@@ -1,146 +1,94 @@
-# 🧩 Realtek_AMB82mini_computer_plugin
+# Realtek AMB82-mini Computer Plugin (Assistant Tool)
 
-> 🖥️ A lightweight CLI toolkit designed for **Realtek AMB82-mini** development.  
-> 提供簡潔乾淨的命令列工具，用於驅動安裝、開啟 SDK 資料夾與多語系設定。
+這是一個專為 Realtek AMB82-mini 開發板設計的電腦端輔助工具 (CLI)。旨在簡化開發流程，提供驅動安裝、影像串流擷取、環境設定及資源下載等功能。
 
----
+This is a CLI-based assistant tool designed for Realtek AMB82-mini developers. It simplifies the development workflow by providing features like driver installation, video frame capturing, environment configuration, and resource downloading.
 
-## 🚀 專案簡介
+## 🚀 功能特點 (Features)
 
-`Realtek_AMB82mini_computer_plugin` 是一款針對 **Realtek AmebaPro2 (AMB82-mini)** 開發板設計的電腦端輔助工具。  
-此工具以 **Python CLI（命令列介面）** 為核心，透過簡潔互動式選單，讓使用者快速進行以下操作：
+* **Driver Installation**: 內建 CH341SER 驅動程式安裝功能。
+* **Quick Navigation**: 快速開啟 Arduino15 中的 Realtek AMB82-mini 硬體資料夾。
+* **Video Frame Capture**: 透過 OpenCV 擷取開發板串流影像，並支援自動儲存 (預設每秒一張)。
+* **Auto Configuration**: 自動修改 `UVCD_pram.h` 參數設定，優化影像傳輸配置。
+* **Download Helper**: 整合 Arduino IDE 與 VLC Player 下載連結。
+* **Multi-language Support**: 支援繁體中文 (zh_TW)、English (en_US) 與日文 (ja_JP)。
+* **Hidden Settings**: 包含隱藏的開發者選項 (更改 FPS、強制切換語言)。
 
-- ✅ 自動下載 CH340 / CH341SER 驅動程式  
-- 📂 一鍵開啟 Realtek Arduino SDK 資料夾  
-- ⚙️ 進入「隱藏設定模式」以修改語言、拍照速度等參數  
-- 🌏 支援多語系（繁中 / 英文 / 日文）
+## 📥 下載與使用 (Download & Usage)
 
-本專案適合嵌入式工程師、學生與研究者快速配置開發環境。
+### 方法 1：直接執行 (推薦)
+如果您不想安裝 Python 環境，可以直接下載編譯好的執行檔：
 
----
+1.  前往本專案的 **Releases 頁面**。
+2.  下載最新的 `.exe` 檔案 (例如 `main.exe`)。
+3.  直接雙擊執行即可 (無需安裝 Python)。
 
-## 📁 專案結構
-```
-Realtek_AMB82mini_computer_plugin/
-├── main.py           # 主程式入口（主選單控制）
-├── utils.py          # 工具功能（驅動安裝、開啟資料夾、隱藏設定）
-├── settings.py       # 全域設定與語言載入
-└── lang/             # 多語系 JSON 語言包
-    ├── zh_TW.json    # 繁體中文
-    ├── en_US.json    # 英文
-    └── ja_JP.json    # 日文
-```
+### 方法 2：原始碼執行
+如果您希望修改程式碼或自行執行：
 
----
+1.  Clone 此專案：
+    ```bash
+    git clone [https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin.git](https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin.git)
+    cd Realtek_AMB82mini_computer_plugin
+    ```
 
-## ⚙️ 安裝與使用方式
+2.  安裝依賴套件：
+    ```bash
+    pip install opencv-python requests tqdm
+    ```
 
-### 🔧 1. 安裝 Python
-請確保系統已安裝 **Python 3.8 以上版本**。
+3.  執行程式：
+    ```bash
+    python main.py
+    ```
 
-### 📦 2. 下載專案
+## 🛠 編譯方式 (Building from Source)
+
+如果您想要自行打包 `.exe` 檔案，請確保已安裝 `pyinstaller`，並使用以下指令進行編譯。此指令會將語言包與驅動程式一同打包進執行檔中。
+
+### 前置需求
 ```bash
-git clone https://github.com/<your-username>/Realtek_AMB82mini_computer_plugin.git
-cd Realtek_AMB82mini_computer_plugin
+pip install pyinstaller
 ```
 
-### ▶️ 3. 執行程式
+### 編譯指令
+
+請在終端機 (Terminal/CMD) 中執行以下指令：
+
 ```bash
-python main.py
+pyinstaller --onefile --console --add-data "CH341SER.EXE;." --add-data "lang/zh_TW.json;lang" --add-data "lang/en_US.json;lang" main.py
 ```
 
-### 🧭 執行畫面
-```
-=== 主選單 ===
-1. 下載 CH340 驅動程式
-2. 開啟 Realtek AMB82-mini 資料夾
-3. 離開程式
-請輸入選項:
-```
+> **注意**:
+>
+>   * Windows 使用者請確保指令中的分隔符號為分號 `;` (如上所示)。
+>   * 編譯完成後，執行檔將位於 `dist/` 資料夾中。
 
----
+## 🤫 隱藏功能 (Hidden Features)
 
-## 🧰 功能介紹
+在主選單輸入 **`ntnu`** 即可進入隱藏設定模式：
 
-### 1️⃣ 安裝 CH340 / CH341SER 驅動程式
-自動將打包於程式內的驅動程式安裝檔 `CH341SER.EXE` 複製到當前資料夾。
+  * 查看全域設定資訊 (Global Info)。
+  * 修改拍照/擷取影像的速度 (FPS)。
+  * 強制切換預設語言。
 
-### 2️⃣ 開啟 Realtek SDK 資料夾
-快速尋找並開啟以下目錄：
-```
-C:\Users\<User>\AppData\Local\Arduino15\packages\realtek\hardware\AmebaPro2\
-```
+## 📂 專案結構 (Project Structure)
 
-### 3️⃣ 隱藏設定模式
-輸入 `ntnu` 進入隱藏選單，可執行：
-- 顯示所有全域設定資訊  
-- 修改拍攝間隔（FPS）  
-- 切換系統語言  
+  * `main.py`: 程式進入點，處理選單邏輯。
+  * `utils.py`: 核心功能實作 (OpenCV 擷取、檔案下載、參數修改等)。
+  * `settings.py`: 全域設定、語言包載入邏輯與資源路徑處理。
+  * `lang/`: 存放語言設定檔 (`.json`)。
 
----
+## 📝 需求環境 (Requirements)
 
-## 🌏 語言支援
+  * Python 3.x
+  * opencv-python
+  * requests
+  * tqdm
 
-| 語言 | 檔案名稱 | 顯示範例 |
-|------|------------|------------|
-| 繁體中文 | `lang/zh_TW.json` | 主選單、設定說明 |
-| English | `lang/en_US.json` | English CLI interface |
-| 日本語 | `lang/ja_JP.json` | 日本語 CLI インターフェース |
+## 👤 作者 (Author)
 
-可在隱藏設定中直接切換語系：
-```
-=== 隱藏設定 ===
-1. 列印所有全局資訊
-2. 修改拍攝速度
-3. 修改系統語言
-4. 返回主選單
-```
+  * **Author**: NTNU Feng
+  * **Email**: benfeng99@gmail.com
+  * **Version**: 2.0.0
 
----
-
-## 🧑‍💻 作者資訊
-
-| 項目 | 內容 |
-|------|------|
-| Author | NTNU Feng |
-| Email | benfeng99@gmail.com |
-| Version | 2.0.0 |
-| License | MIT License |
-
----
-
-## 💡 開發與貢獻
-
-歡迎提交 Pull Request 或 Issue，一起改進此工具。  
-若有新的 AMB82-mini 功能需求（例如 Wi-Fi 測試、燒錄工具整合等），可在 Issue 中討論。
-
----
-
-## 🧱 未來版本規劃
-- [ ] 新增自動燒錄（flash）功能  
-- [ ] 支援 Linux / macOS 平台  
-- [ ] 新增更多 Realtek Ameba 板支援  
-- [ ] 提供圖形化界面（GUI 版）
-
----
-
-## 🪪 授權 License
-此專案採用 **MIT License**，可自由使用、修改與散佈。  
-請於再發行版本中附上授權聲明。
-
----
-
-## 🏁 範例截圖（CLI 介面）
-```
-=== 主選單 ===
-1. 下載 CH340 驅動程式
-2. 開啟 Realtek AMB82-mini 資料夾
-3. 離開程式
-請輸入選項: 1
-正在複製 CH341SER.EXE...
-✅ 驅動程式已複製到當前資料夾。
-```
-
----
-
-🧡 **Realtek_AMB82mini_computer_plugin — 讓 AMB82-mini 設定更簡單、更聰明。**
