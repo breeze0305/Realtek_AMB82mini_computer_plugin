@@ -1,0 +1,142 @@
+#include "StreamIO.h"
+#include "VideoStream.h"
+#include "NNObjectDetection.h"
+#include "VideoStreamOverlay.h"
+#include "ObjectClassList.h"
+
+#define CHANNEL 0
+#define CHANNELNN 3 
+
+#define NNWIDTH  640
+#define NNHEIGHT 640
+#include <AmebaServo.h>
+VideoSetting config(VIDEO_FHD, 30, VIDEO_H264, 0);
+VideoSetting configNN(NNWIDTH, NNHEIGHT, 10, VIDEO_RGB, 0);
+NNObjectDetection ObjDet;
+
+StreamIO videoStreamer(1, 1);
+StreamIO videoStreamerNN(1, 1);
+
+int a=19;
+int b=20;
+int c=21;
+int d=22;
+void setup() {
+    Serial.begin(115200);
+    pinMode(a, OUTPUT);
+    pinMode(b, OUTPUT);
+    pinMode(c, OUTPUT);
+    pinMode(d, OUTPUT);
+
+
+    config.setBitrate(2 * 1024 * 1024);     
+    Camera.configVideoChannel(CHANNEL, config);
+    Camera.configVideoChannel(CHANNELNN, configNN);
+    Camera.videoInit();
+
+ 
+    ObjDet.configVideo(configNN);
+    ObjDet.modelSelect(OBJECT_DETECTION, CUSTOMIZED_YOLOV7TINY, NA_MODEL, NA_MODEL);
+    ObjDet.begin();
+
+    videoStreamer.registerInput(Camera.getStream(CHANNEL));
+
+    if (videoStreamer.begin() != 0) {
+        Serial.println("StreamIO link start failed");
+    }
+
+    Camera.channelBegin(CHANNEL);
+
+    videoStreamerNN.registerInput(Camera.getStream(CHANNELNN));
+    videoStreamerNN.setStackSize();
+    videoStreamerNN.setTaskPriority();
+    videoStreamerNN.registerOutput(ObjDet);
+    if (videoStreamerNN.begin() != 0) {
+        Serial.println("StreamIO link start failed");
+    }
+
+    Camera.channelBegin(CHANNELNN);
+
+    OSD.configVideo(CHANNEL, config);
+    OSD.begin();
+}
+
+unsigned long previousMillis = 0; 
+const long interval = 1000;        
+
+void loop() {
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - previousMillis >= interval) {
+        
+      previousMillis = currentMillis; 
+
+      std::vector<ObjectDetectionResult> results = ObjDet.getResult();
+      int highestScoreIndex = -1;
+      float highestScore = 50;
+      for (int i = 0; i < ObjDet.getResultCount(); i++) {
+        if (results[i].score() > highestScore) {
+          highestScore = results[i].score();
+          highestScoreIndex = i;
+        }
+      }
+
+      if (highestScoreIndex != -1) {
+          int obj_type = results[highestScoreIndex].type();
+                
+          printf("---------------------------------------------------------%d\n",obj_type);
+          if(obj_type==0){ //前進
+            digitalWrite(a, 0); //右前
+            digitalWrite(b, 1);
+            digitalWrite(c, 0); //左前
+            digitalWrite(d, 1);
+            delay(200);
+          }
+
+          else if(obj_type==1){ //右轉後前進
+            digitalWrite(a, 0); 
+            digitalWrite(b, 0); 
+            digitalWrite(c, 0); 
+            digitalWrite(d, 1);
+            delay(100);            // 維持此狀態0.2秒
+            digitalWrite(a, 0);
+            digitalWrite(b, 1);
+            digitalWrite(c, 0);
+            digitalWrite(d, 1);
+            delay(200);
+          }
+
+          else if(obj_type==2){//左轉後前進
+            digitalWrite(a, 0); 
+            digitalWrite(b, 1); 
+            digitalWrite(c, 0); 
+            digitalWrite(d, 0);
+            delay(100);            // 維持此狀態0.2秒
+            digitalWrite(a, 0);
+            digitalWrite(b, 1);
+            digitalWrite(c, 0);
+            digitalWrite(d, 1);
+            delay(200);
+          }
+          else if(obj_type==3){//後退
+            digitalWrite(a, 1); 
+            digitalWrite(b, 0); 
+            digitalWrite(c, 1); 
+            digitalWrite(d, 0);
+            delay(200);
+          }
+          else if(obj_type==4){//停車
+            digitalWrite(a, 0); 
+            digitalWrite(b, 0); 
+            digitalWrite(c, 0); 
+            digitalWrite(d, 0);
+          }
+          digitalWrite(a, 0); 
+          digitalWrite(b, 0); 
+          digitalWrite(c, 0); 
+          digitalWrite(d, 0);
+      }
+    }
+    OSD.update(CHANNEL);
+    delay(100);
+}

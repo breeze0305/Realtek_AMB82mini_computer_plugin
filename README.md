@@ -56,7 +56,7 @@ pip install pyinstaller
 請在終端機 (Terminal/CMD) 中執行以下指令：
 
 ```bash
-pyinstaller --onefile --console --add-data "CH341SER.EXE;." --add-data "lang/zh_TW.json;lang" --add-data "lang/en_US.json;lang" main.py
+pyinstaller --onefile --console --add-data "CH341SER.EXE;." --add-data "lang/zh_TW.json;lang" --add-data "lang/en_US.json;lang" --add-data "gesture_recognition/hand_code.txt;gesture_recognition" --add-data "gesture_recognition/hand_weight.nb;gesture_recognition" main.py
 ```
 
 > **注意**:
@@ -78,6 +78,7 @@ pyinstaller --onefile --console --add-data "CH341SER.EXE;." --add-data "lang/zh_
   * `utils.py`: 核心功能實作 (OpenCV 擷取、檔案下載、參數修改等)。
   * `settings.py`: 全域設定、語言包載入邏輯與資源路徑處理。
   * `lang/`: 存放語言設定檔 (`.json`)。
+  * `gesture_recognition/`: 存放手勢辨識相關檔案。
 
 ## 📝 需求環境 (Requirements)
 
@@ -90,5 +91,5 @@ pyinstaller --onefile --console --add-data "CH341SER.EXE;." --add-data "lang/zh_
 
   * **Author**: NTNU Feng
   * **Email**: benfeng99@gmail.com
-  * **Version**: 2.0.0
+  * **Version**: 2.1.0
 

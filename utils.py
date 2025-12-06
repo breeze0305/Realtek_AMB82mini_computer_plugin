@@ -1,12 +1,14 @@
 import os
 os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
 import re
+import shutil
 import requests
-from tqdm import tqdm
 import time
 import threading
 from pathlib import Path
-from settings import GLOBAL_SETTINGS, load_language
+from tqdm import tqdm
+
+from settings import GLOBAL_SETTINGS, load_language, resource_path
 
 def clear_terminal():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -81,27 +83,30 @@ def _get_UVCD_pram_file():
     return uvcd_path
     
 def set_UVCD_pram_file():
-    file_path = _get_UVCD_pram_file()
+    try:
+        file_path = _get_UVCD_pram_file()
 
-    text = file_path.read_text(encoding="utf-8")
-    # 使用正規表示式匹配所有 UVCD_* 定義
-    pattern = re.compile(r"^#define\s+(UVCD_\w+)\s+(\d+)", re.MULTILINE)
+        text = file_path.read_text(encoding="utf-8")
+        # 使用正規表示式匹配所有 UVCD_* 定義
+        pattern = re.compile(r"^#define\s+(UVCD_\w+)\s+(\d+)", re.MULTILINE)
 
-    def replace_define(match):
-        name = match.group(1)
-        value = match.group(2)
-        if name == "UVCD_H264":
-            return match.group(0)  # 保留原樣
-        elif name.startswith("UVCD_"):
-            return f"#define {name} 0"  # 改為0
-        else:
-            return match.group(0)
+        def replace_define(match):
+            name = match.group(1)
+            value = match.group(2)
+            if name == "UVCD_H264":
+                return match.group(0)  # 保留原樣
+            elif name.startswith("UVCD_"):
+                return f"#define {name} 0"  # 改為0
+            else:
+                return match.group(0)
 
-    # 套用修改
-    new_text = pattern.sub(replace_define, text)
+        # 套用修改
+        new_text = pattern.sub(replace_define, text)
 
-    # 寫回檔案
-    file_path.write_text(new_text, encoding="utf-8")
+        # 寫回檔案
+        file_path.write_text(new_text, encoding="utf-8")
+    except:
+        pass
     
 def teach_for_capture_frame_from_amb(lang):
     clear_terminal()
@@ -239,3 +244,22 @@ def get_preference_link(lang):
     print(link)
     print("======================")
     return
+
+def get_hand_gesture_files(lang):
+    """
+    將 CH341SER.EXE 從內部資源複製到目前工作資料夾。
+    （打包後從 sys._MEIPASS 提取，開發時從原始檔案夾取）
+    """
+    try:
+        print(lang["hand_file_copy"])
+
+        src1 = resource_path("gesture_recognition/hand_code.txt")
+        src2 = resource_path("gesture_recognition/hand_weight.nb")
+        dst1 = Path(os.getcwd()) / "hand_code.txt"
+        dst2 = Path(os.getcwd()) / "hand_weight.nb"
+
+        shutil.copy(src1, dst1)
+        shutil.copy(src2, dst2)
+
+    except Exception as e:
+        print(lang["hand_file_error"], e)

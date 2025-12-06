@@ -2,7 +2,11 @@
 # -*- coding: utf-8 -*-
 
 from utils import *
-from settings import GLOBAL_SETTINGS, load_language, load_amb_driver, select_startup_language
+from settings import (GLOBAL_SETTINGS, 
+                      load_language, 
+                      load_amb_driver, 
+                      select_startup_language, 
+                      check_new_version)
 
 def main():
     # 1. 程式啟動時，先進入語言選擇介面
@@ -11,10 +15,7 @@ def main():
     # 2. 根據選擇結果載入語言包
     lang = load_language(GLOBAL_SETTINGS["language_default"])
     
-    try:
-        set_UVCD_pram_file()
-    except:
-        pass
+    set_UVCD_pram_file()
     
     while True:
         clear_terminal()
@@ -28,6 +29,7 @@ def main():
         elif choice == "2":
             open_amb82_folder(lang)
         elif choice == "3":
+            set_UVCD_pram_file()
             teach_for_capture_frame_from_amb(lang)
         elif choice == "4":
             capture_frame_from_amb(lang)
@@ -40,9 +42,13 @@ def main():
             link = GLOBAL_SETTINGS["vlc_dl_link"]
             download_file(link, link.split("/")[-1])
         elif choice == "8":
+            get_hand_gesture_files(lang)
+        elif choice == "9":
+            clear_terminal()
+            check_new_version(lang)
+        elif choice == "10":
             print(lang["main_exit"])
             break
-
         
         
         elif choice.lower() == "ntnu":
