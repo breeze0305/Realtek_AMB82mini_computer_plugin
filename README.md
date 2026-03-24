@@ -1,94 +1,103 @@
-# Realtek AMB82-mini Computer Plugin (Assistant Tool)
+# Realtek AMB82-mini Computer Plugin
 
-這是一個專為 Realtek AMB82-mini 開發板設計的電腦端輔助工具 (CLI)。旨在簡化開發流程，提供驅動安裝、影像串流擷取、環境設定及資源下載等功能。
+這是一個專為 Realtek AMB82-mini 開發板設計的 Windows CLI 輔助工具，目的是把常見的環境準備、驅動複製、相機擷取、資源下載與開發流程提示集中到同一個介面。
 
-This is a CLI-based assistant tool designed for Realtek AMB82-mini developers. It simplifies the development workflow by providing features like driver installation, video frame capturing, environment configuration, and resource downloading.
+This is a Windows-oriented CLI assistant for Realtek AMB82-mini developers. It helps with driver distribution, camera capture, bundled resource extraction, Realtek environment navigation, and basic update/download utilities.
 
-## 🚀 功能特點 (Features)
+## Features
 
-* **Driver Installation**: 內建 CH341SER 驅動程式安裝功能。
-* **Quick Navigation**: 快速開啟 Arduino15 中的 Realtek AMB82-mini 硬體資料夾。
-* **Video Frame Capture**: 透過 OpenCV 擷取開發板串流影像，並支援自動儲存 (預設每秒一張)。
-* **Auto Configuration**: 自動修改 `UVCD_pram.h` 參數設定，優化影像傳輸配置。
-* **Download Helper**: 整合 Arduino IDE 與 VLC Player 下載連結。
-* **Multi-language Support**: 支援繁體中文 (zh_TW)、English (en_US) 與日文 (ja_JP)。
-* **Hidden Settings**: 包含隱藏的開發者選項 (更改 FPS、強制切換語言)。
+- Driver helper: 將 `CH341SER.EXE` 複製到目前工作目錄，方便手動安裝。
+- Realtek folder quick open: 快速開啟 `%USERPROFILE%\\AppData\\Local\\Arduino15` 下的 Realtek AMB82-mini 套件資料夾。
+- Capture tutorial: 提供 AMB82 相機擷取教學流程。
+- Camera capture: 掃描可用攝影機，支援預覽與選擇，並將影像連續存到 `output/`。
+- Background UVCD patch: 啟動時會背景尋找並修改 `UVCD_pram.h`，將大多數 `UVCD_*` 參數改為 `0`，保留 `UVCD_H264`。
+- Download helper: 提供 Arduino IDE、VLC 與 Realtek package index 相關下載或連結資訊。
+- Gesture resource copy: 將 `gesture_recognition/` 內的模型檔複製到目前工作目錄。
+- Multi-language UI: 內建 `zh_TW`、`en_US`、`ja_JP` 三種語系。
+- Hidden menu: 在主選單輸入 `ntnu` 可查看全域設定、切換語言與調整擷取速度設定值。
 
-## 📥 下載與使用 (Download & Usage)
+## Requirements
 
-### 方法 1：直接執行 (推薦)
-如果您不想安裝 Python 環境，可以直接下載編譯好的執行檔：
+- Windows
+- Python 3.x
+- `opencv-python`
+- `requests`
+- `tqdm`
 
-1.  前往本專案的 **Releases 頁面**。
-2.  下載最新的 `.exe` 檔案 (例如 `main.exe`)。
-3.  直接雙擊執行即可 (無需安裝 Python)。
+安裝依賴：
 
-### 方法 2：原始碼執行
-如果您希望修改程式碼或自行執行：
+```bash
+pip install opencv-python requests tqdm
+```
 
-1.  Clone 此專案：
-    ```bash
-    git clone [https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin.git](https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin.git)
-    cd Realtek_AMB82mini_computer_plugin
-    ```
+## Run From Source
 
-2.  安裝依賴套件：
-    ```bash
-    pip install opencv-python requests tqdm
-    ```
+```bash
+git clone https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin.git
+cd Realtek_AMB82mini_computer_plugin
+python main.py
+```
 
-3.  執行程式：
-    ```bash
-    python main.py
-    ```
+程式啟動後會先讓使用者選擇語言，接著在背景執行 UVCD 設定檔搜尋與修補，再進入主選單。
 
-## 🛠 編譯方式 (Building from Source)
+## Main Menu Summary
 
-如果您想要自行打包 `.exe` 檔案，請確保已安裝 `pyinstaller`，並使用以下指令進行編譯。此指令會將語言包與驅動程式一同打包進執行檔中。
+- `1`: 複製 `CH341SER.EXE` 到目前目錄
+- `2`: 開啟 Realtek AMB82-mini Arduino 套件資料夾
+- `3`: 顯示 AMB82 影像擷取教學
+- `4`: 啟動相機擷取並將影像輸出到 `output/`
+- `5`: 下載 Arduino IDE
+- `6`: 顯示 Realtek preferences/package index 連結
+- `7`: 下載 VLC
+- `8`: 複製手勢辨識檔案到目前目錄
+- `9`: 檢查 GitHub 上是否有新版本
+- `10`: 離開程式
+- `ntnu`: 進入隱藏設定
 
-### 前置需求
+## Build
+
+若要打包成可執行檔，先安裝：
+
 ```bash
 pip install pyinstaller
 ```
 
-### 編譯指令
-
-請在終端機 (Terminal/CMD) 中執行以下指令：
+建議直接使用既有 spec：
 
 ```bash
-pyinstaller --onefile --console --add-data "CH341SER.EXE;." --add-data "lang/zh_TW.json;lang" --add-data "lang/en_US.json;lang" --add-data "lang/ja_JP.json;lang" --add-data "gesture_recognition/hand_code.txt;gesture_recognition" --add-data "gesture_recognition/hand_weight.nb;gesture_recognition" main.py
+pyinstaller main.spec
 ```
 
-> **注意**:
->
->   * Windows 使用者請確保指令中的分隔符號為分號 `;` (如上所示)。
->   * 編譯完成後，執行檔將位於 `dist/` 資料夾中。
+如果需要手動打包，也可使用：
 
-## 🤫 隱藏功能 (Hidden Features)
+```bash
+pyinstaller --onefile --console --icon="./icon.ico" --add-data "CH341SER.EXE;." --add-data "lang/zh_TW.json;lang" --add-data "lang/en_US.json;lang" --add-data "lang/ja_JP.json;lang" --add-data "gesture_recognition/hand_code.txt;gesture_recognition" --add-data "gesture_recognition/hand_weight.nb;gesture_recognition" main.py
+```
 
-在主選單輸入 **`ntnu`** 即可進入隱藏設定模式：
+## Project Structure
 
-  * 查看全域設定資訊 (Global Info)。
-  * 修改拍照/擷取影像的速度 (FPS)。
-  * 強制切換預設語言。
+- `main.py`: 程式入口與主選單流程
+- `utils/__init__.py`: 匯出主要功能給 `main.py`
+- `utils/settings.py`: 全域設定、語系載入、資源路徑、版本檢查
+- `utils/fn.py`: 一般 CLI 功能、隱藏設定、資料夾開啟、教學文字
+- `utils/get_file.py`: 檔案下載、下載連結顯示、手勢檔案複製
+- `utils/opencv.py`: UVCD 設定修補、背景執行緒、相機擷取
+- `lang/`: 多語系 JSON 檔
+- `gesture_recognition/`: 手勢辨識模型與對應資源
+- `CH341SER.EXE`: 驅動安裝程式
+- `icon.ico`: PyInstaller 打包圖示
+- `version.txt`: 本地版本號
 
-## 📂 專案結構 (Project Structure)
+## Notes
 
-  * `main.py`: 程式進入點，處理選單邏輯。
-  * `utils.py`: 核心功能實作 (OpenCV 擷取、檔案下載、參數修改等)。
-  * `settings.py`: 全域設定、語言包載入邏輯與資源路徑處理。
-  * `lang/`: 存放語言設定檔 (`.json`)。
-  * `gesture_recognition/`: 存放手勢辨識相關檔案。
+- 這個專案目前以 Windows 為主要執行平台。
+- 啟動程式後會嘗試修改使用者本機 Arduino 套件中的 `UVCD_pram.h`。
+- 相機擷取目前實際儲存間隔固定為每秒一張。
+- 隱藏設定中的擷取速度已可修改設定值，但目前尚未套用到實際擷取迴圈。
+- 驅動與手勢檔案功能是「複製到目前目錄」，不是自動執行安裝。
 
-## 📝 需求環境 (Requirements)
+## Author
 
-  * Python 3.x
-  * opencv-python
-  * requests
-  * tqdm
-
-## 👤 作者 (Author)
-
-  * **Author**: NTNU Feng
-  * **Email**: benfeng99@gmail.com
+- Author: NTNU Feng
+- Email: benfeng99@gmail.com
 
