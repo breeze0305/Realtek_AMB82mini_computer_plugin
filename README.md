@@ -40,6 +40,10 @@ python main.py
 
 程式啟動後會先讓使用者選擇語言，接著在背景執行 UVCD 設定檔搜尋與修補，再進入主選單。
 
+## Tutorial
+
+- 使用教學影片: https://youtu.be/sqhTgFAhslU
+
 ## Main Menu Summary
 
 - `1`: 複製 `CH341SER.EXE` 到目前目錄
