@@ -33,7 +33,6 @@
     "hidden_input_lang": "切り替える言語番号を入力してください: ",
     "hidden_lang_updated": "言語が {lang} に切り替えられました。",
     "global_info_title": "=== グローバル設定情報 ===",
-    "camera_label": "カメラ",
     "teach_intro_1": "1 この機能は AMB82 カメラから画像を取得する方法を学ぶためのチュートリアルです。",
     "teach_intro_2": "2 まず、AMB82 mini の CH340 ポートを USB ケーブルで PC に接続し、Arduino IDE を開いてください。",
     "teach_intro_3": "3 Arduino IDE の AMB82 mini 例題から AmebaUSB / UVC_device を開きます。",

@@ -1,14 +1,20 @@
 import os
-from pathlib import Path
 
+from .settings import (
+    APP_STATE,
+    GLOBAL_SETTINGS,
+    find_amebapro2_root,
+    load_language,
+    set_capture_interval_seconds,
+    set_language_default,
+)
 
-from .settings import GLOBAL_SETTINGS, load_language
 
 def clear_terminal():
-    os.system('cls' if os.name == 'nt' else 'clear')
-    
-def hidden_settings(lang):
-    # 如果在內部切換了語言，需要更新外部的 lang 引用，這裡透過回傳新的 lang 來達成
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def show_hidden_settings(lang):
     current_lang = lang
     while True:
         clear_terminal()
@@ -21,57 +27,72 @@ def hidden_settings(lang):
 
         if choice == "1":
             clear_terminal()
-            print(current_lang["global_info_title"]) # 修正: 使用 JSON 導入
-            for k, v in GLOBAL_SETTINGS.items():
-                print(f"{k}: {v}")
+            print(current_lang["global_info_title"])
+            for key, value in GLOBAL_SETTINGS.items():
+                print(f"{key}: {value}")
         elif choice == "2":
             try:
-                sec = int(input(current_lang["hidden_input_speed"]))
-                if sec > 0:
-                    GLOBAL_SETTINGS["take_picture_fps"] = f"1 / {sec}s"
-                    print(current_lang["hidden_speed_updated"].format(sec=sec))
+                seconds = int(input(current_lang["hidden_input_speed"]))
+                if seconds > 0:
+                    set_capture_interval_seconds(seconds)
+                    print(current_lang["hidden_speed_updated"].format(sec=seconds))
                 else:
                     print(current_lang["error_invalid_choice"])
             except ValueError:
                 print(current_lang["error_invalid_choice"])
         elif choice == "3":
             print(current_lang["hidden_lang_list"])
-            for i, l in enumerate(GLOBAL_SETTINGS["language_support"], start=1):
-                print(f"{i}. {l}")
+            supported_languages = APP_STATE["language_support"]
+            for index, lang_code in enumerate(supported_languages, start=1):
+                print(f"{index}. {lang_code}")
             try:
-                idx = int(input(current_lang["hidden_input_lang"]))
-                if 1 <= idx <= len(GLOBAL_SETTINGS["language_support"]):
-                    GLOBAL_SETTINGS["language_default"] = GLOBAL_SETTINGS["language_support"][idx - 1]
-                    print(current_lang["hidden_lang_updated"].format(lang=GLOBAL_SETTINGS["language_default"]))
-                    # 重新載入語言包
-                    current_lang = load_language(GLOBAL_SETTINGS["language_default"])
+                selected_index = int(input(current_lang["hidden_input_lang"]))
+                if 1 <= selected_index <= len(supported_languages):
+                    selected_lang = supported_languages[selected_index - 1]
+                    set_language_default(selected_lang)
+                    print(current_lang["hidden_lang_updated"].format(lang=APP_STATE["language_default"]))
+                    current_lang = load_language(APP_STATE["language_default"])
                 else:
                     print(current_lang["error_invalid_choice"])
             except ValueError:
                 print(current_lang["error_invalid_choice"])
-                
         elif choice == "4":
             break
         else:
             print(current_lang["error_invalid_choice"])
+
         input(current_lang["main_back"])
+
     return current_lang
 
-def open_amb82_folder(lang):
-    base_dir = Path.home() / "AppData" / "Local" / "Arduino15"
-    matches = list(base_dir.rglob("packages/realtek/hardware/AmebaPro2"))
-    if matches:
-        os.startfile(matches[0])
+
+hidden_settings = show_hidden_settings
+
+
+def open_amb82_package_folder(lang):
+    ameba_root = find_amebapro2_root()
+    if ameba_root is not None:
+        os.startfile(ameba_root)
         print(lang["folder_success"])
     else:
         print(lang["folder_not_found"])
-        
-def teach_for_capture_frame_from_amb(lang):
+
+
+open_amb82_folder = open_amb82_package_folder
+
+
+def show_capture_frame_tutorial(lang):
     clear_terminal()
-    print(lang["teach_intro_1"])
-    print(lang["teach_intro_2"])
-    print(lang["teach_intro_3"])
-    print(lang["teach_intro_4"])
-    print(lang["teach_intro_5"])
-    print(lang["teach_intro_6"])
-    return
+    tutorial_keys = (
+        "teach_intro_1",
+        "teach_intro_2",
+        "teach_intro_3",
+        "teach_intro_4",
+        "teach_intro_5",
+        "teach_intro_6",
+    )
+    for key in tutorial_keys:
+        print(lang[key])
+
+
+teach_for_capture_frame_from_amb = show_capture_frame_tutorial

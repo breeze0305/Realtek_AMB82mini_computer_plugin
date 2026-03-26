@@ -1,58 +1,98 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from utils import *
+from utils import (
+    APP_LINKS,
+    APP_STATE,
+    capture_frame_from_amb,
+    check_new_version,
+    clear_terminal,
+    copy_amb_driver,
+    copy_hand_gesture_files,
+    download_file,
+    load_language,
+    open_amb82_package_folder,
+    select_startup_language,
+    show_capture_frame_tutorial,
+    show_hidden_settings,
+    show_preference_link,
+    start_background_uvcd_task,
+)
+
+
+def _download_filename(url):
+    return url.rsplit("/", 1)[-1]
+
+
+def _run_lang_action(action, lang):
+    action(lang)
+    return lang, True
+
+
+def _run_download(url, lang):
+    download_file(url, _download_filename(url))
+    return lang, True
+
+
+def _check_version(lang):
+    clear_terminal()
+    check_new_version(lang)
+    return lang, True
+
+
+def _open_hidden_settings(lang):
+    return show_hidden_settings(lang), True
+
+
+def _exit_app(lang):
+    print(lang["main_exit"])
+    return lang, False
+
+
+def _build_main_actions(lang):
+    return {
+        "1": lambda: _run_lang_action(copy_amb_driver, lang),
+        "2": lambda: _run_lang_action(open_amb82_package_folder, lang),
+        "3": lambda: _run_lang_action(show_capture_frame_tutorial, lang),
+        "4": lambda: _run_lang_action(capture_frame_from_amb, lang),
+        "5": lambda: _run_download(APP_LINKS["arduino_dl_link"], lang),
+        "6": lambda: _run_lang_action(show_preference_link, lang),
+        "7": lambda: _run_download(APP_LINKS["vlc_dl_link"], lang),
+        "8": lambda: _run_lang_action(copy_hand_gesture_files, lang),
+        "9": lambda: _check_version(lang),
+        "10": lambda: _exit_app(lang),
+        "ntnu": lambda: _open_hidden_settings(lang),
+    }
+
+
+def _handle_menu_choice(choice, lang):
+    action = _build_main_actions(lang).get(choice.lower())
+    if action is None:
+        print(lang["error_invalid_choice"])
+        return lang, True
+    return action()
+
 
 def main():
-    # 1. 程式啟動時，先進入語言選擇介面
     select_startup_language()
+    lang = load_language(APP_STATE["language_default"])
 
-    # 2. 根據選擇結果載入語言包
-    lang = load_language(GLOBAL_SETTINGS["language_default"])
-    
-    # set_UVCD_pram_file()
     uvcd_stop_event = start_background_uvcd_task()
-    
+
     while True:
         clear_terminal()
         print(lang["main_title"])
-        for k, v in lang["main_options"].items():
-            print(f"{k}. {v}")
-        choice = input(lang["main_input"])
+        for key, value in lang["main_options"].items():
+            print(f"{key}. {value}")
 
-        if choice == "1":
-            load_amb_driver(lang)
-        elif choice == "2":
-            open_amb82_folder(lang)
-        elif choice == "3":
-            teach_for_capture_frame_from_amb(lang)
-        elif choice == "4":
-            capture_frame_from_amb(lang)
-        elif choice == "5":
-            link = GLOBAL_SETTINGS["arduino_dl_link"]
-            download_file(link, link.split("/")[-1])
-        elif choice == "6":
-            get_preference_link(lang)
-        elif choice == "7":
-            link = GLOBAL_SETTINGS["vlc_dl_link"]
-            download_file(link, link.split("/")[-1])
-        elif choice == "8":
-            get_hand_gesture_files(lang)
-        elif choice == "9":
-            clear_terminal()
-            check_new_version(lang)
-        elif choice == "10":
-            print(lang["main_exit"])
+        choice = input(lang["main_input"])
+        lang, keep_running = _handle_menu_choice(choice, lang)
+
+        if not keep_running:
             break
-        
-        
-        elif choice.lower() == "ntnu":
-            # hidden_settings 可能會改變語言，所以需要接收回傳值更新 lang
-            lang = hidden_settings(lang)
-        else:
-            print(lang["error_invalid_choice"])
 
         input(lang["main_back"])
+
 
 if __name__ == "__main__":
     main()

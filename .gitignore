@@ -3,3 +3,5 @@ dist
 bash.sh
 main.spec
 agents.md
+__pycache__/
+*.pyc

@@ -33,8 +33,6 @@
     "hidden_input_lang": "Enter the language number to switch to: ",
     "hidden_lang_updated": "Language switched to {lang}.",
     "global_info_title": "=== Global Settings Info ===",
-    "camera_label": "Camera",
-
     "teach_intro_1": "1 This feature provides a tutorial on how to capture images using the AMB82 camera.",
     "teach_intro_2": "2 First, connect the CH340 port of the AMB82 mini to your computer via USB and open the Arduino IDE.",
     "teach_intro_3": "3 Open the AmebaUSB / UVC_device example from the AMB82 mini examples.",

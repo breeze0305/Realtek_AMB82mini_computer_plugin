@@ -1,117 +1,150 @@
 import json
-import requests
-import sys
 import os
 import shutil
-
-from copy import deepcopy
+import sys
 from pathlib import Path
+from typing import Optional
 
-GLOBAL_SETTINGS = {
+import requests
+
+APP_METADATA = {
     "author": "NTNU Feng",
     "contact_email": "benfeng99@gmail.com",
+    "version": "2.2.1",
+}
+
+APP_LINKS = {
     "github_repo": "https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin",
     "arduino_dl_link": "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.6_Windows_64bit.exe",
     "vlc_dl_link": "https://free.nchc.org.tw/vlc/vlc/3.0.21/win64/vlc-3.0.21-win64.exe",
     "preference_link": "https://github.com/Ameba-AIoT/ameba-arduino-pro2/raw/dev/Arduino_package/package_realtek_amebapro2_early_index.json",
-    "version": "2.1.1",
-    "take_picture_fps": "1張 / 1秒",
+}
+
+APP_STATE = {
+    "capture_interval_seconds": 1,
     "language_default": "zh_TW",
     "language_support": ["zh_TW", "en_US", "ja_JP"],
 }
 
-# =========================================================
-# 📂 通用資源路徑解析器（開發模式 / 打包模式 通用）
-# =========================================================
+GLOBAL_SETTINGS = {}
+
+
+def format_capture_interval(seconds):
+    return f"1 / {seconds}s"
+
+
+def sync_global_settings():
+    GLOBAL_SETTINGS.clear()
+    GLOBAL_SETTINGS.update(APP_METADATA)
+    GLOBAL_SETTINGS.update(APP_LINKS)
+    GLOBAL_SETTINGS.update(
+        {
+            "take_picture_fps": format_capture_interval(APP_STATE["capture_interval_seconds"]),
+            "language_default": APP_STATE["language_default"],
+            "language_support": list(APP_STATE["language_support"]),
+        }
+    )
+
+
+def set_language_default(lang_code):
+    APP_STATE["language_default"] = lang_code
+    sync_global_settings()
+
+
+def set_capture_interval_seconds(seconds):
+    APP_STATE["capture_interval_seconds"] = seconds
+    sync_global_settings()
+
+
+def get_capture_interval_seconds():
+    return APP_STATE["capture_interval_seconds"]
+
+
+sync_global_settings()
+
+
 def resource_path(relative_path: str) -> Path:
-    """
-    取得資源實際路徑：
-      - 若程式被 PyInstaller 打包，會從 sys._MEIPASS 下找
-      - 若為開發階段，則從當前模組所在資料夾取
-    """
-    if getattr(sys, 'frozen', False):  # PyInstaller 執行時
+    if getattr(sys, "frozen", False):
         base_path = Path(sys._MEIPASS)
     else:
         base_path = Path(__file__).parent.parent
     return base_path / relative_path
 
 
-# =========================================================
-# 🌐 語言包載入器與選擇器
-# =========================================================
 def load_language(lang_code: str):
-    """
-    載入語言包 JSON 檔案。
-    若指定語言不存在，會自動回退為 zh_TW。
-    """
     lang_file = resource_path(f"lang/{lang_code}.json")
 
     if not lang_file.exists():
-        # print(f"Warning: Language pack {lang_code} not found, defaulting to zh_TW.")
         lang_file = resource_path("lang/zh_TW.json")
 
     try:
-        with open(lang_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error loading language file {lang_file}: {e}")
+        with open(lang_file, "r", encoding="utf-8") as file:
+            return json.load(file)
+    except Exception as exc:
+        print(f"Error loading language file {lang_file}: {exc}")
         return {"error": "Language file loading failed."}
 
+
 def select_startup_language():
-    """
-    程式啟動時，強制要求使用者選擇語言。
-    """
-    os.system('cls' if os.name == 'nt' else 'clear')
+    os.system("cls" if os.name == "nt" else "clear")
     print("=== Select Language / 選擇語言 ===")
-    
-    # 動態列出支援的語言
-    for idx, lang in enumerate(GLOBAL_SETTINGS["language_support"], start=1):
-        print(f"{idx}. {lang}")
-    
+
+    supported_languages = APP_STATE["language_support"]
+    for index, lang_code in enumerate(supported_languages, start=1):
+        print(f"{index}. {lang_code}")
+
     while True:
         try:
-            choice = input(f"Select (1-{len(GLOBAL_SETTINGS['language_support'])}): ")
-            idx = int(choice)
-            if 1 <= idx <= len(GLOBAL_SETTINGS["language_support"]):
-                selected_lang = GLOBAL_SETTINGS["language_support"][idx - 1]
-                GLOBAL_SETTINGS["language_default"] = selected_lang
+            choice = input(f"Select (1-{len(supported_languages)}): ")
+            selected_index = int(choice)
+            if 1 <= selected_index <= len(supported_languages):
+                selected_lang = supported_languages[selected_index - 1]
+                set_language_default(selected_lang)
                 print(f"Language set to: {selected_lang}")
                 break
-            else:
-                print("Invalid selection / 無效選擇")
+            print("Invalid selection / 無效的選擇")
         except ValueError:
-             print("Please enter a number / 請輸入數字")
+            print("Please enter a number / 請輸入數字")
 
 
-# =========================================================
-# 🧩 驅動安裝程式（共用 resource_path）
-# =========================================================
-def load_amb_driver(lang):
-    """
-    將 CH341SER.EXE 從內部資源複製到目前工作資料夾。
-    （打包後從 sys._MEIPASS 提取，開發時從原始檔案夾取）
-    """
+def copy_amb_driver(lang):
     try:
         print(lang["driver_start"])
 
-        src = resource_path("CH341SER.EXE")
-        dst = Path(os.getcwd()) / "CH341SER.EXE"
+        source = resource_path("CH341SER.EXE")
+        destination = Path(os.getcwd()) / "CH341SER.EXE"
 
-        shutil.copy(src, dst)
+        shutil.copy(source, destination)
         print(lang["driver_success"])
 
-    except Exception as e:
-        print(lang["driver_error"], e)
+    except Exception as exc:
+        print(lang["driver_error"], exc)
 
 
-# =========================================================
-# 🧠 資源完整性檢查（建議打包前執行）
-# =========================================================
+load_amb_driver = copy_amb_driver
+
+
+def find_amebapro2_root() -> Optional[Path]:
+    base_dir = Path.home() / "AppData" / "Local" / "Arduino15"
+    matches = list(base_dir.rglob("packages/realtek/hardware/AmebaPro2"))
+    if not matches:
+        return None
+    return matches[0]
+
+
+def find_uvcd_param_file() -> Optional[Path]:
+    ameba_root = find_amebapro2_root()
+    if ameba_root is None:
+        return None
+
+    subdirs = [directory for directory in ameba_root.iterdir() if directory.is_dir()]
+    if not subdirs:
+        return None
+
+    return subdirs[0] / "libraries" / "USB" / "src" / "UVCD_pram.h"
+
+
 def verify_resources():
-    """
-    檢查所有應被打包的外部資源是否存在。
-    打包前可執行此函式以確保不會漏掉檔案。
-    """
     required_files = [
         "CH341SER.EXE",
         "lang/zh_TW.json",
@@ -120,36 +153,31 @@ def verify_resources():
         "gesture_recognition/hand_code.txt",
         "gesture_recognition/hand_weight.nb",
     ]
-    missing = [f for f in required_files if not Path(f).exists()]
+    missing = [file_name for file_name in required_files if not resource_path(file_name).exists()]
 
     if missing:
         print("Warning: The following required files are missing:")
-        for f in missing:
-            print("  -", f)
+        for file_name in missing:
+            print("  -", file_name)
     else:
         print("Check passed: All resources found.")
-        
+
+
 def check_new_version(lang):
-    """
-    檢查是否有新版本發布。
-    """
     try:
-        url = deepcopy(GLOBAL_SETTINGS["github_repo"])
+        url = APP_LINKS["github_repo"]
         url = url.replace("github.com", "raw.githubusercontent.com") + "/main/version.txt"
         response = requests.get(url)
         github_version = response.text.strip()
-        local_version = GLOBAL_SETTINGS["version"]
-        
+        local_version = APP_METADATA["version"]
+
         if github_version != local_version:
-            # 顯示有新版本
-            x1 = lang["update_available"].format(github=github_version, local=local_version)
-            x2 = lang["update_download"].format(repo=GLOBAL_SETTINGS["github_repo"])
-            print(f"\033[31m{x1}\033[0m")
-            print(f"\033[33m{x2}\033[0m")
+            message = lang["update_available"].format(github=github_version, local=local_version)
+            download_message = lang["update_download"].format(repo=APP_LINKS["github_repo"])
+            print(f"\033[31m{message}\033[0m")
+            print(f"\033[33m{download_message}\033[0m")
         else:
-            # 顯示已是最新版本
-            # "\033[32m綠色字\033[0m"
             print(f"\033[32m{lang['update_latest']}\033[0m")
-        
-    except Exception as e:
-        print("Error checking for new version:", e)
+
+    except Exception as exc:
+        print("Error checking for new version:", exc)

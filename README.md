@@ -14,7 +14,7 @@ This is a Windows-oriented CLI assistant for Realtek AMB82-mini developers. It h
 - Download helper: 提供 Arduino IDE、VLC 與 Realtek package index 相關下載或連結資訊。
 - Gesture resource copy: 將 `gesture_recognition/` 內的模型檔複製到目前工作目錄。
 - Multi-language UI: 內建 `zh_TW`、`en_US`、`ja_JP` 三種語系。
-- Hidden menu: 在主選單輸入 `ntnu` 可查看全域設定、切換語言與調整擷取速度設定值。
+- Hidden menu: 在主選單輸入 `ntnu` 可查看全域設定、切換語言，並調整實際擷取間隔。
 
 ## Requirements
 
@@ -56,7 +56,7 @@ python main.py
 - `8`: 複製手勢辨識檔案到目前目錄
 - `9`: 檢查 GitHub 上是否有新版本
 - `10`: 離開程式
-- `ntnu`: 進入隱藏設定
+- `ntnu`: 進入隱藏設定，可切換語言與調整實際擷取間隔
 
 ## Build
 
@@ -82,22 +82,22 @@ pyinstaller --onefile --console --icon="./icon.ico" --add-data "CH341SER.EXE;." 
 
 - `main.py`: 程式入口與主選單流程
 - `utils/__init__.py`: 匯出主要功能給 `main.py`
-- `utils/settings.py`: 全域設定、語系載入、資源路徑、版本檢查
+- `utils/settings.py`: 全域設定、執行期狀態、語系載入、資源路徑、版本檢查與 Arduino 路徑 helper
 - `utils/fn.py`: 一般 CLI 功能、隱藏設定、資料夾開啟、教學文字
 - `utils/get_file.py`: 檔案下載、下載連結顯示、手勢檔案複製
-- `utils/opencv.py`: UVCD 設定修補、背景執行緒、相機擷取
+- `utils/opencv.py`: UVCD 設定修補、背景執行緒、相機掃描與影像擷取
 - `lang/`: 多語系 JSON 檔
 - `gesture_recognition/`: 手勢辨識模型與對應資源
 - `CH341SER.EXE`: 驅動安裝程式
 - `icon.ico`: PyInstaller 打包圖示
-- `version.txt`: 本地版本號
+- `version.txt`: 倉庫中的版本文字檔；更新檢查會抓取遠端 `version.txt`，本地版本定義在 `utils/settings.py`
 
 ## Notes
 
 - 這個專案目前以 Windows 為主要執行平台。
 - 啟動程式後會嘗試修改使用者本機 Arduino 套件中的 `UVCD_pram.h`。
-- 相機擷取目前實際儲存間隔固定為每秒一張。
-- 隱藏設定中的擷取速度已可修改設定值，但目前尚未套用到實際擷取迴圈。
+- 相機擷取的實際儲存間隔預設為每秒一張，可在隱藏設定中修改。
+- 隱藏設定中的擷取速度會套用到實際擷取迴圈。
 - 驅動與手勢檔案功能是「複製到目前目錄」，不是自動執行安裝。
 
 ## Author

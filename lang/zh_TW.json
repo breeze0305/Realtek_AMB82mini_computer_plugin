@@ -33,8 +33,6 @@
     "hidden_input_lang": "請輸入要切換的語言編號: ",
     "hidden_lang_updated": "語言已切換為 {lang}。",
     "global_info_title": "=== 全局設定資訊 ===",
-    "camera_label": "攝影機",
-
     "teach_intro_1": "1 這個功能用於教學如何從 AMB82 攝影機捕捉影像。",
     "teach_intro_2": "2 首先請將 AMB82 mini 的 CH340 端口插入 USB 線連接電腦，並打開 Arduino IDE。",
     "teach_intro_3": "3 打開 AMB82 mini 範例中的 AmebaUSB / UVC_device。",
