@@ -13,6 +13,7 @@ This is a Windows-oriented CLI assistant for Realtek AMB82-mini developers. It h
 - Background UVCD patch: 啟動時會背景尋找並修改 `UVCD_pram.h`，將大多數 `UVCD_*` 參數改為 `0`，保留 `UVCD_H264`。
 - Download helper: 提供 Arduino IDE、VLC 與 Realtek package index 相關下載或連結資訊。
 - Gesture resource copy: 將 `gesture_recognition/` 內的模型檔複製到目前工作目錄。
+- Image classification model copy: 將 `image_classification_japan/img_class_cnn.nb` 複製到目前工作目錄。
 - Multi-language UI: 內建 `zh_TW`、`en_US`、`ja_JP` 三種語系。
 - Hidden menu: 在主選單輸入 `ntnu` 可查看全域設定、切換語言，並調整實際擷取間隔。
 
@@ -54,8 +55,9 @@ python main.py
 - `6`: 顯示 Realtek preferences/package index 連結
 - `7`: 下載 VLC
 - `8`: 複製手勢辨識檔案到目前目錄
-- `9`: 檢查 GitHub 上是否有新版本
-- `10`: 離開程式
+- `9`: 複製 `img_class_cnn.nb` 到目前目錄
+- `10`: 檢查 GitHub 上是否有新版本
+- `11`: 離開程式
 - `ntnu`: 進入隱藏設定，可切換語言與調整實際擷取間隔
 
 ## Build
@@ -75,7 +77,7 @@ pyinstaller main.spec
 如果需要手動打包，也可使用：
 
 ```bash
-pyinstaller --onefile --console --icon="./icon.ico" --add-data "CH341SER.EXE;." --add-data "lang/zh_TW.json;lang" --add-data "lang/en_US.json;lang" --add-data "lang/ja_JP.json;lang" --add-data "gesture_recognition/hand_code.txt;gesture_recognition" --add-data "gesture_recognition/hand_weight.nb;gesture_recognition" main.py
+pyinstaller --onefile --console --icon="./icon.ico" --add-data "CH341SER.EXE;." --add-data "lang/zh_TW.json;lang" --add-data "lang/en_US.json;lang" --add-data "lang/ja_JP.json;lang" --add-data "gesture_recognition/hand_code.txt;gesture_recognition" --add-data "gesture_recognition/hand_weight.nb;gesture_recognition" --add-data "image_classification_japan/img_class_cnn.nb;image_classification_japan" main.py
 ```
 
 ## Project Structure
@@ -84,10 +86,11 @@ pyinstaller --onefile --console --icon="./icon.ico" --add-data "CH341SER.EXE;." 
 - `utils/__init__.py`: 匯出主要功能給 `main.py`
 - `utils/settings.py`: 全域設定、執行期狀態、語系載入、資源路徑、版本檢查與 Arduino 路徑 helper
 - `utils/fn.py`: 一般 CLI 功能、隱藏設定、資料夾開啟、教學文字
-- `utils/get_file.py`: 檔案下載、下載連結顯示、手勢檔案複製
+- `utils/get_file.py`: 檔案下載、下載連結顯示、手勢檔案與影像分類模型複製
 - `utils/opencv.py`: UVCD 設定修補、背景執行緒、相機掃描與影像擷取
 - `lang/`: 多語系 JSON 檔
 - `gesture_recognition/`: 手勢辨識模型與對應資源
+- `image_classification_japan/`: 影像分類模型資源
 - `CH341SER.EXE`: 驅動安裝程式
 - `icon.ico`: PyInstaller 打包圖示
 - `version.txt`: 倉庫中的版本文字檔；更新檢查會抓取遠端 `version.txt`，本地版本定義在 `utils/settings.py`
@@ -98,7 +101,7 @@ pyinstaller --onefile --console --icon="./icon.ico" --add-data "CH341SER.EXE;." 
 - 啟動程式後會嘗試修改使用者本機 Arduino 套件中的 `UVCD_pram.h`。
 - 相機擷取的實際儲存間隔預設為每秒一張，可在隱藏設定中修改。
 - 隱藏設定中的擷取速度會套用到實際擷取迴圈。
-- 驅動與手勢檔案功能是「複製到目前目錄」，不是自動執行安裝。
+- 驅動、手勢檔案與影像分類模型功能都是「複製到目前目錄」，不是自動執行安裝。
 
 ## Author
 

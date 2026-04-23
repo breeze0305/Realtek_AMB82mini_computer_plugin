@@ -10,7 +10,7 @@ import requests
 APP_METADATA = {
     "author": "NTNU Feng",
     "contact_email": "benfeng99@gmail.com",
-    "version": "2.2.1",
+    "version": "2.2.2",
 }
 
 APP_LINKS = {
@@ -152,6 +152,7 @@ def verify_resources():
         "lang/ja_JP.json",
         "gesture_recognition/hand_code.txt",
         "gesture_recognition/hand_weight.nb",
+        "image_classification_japan/img_class_cnn.nb",
     ]
     missing = [file_name for file_name in required_files if not resource_path(file_name).exists()]
 

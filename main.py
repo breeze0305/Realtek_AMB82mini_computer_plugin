@@ -9,6 +9,7 @@ from utils import (
     clear_terminal,
     copy_amb_driver,
     copy_hand_gesture_files,
+    copy_image_classification_model,
     download_file,
     load_language,
     open_amb82_package_folder,
@@ -59,8 +60,9 @@ def _build_main_actions(lang):
         "6": lambda: _run_lang_action(show_preference_link, lang),
         "7": lambda: _run_download(APP_LINKS["vlc_dl_link"], lang),
         "8": lambda: _run_lang_action(copy_hand_gesture_files, lang),
-        "9": lambda: _check_version(lang),
-        "10": lambda: _exit_app(lang),
+        "9": lambda: _run_lang_action(copy_image_classification_model, lang),
+        "10": lambda: _check_version(lang),
+        "11": lambda: _exit_app(lang),
         "ntnu": lambda: _open_hidden_settings(lang),
     }
 

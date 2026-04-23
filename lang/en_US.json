@@ -9,8 +9,9 @@
         "6": "Get Realtek Preferences Link",
         "7": "Download VLC Media Player",
         "8": "Get Gesture Recognition Files",
-        "9": "Check for New Version",
-        "10": "Exit Program"
+        "9": "Get Image Classification Model",
+        "10": "Check for New Version",
+        "11": "Exit Program"
     },
     "main_input": "Please enter an option: ",
     "main_back": "Press Enter to return to the main menu...",
@@ -58,6 +59,9 @@
     "hand_file_copy": "Copying files...",
     "hand_file_success": "Gesture recognition files copied successfully",
     "hand_file_error": "Failed to copy gesture recognition files",
+    "image_class_copy": "Copying image classification model...",
+    "image_class_success": "Image classification model copied successfully",
+    "image_class_error": "Failed to copy image classification model",
 
     "update_available": "A new version is available: {github} (current: {local})",
     "update_download": "Please visit {repo} to download the latest version.",

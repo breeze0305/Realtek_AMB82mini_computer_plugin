@@ -9,8 +9,9 @@
         "6": "取得Realtek Preferences連結",
         "7": "下載 VLC 媒體播放器",
         "8": "取得手勢辨識檔案",
-        "9": "檢查新版本",
-        "10": "離開程式"
+        "9": "取得影像分類模型檔案",
+        "10": "檢查新版本",
+        "11": "離開程式"
     },
     "main_input": "請輸入選項: ",
     "main_back": "按 Enter 鍵返回主選單...",
@@ -58,6 +59,9 @@
     "hand_file_copy": "正在複製檔案...",
     "hand_file_success": "手勢辨識檔案已成功複製",
     "hand_file_error": "手勢辨識檔案複製失敗",
+    "image_class_copy": "正在複製影像分類模型檔案...",
+    "image_class_success": "影像分類模型檔案已成功複製",
+    "image_class_error": "影像分類模型檔案複製失敗",
 
     "update_available": "偵測到新版本：{github}（目前版本：{local}）",
     "update_download": "請前往 {repo} 下載最新版本。",

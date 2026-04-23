@@ -9,8 +9,10 @@ from .fn import (
 )
 from .get_file import (
     copy_hand_gesture_files,
+    copy_image_classification_model,
     download_file,
     get_hand_gesture_files,
+    get_image_classification_model,
     get_preference_link,
     show_preference_link,
 )
@@ -49,11 +51,13 @@ __all__ = [
     "clear_terminal",
     "copy_amb_driver",
     "copy_hand_gesture_files",
+    "copy_image_classification_model",
     "download_file",
     "find_amebapro2_root",
     "find_uvcd_param_file",
     "get_capture_interval_seconds",
     "get_hand_gesture_files",
+    "get_image_classification_model",
     "get_preference_link",
     "hidden_settings",
     "load_amb_driver",

@@ -38,6 +38,23 @@ def copy_hand_gesture_files(lang):
 get_hand_gesture_files = copy_hand_gesture_files
 
 
+def copy_image_classification_model(lang):
+    try:
+        print(lang["image_class_copy"])
+
+        source_model = resource_path("image_classification_japan/img_class_cnn.nb")
+        destination_model = Path(os.getcwd()) / "img_class_cnn.nb"
+
+        shutil.copy(source_model, destination_model)
+        print(lang["image_class_success"])
+
+    except Exception as exc:
+        print(lang["image_class_error"], exc)
+
+
+get_image_classification_model = copy_image_classification_model
+
+
 def download_file(url, output_path):
     clear_terminal()
     response = requests.get(url, stream=True)
