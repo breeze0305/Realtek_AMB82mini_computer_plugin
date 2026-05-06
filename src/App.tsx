@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Clipboard,
   Download,
+  ExternalLink,
   FolderOpen,
   Languages,
   PackageCheck,
@@ -110,12 +111,9 @@ const translations = {
     open: "開啟",
     check: "檢查",
     preview: "預覽畫面",
-    scanCamera: "掃描相機",
     selectCamera: "選擇鏡頭",
-    startPreview: "開啟預覽",
     startCapture: "開始截圖",
     stopCapture: "停止截圖",
-    closePreview: "關閉預覽",
     noCamera: "尚未找到相機",
     output: "輸出資料夾",
     lastSaved: "最後儲存",
@@ -149,12 +147,9 @@ const translations = {
     open: "Open",
     check: "Check",
     preview: "Preview",
-    scanCamera: "Scan cameras",
     selectCamera: "Select camera",
-    startPreview: "Start preview",
     startCapture: "Start capture",
     stopCapture: "Stop capture",
-    closePreview: "Close preview",
     noCamera: "No camera found",
     output: "Output folder",
     lastSaved: "Last saved",
@@ -188,12 +183,9 @@ const translations = {
     open: "開く",
     check: "確認",
     preview: "プレビュー",
-    scanCamera: "カメラ検索",
     selectCamera: "カメラを選択",
-    startPreview: "プレビュー開始",
     startCapture: "撮影開始",
     stopCapture: "撮影停止",
-    closePreview: "プレビュー終了",
     noCamera: "カメラが見つかりません",
     output: "出力フォルダー",
     lastSaved: "最後の保存",
@@ -266,6 +258,12 @@ function App() {
     };
   }, [status]);
 
+  useEffect(() => {
+    if (view === "camera") {
+      void scanCameras();
+    }
+  }, [view]);
+
   async function refreshDashboard() {
     const data = await invoke<Dashboard>("get_dashboard");
     setDashboard(data);
@@ -288,6 +286,15 @@ function App() {
     if (!text) return;
     await navigator.clipboard.writeText(text);
     setStatus(t.copied);
+  }
+
+  async function openUrl(url?: string) {
+    if (!url) return;
+    try {
+      await invoke<ActionResult>("open_url", { url });
+    } catch (error) {
+      setStatus(String(error));
+    }
   }
 
   async function runAction<T>(
@@ -325,9 +332,18 @@ function App() {
     return key === "arduino" || key === "vlc";
   }
 
+  function openCameraView() {
+    stopCamera();
+    setCameras([]);
+    setSelectedCamera("");
+    setLastSaved("");
+    setView("camera");
+  }
+
   async function scanCameras() {
     try {
       stopCaptureTimer();
+      stopPreviewStream();
       const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true });
       permissionStream.getTracks().forEach((track) => track.stop());
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -520,7 +536,7 @@ function App() {
       title: t.camera,
       detail: dashboard?.output_folder ?? "",
       icon: Camera,
-      action: () => setView("camera"),
+      action: () => void openCameraView(),
       label: t.open,
       disabled: false,
       key: null,
@@ -571,10 +587,10 @@ function App() {
       </header>
 
       <section className="linkPanel">
-        <button onClick={() => copyText(dashboard?.metadata.repository)} title={t.github}>
+        <button onClick={() => void openUrl(dashboard?.metadata.repository)} title={t.github}>
           <span>{t.github}</span>
           <strong>{dashboard?.metadata.repository}</strong>
-          <Clipboard size={17} />
+          <ExternalLink size={17} />
         </button>
         <button onClick={() => copyText(dashboard?.metadata.realtek_package_url)} title={t.preference}>
           <span>{t.preference}</span>
@@ -642,10 +658,6 @@ function App() {
             {!isPreviewing && <span>{t.preview}</span>}
           </div>
           <div className="cameraControls">
-            <button className="secondaryBtn" onClick={scanCameras}>
-              <RefreshCcw size={17} />
-              {t.scanCamera}
-            </button>
             <select value={selectedCamera} onChange={(event) => void selectCamera(event.target.value)} aria-label={t.selectCamera}>
               <option value="">{t.noCamera}</option>
               {cameras.map((device, index) => (
@@ -654,20 +666,10 @@ function App() {
                 </option>
               ))}
             </select>
-            <button className="secondaryBtn" onClick={() => void startPreview()} disabled={!selectedCamera}>
-              <Camera size={17} />
-              {t.startPreview}
-            </button>
             <button className={isCapturing ? "dangerBtn" : "primaryBtn"} onClick={isCapturing ? stopCaptureTimer : startCapture}>
               {isCapturing ? <Square size={17} /> : <Play size={17} />}
               {isCapturing ? t.stopCapture : t.startCapture}
             </button>
-            {isPreviewing && !isCapturing && (
-              <button className="secondaryBtn" onClick={stopCamera}>
-                <Square size={17} />
-                {t.closePreview}
-              </button>
-            )}
           </div>
           <dl className="pathList">
             <div>

@@ -149,7 +149,9 @@ button:disabled {
 .contentSection {
   display: grid;
   gap: 16px;
+  width: min(980px, 100%);
   max-width: 980px;
+  justify-self: center;
 }
 
 .sectionTop {
@@ -344,6 +346,7 @@ dd {
   position: fixed;
   left: 24px;
   bottom: 20px;
+  z-index: 40;
   min-height: 38px;
   padding: 0 13px;
   border: 1px solid #d8d1c4;
@@ -351,6 +354,7 @@ dd {
   background: #fffdf8;
   box-shadow: 0 8px 24px rgba(35, 48, 47, 0.08);
   font-size: 13px;
+  backdrop-filter: blur(8px);
 }
 
 .feedbackToast {

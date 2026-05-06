@@ -201,6 +201,7 @@ pub fn run() {
             open_realtek_folder,
             open_output_folder,
             open_path,
+            open_url,
             save_driver_as,
             save_hand_resources_as,
             save_image_model_japan_as,
@@ -326,6 +327,20 @@ fn open_path(path: String) -> Result<ActionResult, AppError> {
         ok: true,
         message: "Path opened".into(),
         path: Some(display_path(path)),
+    })
+}
+
+#[tauri::command]
+fn open_url(url: String) -> Result<ActionResult, AppError> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err(AppError::Message("Only http and https URLs can be opened".into()));
+    }
+
+    open_in_browser(&url)?;
+    Ok(ActionResult {
+        ok: true,
+        message: "URL opened".into(),
+        path: Some(url),
     })
 }
 
@@ -846,6 +861,27 @@ fn open_in_explorer(path: &Path) -> Result<(), AppError> {
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         Command::new("xdg-open").arg(path).spawn()?;
+    }
+
+    Ok(())
+}
+
+fn open_in_browser(url: &str) -> Result<(), AppError> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", url])
+            .spawn()?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg(url).spawn()?;
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Command::new("xdg-open").arg(url).spawn()?;
     }
 
     Ok(())
