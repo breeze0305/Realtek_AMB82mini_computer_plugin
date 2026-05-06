@@ -140,27 +140,6 @@ static EMBEDDED_RESOURCES: &[EmbeddedResource] = &[
         )),
     },
     EmbeddedResource {
-        path: "lang/zh_TW.json",
-        bytes: include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../resource/lang/zh_TW.json"
-        )),
-    },
-    EmbeddedResource {
-        path: "lang/en_US.json",
-        bytes: include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../resource/lang/en_US.json"
-        )),
-    },
-    EmbeddedResource {
-        path: "lang/ja_JP.json",
-        bytes: include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../resource/lang/ja_JP.json"
-        )),
-    },
-    EmbeddedResource {
         path: "gesture_recognition/hand_code.txt",
         bytes: include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
