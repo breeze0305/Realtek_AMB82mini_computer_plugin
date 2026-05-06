@@ -115,7 +115,9 @@ button:disabled {
 .linkPanel {
   display: grid;
   gap: 10px;
+  width: min(980px, 100%);
   max-width: 980px;
+  justify-self: center;
 }
 
 .linkPanel button {
@@ -327,6 +329,29 @@ button:disabled {
 .pathList div {
   display: grid;
   gap: 4px;
+}
+
+.cameraGuide {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid #e5ded1;
+}
+
+.cameraGuide h3 {
+  margin: 0;
+  color: #1f2f2d;
+  font-size: 17px;
+}
+
+.cameraGuide ol {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 22px;
+  color: #44504c;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 dt {

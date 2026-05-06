@@ -118,6 +118,7 @@ const translations = {
     output: "輸出資料夾",
     chooseOutput: "選擇資料夾",
     lastSaved: "最後儲存",
+    cameraGuideTitle: "拍攝教學",
     ready: "就緒",
     latest: "目前為最新版本",
     update: "偵測到新版本",
@@ -155,6 +156,7 @@ const translations = {
     output: "Output folder",
     chooseOutput: "Choose folder",
     lastSaved: "Last saved",
+    cameraGuideTitle: "Capture Guide",
     ready: "Ready",
     latest: "You are on the latest version",
     update: "New version available",
@@ -192,6 +194,7 @@ const translations = {
     output: "出力フォルダー",
     chooseOutput: "フォルダー選択",
     lastSaved: "最後の保存",
+    cameraGuideTitle: "撮影ガイド",
     ready: "準備完了",
     latest: "最新バージョンです",
     update: "新しいバージョンがあります",
@@ -202,6 +205,33 @@ const languageNames: Record<Language, string> = {
   zh_TW: "繁體中文",
   en_US: "English",
   ja_JP: "日本語",
+};
+
+const cameraGuideSteps: Record<Language, string[]> = {
+  zh_TW: [
+    "將 AMB82 mini 的 CH340 端口插入 USB 線，並連接至電腦。",
+    "打開 Arduino IDE。",
+    "開啟 AMB82 mini 範例中的 AmebaUSB / UVC_device。",
+    "將程式碼直接燒錄到 AMB82 mini 開發板。",
+    "燒錄完成後，將 AMB82 mini 的 USB 線插入另一個 8735 USB 端口。",
+    "回到此頁面，即可選擇 AMB82 mini 作為拍攝鏡頭。",
+  ],
+  en_US: [
+    "Plug a USB cable into the CH340 port on the AMB82 mini, then connect it to the computer.",
+    "Open Arduino IDE.",
+    "Open AmebaUSB / UVC_device from the AMB82 mini examples.",
+    "Upload the sketch directly to the AMB82 mini development board.",
+    "After the upload finishes, move the AMB82 mini USB cable to the other 8735 USB port.",
+    "Return to this page and select AMB82 mini as the capture camera.",
+  ],
+  ja_JP: [
+    "AMB82 mini の CH340 ポートに USB ケーブルを接続し、コンピューターにつなぎます。",
+    "Arduino IDE を開きます。",
+    "AMB82 mini のサンプルから AmebaUSB / UVC_device を開きます。",
+    "スケッチを AMB82 mini 開発ボードへ直接書き込みます。",
+    "書き込み完了後、AMB82 mini の USB ケーブルをもう一方の 8735 USB ポートに差し替えます。",
+    "このページに戻ると、AMB82 mini を撮影用カメラとして選択できます。",
+  ],
 };
 
 function App() {
@@ -541,7 +571,7 @@ function App() {
     })),
     {
       title: t.folder,
-      detail: dashboard?.realtek_folder ?? "-",
+      detail: "",
       icon: FolderOpen,
       action: () =>
         runAction<ActionResult>("folder", "open_realtek_folder", (result) => result.path ?? result.message),
@@ -552,7 +582,7 @@ function App() {
     },
     {
       title: t.camera,
-      detail: dashboard?.output_folder ?? "",
+      detail: "",
       icon: Camera,
       action: () => void openCameraView(),
       label: t.open,
@@ -646,7 +676,7 @@ function App() {
                   </div>
                   <div className="cardText">
                     <h3>{card.title}</h3>
-                    <p>{card.disabled ? t.unavailableOffline : card.detail}</p>
+                    {(card.disabled || card.detail) && <p>{card.disabled ? t.unavailableOffline : card.detail}</p>}
                   </div>
                   <button className="primaryBtn" onClick={card.action} disabled={card.disabled || isRunning}>
                     {isRunning ? <RefreshCcw className="spin" size={17} /> : <ActionIcon size={17} />}
@@ -703,6 +733,14 @@ function App() {
               <dd>{lastSaved || "-"}</dd>
             </div>
           </dl>
+          <section className="cameraGuide">
+            <h3>{t.cameraGuideTitle}</h3>
+            <ol>
+              {cameraGuideSteps[language].map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </section>
         </section>
       )}
 

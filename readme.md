@@ -20,6 +20,7 @@ Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助
   - 即時預覽畫面
   - 可在相機頁選擇截圖輸出資料夾
   - 定時截圖並輸出為 `image_00001.jpg`、`image_00002.jpg` 等檔案
+  - 內建 AMB82 mini UVC 相機設定教學
 - 檢查 GitHub 上的最新版本。
 - 顯示外網連線狀態；無外網時會停用需要網路的功能。
 - 支援繁體中文、英文、日文介面。
@@ -40,6 +41,7 @@ amb82-mini-computer-plugin.exe
 
 - 固定大小視窗，不會因拖拉造成排版跑掉。
 - 主選單卡片皆有 index 編號，方便對照操作項目。
+- GitHub 倉庫與 AMB Preference 連結區塊置中顯示，與主選單寬度一致。
 - GitHub 倉庫連結可直接開啟網頁；AMB Preference 連結可一鍵複製。
 - Arduino IDE 與 VLC 下載時，卡片會以深一點的淺綠色覆蓋層顯示下載進度。
 - 操作結果會以半透明淺綠色提示浮窗顯示，1.5 秒後淡出。
