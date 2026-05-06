@@ -315,13 +315,14 @@ fn open_output_folder(state: tauri::State<AppState>) -> Result<ActionResult, App
 
 #[tauri::command]
 fn select_output_folder(state: tauri::State<AppState>) -> Result<ActionResult, AppError> {
-    let Some(folder) = rfd::FileDialog::new()
-        .set_title("Select output folder")
+    let Some(parent_folder) = rfd::FileDialog::new()
+        .set_title("Select output folder location")
         .pick_folder()
     else {
         return Err(AppError::Message("Folder selection was canceled".into()));
     };
 
+    let folder = parent_folder.join("output");
     fs::create_dir_all(&folder)?;
     *state
         .output_folder
@@ -331,7 +332,7 @@ fn select_output_folder(state: tauri::State<AppState>) -> Result<ActionResult, A
 
     Ok(ActionResult {
         ok: true,
-        message: "Output folder selected".into(),
+        message: "Output folder location selected".into(),
         path: Some(display_path(folder)),
     })
 }
