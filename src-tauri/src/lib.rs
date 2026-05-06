@@ -123,6 +123,7 @@ struct UvcdResult {
 
 struct AppState {
     settings: Mutex<Settings>,
+    output_folder: Mutex<Option<PathBuf>>,
 }
 
 struct EmbeddedResource {
@@ -133,19 +134,31 @@ struct EmbeddedResource {
 static EMBEDDED_RESOURCES: &[EmbeddedResource] = &[
     EmbeddedResource {
         path: "CH341SER.EXE",
-        bytes: include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../resource/CH341SER.EXE")),
+        bytes: include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../resource/CH341SER.EXE"
+        )),
     },
     EmbeddedResource {
         path: "lang/zh_TW.json",
-        bytes: include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../resource/lang/zh_TW.json")),
+        bytes: include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../resource/lang/zh_TW.json"
+        )),
     },
     EmbeddedResource {
         path: "lang/en_US.json",
-        bytes: include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../resource/lang/en_US.json")),
+        bytes: include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../resource/lang/en_US.json"
+        )),
     },
     EmbeddedResource {
         path: "lang/ja_JP.json",
-        bytes: include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../resource/lang/ja_JP.json")),
+        bytes: include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../resource/lang/ja_JP.json"
+        )),
     },
     EmbeddedResource {
         path: "gesture_recognition/hand_code.txt",
@@ -185,6 +198,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState {
             settings: Mutex::new(Settings::default()),
+            output_folder: Mutex::new(None),
         })
         .setup(|app| {
             let handle = app.handle().clone();
@@ -200,6 +214,7 @@ pub fn run() {
             copy_image_model,
             open_realtek_folder,
             open_output_folder,
+            select_output_folder,
             open_path,
             open_url,
             save_driver_as,
@@ -233,7 +248,7 @@ fn get_dashboard(app: AppHandle, state: tauri::State<AppState>) -> Result<Dashbo
         settings,
         resources: verify_resources_internal(&app),
         realtek_folder: find_realtek_folder().map(display_path),
-        output_folder: display_path(output_dir()?),
+        output_folder: display_path(output_dir(&state)?),
         internet_connected: has_internet(),
     })
 }
@@ -308,13 +323,36 @@ fn open_realtek_folder() -> Result<ActionResult, AppError> {
 }
 
 #[tauri::command]
-fn open_output_folder() -> Result<ActionResult, AppError> {
-    let folder = output_dir()?;
+fn open_output_folder(state: tauri::State<AppState>) -> Result<ActionResult, AppError> {
+    let folder = output_dir(&state)?;
     fs::create_dir_all(&folder)?;
     open_in_explorer(&folder)?;
     Ok(ActionResult {
         ok: true,
         message: "Output folder opened".into(),
+        path: Some(display_path(folder)),
+    })
+}
+
+#[tauri::command]
+fn select_output_folder(state: tauri::State<AppState>) -> Result<ActionResult, AppError> {
+    let Some(folder) = rfd::FileDialog::new()
+        .set_title("Select output folder")
+        .pick_folder()
+    else {
+        return Err(AppError::Message("Folder selection was canceled".into()));
+    };
+
+    fs::create_dir_all(&folder)?;
+    *state
+        .output_folder
+        .lock()
+        .map_err(|_| AppError::Message("Failed to update output folder".into()))? =
+        Some(folder.clone());
+
+    Ok(ActionResult {
+        ok: true,
+        message: "Output folder selected".into(),
         path: Some(display_path(folder)),
     })
 }
@@ -333,7 +371,9 @@ fn open_path(path: String) -> Result<ActionResult, AppError> {
 #[tauri::command]
 fn open_url(url: String) -> Result<ActionResult, AppError> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err(AppError::Message("Only http and https URLs can be opened".into()));
+        return Err(AppError::Message(
+            "Only http and https URLs can be opened".into(),
+        ));
     }
 
     open_in_browser(&url)?;
@@ -346,7 +386,12 @@ fn open_url(url: String) -> Result<ActionResult, AppError> {
 
 #[tauri::command]
 fn save_driver_as(app: AppHandle) -> Result<ActionResult, AppError> {
-    save_one_resource_as(&app, "CH341SER.EXE", "CH341SER.EXE", "Save CH340/CH341 installer")
+    save_one_resource_as(
+        &app,
+        "CH341SER.EXE",
+        "CH341SER.EXE",
+        "Save CH340/CH341 installer",
+    )
 }
 
 #[tauri::command]
@@ -400,7 +445,12 @@ fn download_vlc() -> Result<DownloadResult, AppError> {
 
 #[tauri::command]
 fn download_arduino_ide_as(app: AppHandle) -> Result<DownloadResult, AppError> {
-    download_url_as(&app, "arduino", ARDUINO_IDE_URL, "Save Arduino IDE installer")
+    download_url_as(
+        &app,
+        "arduino",
+        ARDUINO_IDE_URL,
+        "Save Arduino IDE installer",
+    )
 }
 
 #[tauri::command]
@@ -416,7 +466,9 @@ fn check_internet() -> bool {
 #[tauri::command]
 fn check_version() -> Result<VersionCheck, AppError> {
     if !has_internet() {
-        return Err(AppError::Message("Internet connection is not available".into()));
+        return Err(AppError::Message(
+            "Internet connection is not available".into(),
+        ));
     }
 
     let remote = http_agent()
@@ -442,8 +494,11 @@ fn repair_uvcd_now() -> Result<UvcdResult, AppError> {
 }
 
 #[tauri::command]
-fn save_capture_image(bytes: Vec<u8>) -> Result<ActionResult, AppError> {
-    let folder = output_dir()?;
+fn save_capture_image(
+    bytes: Vec<u8>,
+    state: tauri::State<AppState>,
+) -> Result<ActionResult, AppError> {
+    let folder = output_dir(&state)?;
     fs::create_dir_all(&folder)?;
     let file_path = next_image_path(&folder)?;
     fs::write(&file_path, bytes)?;
@@ -600,7 +655,9 @@ fn download_url_as(
     title: &str,
 ) -> Result<DownloadResult, AppError> {
     if !has_internet() {
-        return Err(AppError::Message("Internet connection is not available".into()));
+        return Err(AppError::Message(
+            "Internet connection is not available".into(),
+        ));
     }
 
     let file_name = file_name_from_url(url)?;
@@ -764,7 +821,16 @@ fn repair_uvcd() -> Result<UvcdResult, AppError> {
     })
 }
 
-fn output_dir() -> Result<PathBuf, AppError> {
+fn output_dir(state: &tauri::State<AppState>) -> Result<PathBuf, AppError> {
+    if let Some(folder) = state
+        .output_folder
+        .lock()
+        .map_err(|_| AppError::Message("Failed to read output folder".into()))?
+        .clone()
+    {
+        return Ok(folder);
+    }
+
     Ok(std::env::current_dir()?.join("output"))
 }
 

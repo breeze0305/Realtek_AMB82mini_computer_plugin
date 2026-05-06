@@ -116,6 +116,7 @@ const translations = {
     stopCapture: "停止截圖",
     noCamera: "尚未找到相機",
     output: "輸出資料夾",
+    chooseOutput: "選擇資料夾",
     lastSaved: "最後儲存",
     ready: "就緒",
     latest: "目前為最新版本",
@@ -152,6 +153,7 @@ const translations = {
     stopCapture: "Stop capture",
     noCamera: "No camera found",
     output: "Output folder",
+    chooseOutput: "Choose folder",
     lastSaved: "Last saved",
     ready: "Ready",
     latest: "You are on the latest version",
@@ -188,6 +190,7 @@ const translations = {
     stopCapture: "撮影停止",
     noCamera: "カメラが見つかりません",
     output: "出力フォルダー",
+    chooseOutput: "フォルダー選択",
     lastSaved: "最後の保存",
     ready: "準備完了",
     latest: "最新バージョンです",
@@ -325,6 +328,21 @@ function App() {
           });
         }, 500);
       }
+    }
+  }
+
+  async function selectOutputFolder() {
+    try {
+      setRunning("output");
+      const result = await invoke<ActionResult>("select_output_folder");
+      setDashboard((current) =>
+        current ? { ...current, output_folder: result.path ?? current.output_folder } : current,
+      );
+      setStatus(result.path ?? result.message);
+    } catch (error) {
+      setStatus(String(error));
+    } finally {
+      setRunning(null);
     }
   }
 
@@ -669,6 +687,10 @@ function App() {
             <button className={isCapturing ? "dangerBtn" : "primaryBtn"} onClick={isCapturing ? stopCaptureTimer : startCapture}>
               {isCapturing ? <Square size={17} /> : <Play size={17} />}
               {isCapturing ? t.stopCapture : t.startCapture}
+            </button>
+            <button className="secondaryBtn" onClick={() => void selectOutputFolder()} disabled={isCapturing || running === "output"}>
+              <FolderOpen size={17} />
+              {t.chooseOutput}
             </button>
           </div>
           <dl className="pathList">
