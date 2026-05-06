@@ -40,6 +40,7 @@ amb82-mini-computer-plugin.exe
 - 固定大小視窗，不會因拖拉造成排版跑掉。
 - 主選單卡片皆有 index 編號，方便對照操作項目。
 - GitHub 倉庫連結與 AMB Preference 連結可一鍵複製。
+- Arduino IDE 與 VLC 下載時，卡片會以深一點的淺綠色覆蓋層顯示下載進度。
 - 操作結果會以半透明淺綠色提示浮窗顯示，5 秒後淡出。
 - `UVCD_pram.h` 修正會在背景自動嘗試，不干擾一般使用流程。
 

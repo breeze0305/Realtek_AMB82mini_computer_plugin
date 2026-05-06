@@ -14,7 +14,8 @@ import {
   WifiOff,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 type Language = "zh_TW" | "en_US" | "ja_JP";
 type View = "home" | "camera";
@@ -53,6 +54,14 @@ type DownloadResult = {
   file_name: string;
   path: string;
   bytes: number;
+};
+
+type DownloadKey = "arduino" | "vlc";
+
+type DownloadProgress = {
+  key: DownloadKey;
+  downloaded: number;
+  total?: number | null;
 };
 
 type VersionCheck = {
@@ -206,6 +215,7 @@ function App() {
   const [running, setRunning] = useState<RunningAction>(null);
   const [status, setStatus] = useState("");
   const [isFeedbackLeaving, setIsFeedbackLeaving] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<Partial<Record<DownloadKey, number>>>({});
   const [internetConnected, setInternetConnected] = useState(false);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCamera, setSelectedCamera] = useState("");
@@ -222,7 +232,24 @@ function App() {
   useEffect(() => {
     void refreshDashboard();
     const timer = window.setInterval(() => void refreshInternet(), 30000);
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen<DownloadProgress>("download-progress", (event) => {
+      const { key, downloaded, total } = event.payload;
+      const progress = total && total > 0 ? Math.min(downloaded / total, 1) : 0.08;
+      setDownloadProgress((current) => ({ ...current, [key]: progress }));
+    }).then((nextUnlisten) => {
+      if (disposed) {
+        nextUnlisten();
+      } else {
+        unlisten = nextUnlisten;
+      }
+    });
+
     return () => {
+      disposed = true;
+      unlisten?.();
       window.clearInterval(timer);
       stopCamera();
     };
@@ -270,6 +297,9 @@ function App() {
   ) {
     try {
       setRunning(key);
+      if (isDownloadKey(key)) {
+        setDownloadProgress((current) => ({ ...current, [key]: 0.02 }));
+      }
       const result = await invoke<T>(command);
       setStatus(next(result));
       if (command === "check_version") {
@@ -279,7 +309,20 @@ function App() {
       setStatus(String(error));
     } finally {
       setRunning(null);
+      if (isDownloadKey(key)) {
+        window.setTimeout(() => {
+          setDownloadProgress((current) => {
+            const nextProgress = { ...current };
+            delete nextProgress[key];
+            return nextProgress;
+          });
+        }, 500);
+      }
     }
+  }
+
+  function isDownloadKey(key: RunningAction): key is DownloadKey {
+    return key === "arduino" || key === "vlc";
   }
 
   async function scanCameras() {
@@ -550,8 +593,19 @@ function App() {
               const Icon = card.icon;
               const isRunning = card.key !== null && running === card.key;
               const ActionIcon = card.actionIcon;
+              const progress = isDownloadKey(card.key) ? downloadProgress[card.key] : undefined;
+              const progressStyle =
+                progress === undefined
+                  ? undefined
+                  : ({
+                      "--card-progress": `${Math.max(4, Math.round(progress * 100))}%`,
+                    } as CSSProperties);
               return (
-                <article className="menuCard" key={card.title}>
+                <article
+                  className={`menuCard ${progress === undefined ? "" : "isDownloading"}`}
+                  key={card.title}
+                  style={progressStyle}
+                >
                   <span className="cardIndex">{String(index + 1).padStart(2, "0")}</span>
                   <div className="cardIcon">
                     <Icon size={24} />

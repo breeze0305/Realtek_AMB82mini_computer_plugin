@@ -2,7 +2,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
-    io::{self, Write},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
     process::Command,
     sync::Mutex,
@@ -97,6 +97,13 @@ struct DownloadResult {
     file_name: String,
     path: String,
     bytes: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct DownloadProgress {
+    key: &'static str,
+    downloaded: u64,
+    total: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -377,13 +384,13 @@ fn download_vlc() -> Result<DownloadResult, AppError> {
 }
 
 #[tauri::command]
-fn download_arduino_ide_as() -> Result<DownloadResult, AppError> {
-    download_url_as(ARDUINO_IDE_URL, "Save Arduino IDE installer")
+fn download_arduino_ide_as(app: AppHandle) -> Result<DownloadResult, AppError> {
+    download_url_as(&app, "arduino", ARDUINO_IDE_URL, "Save Arduino IDE installer")
 }
 
 #[tauri::command]
-fn download_vlc_as() -> Result<DownloadResult, AppError> {
-    download_url_as(VLC_URL, "Save VLC installer")
+fn download_vlc_as(app: AppHandle) -> Result<DownloadResult, AppError> {
+    download_url_as(&app, "vlc", VLC_URL, "Save VLC installer")
 }
 
 #[tauri::command]
@@ -571,7 +578,12 @@ fn download_to_cwd(url: &str) -> Result<DownloadResult, AppError> {
     })
 }
 
-fn download_url_as(url: &str, title: &str) -> Result<DownloadResult, AppError> {
+fn download_url_as(
+    app: &AppHandle,
+    key: &'static str,
+    url: &str,
+    title: &str,
+) -> Result<DownloadResult, AppError> {
     if !has_internet() {
         return Err(AppError::Message("Internet connection is not available".into()));
     }
@@ -579,15 +591,41 @@ fn download_url_as(url: &str, title: &str) -> Result<DownloadResult, AppError> {
     let file_name = file_name_from_url(url)?;
     let target = save_dialog(file_name, title)
         .ok_or_else(|| AppError::Message("Save was canceled".into()))?;
-    download_to_path(url, &target)
+    download_to_path(app, key, url, &target)
 }
 
-fn download_to_path(url: &str, target: &Path) -> Result<DownloadResult, AppError> {
+fn download_to_path(
+    app: &AppHandle,
+    key: &'static str,
+    url: &str,
+    target: &Path,
+) -> Result<DownloadResult, AppError> {
     let response = http_agent().get(url).call().map_err(http_error)?;
+    let total = response
+        .header("content-length")
+        .and_then(|value| value.parse::<u64>().ok());
     let mut file = fs::File::create(target)?;
     let mut reader = response.into_reader();
-    let bytes = io::copy(&mut reader, &mut file)?;
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut bytes = 0_u64;
+    let mut last_emit = 0_u64;
+
+    emit_download_progress(app, key, bytes, total);
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        file.write_all(&buffer[..read])?;
+        bytes += read as u64;
+
+        if bytes.saturating_sub(last_emit) >= 256 * 1024 || total == Some(bytes) {
+            emit_download_progress(app, key, bytes, total);
+            last_emit = bytes;
+        }
+    }
     file.flush()?;
+    emit_download_progress(app, key, bytes, total.or(Some(bytes)));
 
     Ok(DownloadResult {
         file_name: target
@@ -598,6 +636,17 @@ fn download_to_path(url: &str, target: &Path) -> Result<DownloadResult, AppError
         path: display_path(target),
         bytes,
     })
+}
+
+fn emit_download_progress(app: &AppHandle, key: &'static str, downloaded: u64, total: Option<u64>) {
+    let _ = app.emit(
+        "download-progress",
+        DownloadProgress {
+            key,
+            downloaded,
+            total,
+        },
+    );
 }
 
 fn save_dialog(default_name: &str, title: &str) -> Option<PathBuf> {

@@ -183,6 +183,27 @@ button:disabled {
   border: 1px solid #ded7c9;
   border-radius: 8px;
   background: #fffdf8;
+  overflow: hidden;
+}
+
+.menuCard::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: rgba(184, 220, 204, 0.64);
+  content: "";
+  pointer-events: none;
+  transition: width 180ms ease-out;
+}
+
+.menuCard.isDownloading::before {
+  width: var(--card-progress, 4%);
+}
+
+.menuCard > * {
+  position: relative;
+  z-index: 1;
 }
 
 .cardIndex {
