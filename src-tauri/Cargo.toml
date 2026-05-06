@@ -1,0 +1,26 @@
+[package]
+name = "amb82-mini-computer-plugin"
+version = "2.2.2"
+description = "Realtek AMB82-mini Windows desktop assistant"
+authors = ["breeze0305"]
+edition = "2021"
+
+[lib]
+name = "amb82_plugin_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.0.6", features = [] }
+
+[dependencies]
+regex = "1"
+rfd = "0.15"
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "=2.0.6", features = [] }
+tauri-codegen = "=2.0.5"
+tauri-macros = "=2.0.5"
+tauri-runtime = "=2.1.1"
+tauri-runtime-wry = "=2.1.2"
+tauri-utils = "=2.2.0"
+thiserror = "1"
+ureq = { version = "=2.10.1", default-features = true }

@@ -1,0 +1,417 @@
+:root {
+  font-family:
+    Inter, "Noto Sans TC", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #202426;
+  background: #f5f3ee;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.appShell {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  min-height: 100vh;
+  max-height: 100vh;
+  padding: 24px 34px 72px;
+  overflow: auto;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0)),
+    #f5f3ee;
+}
+
+.appHeader {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+}
+
+.appHeader h1 {
+  margin: 0;
+  color: #1f2f2d;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.backButton,
+.languageSelect,
+.linkPanel button,
+.primaryBtn,
+.secondaryBtn,
+.dangerBtn,
+.networkStatus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.backButton {
+  min-width: 88px;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid #d8d1c4;
+  border-radius: 7px;
+  color: #263331;
+  background: #fffdf8;
+}
+
+.backButton[hidden] {
+  visibility: hidden;
+  display: inline-flex;
+}
+
+.languageSelect {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d8d1c4;
+  border-radius: 8px;
+  color: #273331;
+  background: #fffdf8;
+}
+
+.languageSelect span {
+  color: #6a746f;
+  font-size: 13px;
+}
+
+.languageSelect select {
+  min-width: 118px;
+  border: 0;
+  outline: 0;
+  color: #273331;
+  background: transparent;
+}
+
+.linkPanel {
+  display: grid;
+  gap: 10px;
+  max-width: 980px;
+}
+
+.linkPanel button {
+  justify-content: flex-start;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 1px solid #ded7c9;
+  border-radius: 8px;
+  color: #273331;
+  background: #fffdf8;
+  text-align: left;
+}
+
+.linkPanel span {
+  width: 140px;
+  flex: 0 0 auto;
+  color: #6a746f;
+  font-size: 13px;
+}
+
+.linkPanel strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: #1f2f2d;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contentSection {
+  display: grid;
+  gap: 16px;
+  max-width: 980px;
+}
+
+.sectionTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.contentSection h2,
+.sectionTop h2 {
+  margin: 0;
+  color: #1f2f2d;
+  font-size: 23px;
+}
+
+.menuGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.menuCard {
+  position: relative;
+  display: grid;
+  grid-template-columns: 54px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 108px;
+  padding: 16px;
+  border: 1px solid #ded7c9;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.cardIndex {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  color: #77918a;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.cardIcon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 8px;
+  color: #0f5b52;
+  background: #dceee6;
+}
+
+.cardText {
+  min-width: 0;
+}
+
+.cardText h3 {
+  margin: 0 0 7px;
+  color: #111817;
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.cardText p {
+  margin: 0;
+  overflow: hidden;
+  color: #66716d;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primaryBtn,
+.secondaryBtn,
+.dangerBtn {
+  min-width: 98px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 7px;
+}
+
+.primaryBtn {
+  color: #fffaf0;
+  background: #0f766e;
+}
+
+.secondaryBtn {
+  border: 1px solid #d8d1c4;
+  color: #273331;
+  background: #ffffff;
+}
+
+.dangerBtn {
+  color: #fffaf0;
+  background: #b9473b;
+}
+
+.cameraSection {
+  max-width: 1040px;
+}
+
+.videoFrame {
+  position: relative;
+  display: grid;
+  min-height: 390px;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 8px;
+  color: #f6efe2;
+  background: #1d2322;
+  aspect-ratio: 16 / 9;
+}
+
+.videoFrame video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.videoFrame span {
+  position: absolute;
+  color: #d8e0dc;
+  font-size: 15px;
+}
+
+.cameraControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.cameraControls select {
+  min-width: 260px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #d8d1c4;
+  border-radius: 7px;
+  color: #273331;
+  background: #ffffff;
+}
+
+.pathList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.pathList div {
+  display: grid;
+  gap: 4px;
+}
+
+dt {
+  color: #6a746f;
+  font-size: 12px;
+}
+
+dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #273331;
+  font-size: 13px;
+}
+
+.networkStatus {
+  position: fixed;
+  left: 24px;
+  bottom: 20px;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid #d8d1c4;
+  border-radius: 999px;
+  background: #fffdf8;
+  box-shadow: 0 8px 24px rgba(35, 48, 47, 0.08);
+  font-size: 13px;
+}
+
+.feedbackToast {
+  position: fixed;
+  left: 50%;
+  bottom: 76px;
+  z-index: 20;
+  width: min(900px, calc(100vw - 96px));
+  max-height: 112px;
+  padding: 14px 18px;
+  overflow: auto;
+  border: 1px solid #b8dccc;
+  border-radius: 14px;
+  color: #1f332f;
+  background: rgba(220, 238, 230, 0.92);
+  box-shadow: 0 18px 42px rgba(15, 91, 82, 0.18);
+  transform: translateX(-50%);
+  animation: toastIn 180ms ease-out;
+  overflow-wrap: anywhere;
+  backdrop-filter: blur(8px);
+}
+
+.feedbackToast.leaving {
+  animation: toastOut 220ms ease-in forwards;
+}
+
+.networkStatus::before {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  content: "";
+}
+
+.networkStatus.online::before {
+  background: #1fa76d;
+}
+
+.networkStatus.offline::before {
+  background: #c74b40;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+@media (max-width: 1040px) {
+  .menuGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .appShell {
+    padding-inline: 22px;
+  }
+}

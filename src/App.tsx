@@ -1,0 +1,639 @@
+import {
+  ArrowLeft,
+  Camera,
+  CheckCircle2,
+  Clipboard,
+  Download,
+  FolderOpen,
+  Languages,
+  PackageCheck,
+  Play,
+  RefreshCcw,
+  Square,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useRef, useState } from "react";
+
+type Language = "zh_TW" | "en_US" | "ja_JP";
+type View = "home" | "camera";
+
+type Metadata = {
+  author: string;
+  contact: string;
+  version: string;
+  repository: string;
+  arduino_ide_url: string;
+  vlc_url: string;
+  realtek_package_url: string;
+  supported_languages: Language[];
+};
+
+type AppSettings = {
+  capture_interval: number;
+  language: Language;
+};
+
+type Dashboard = {
+  metadata: Metadata;
+  settings: AppSettings;
+  realtek_folder: string | null;
+  output_folder: string;
+  internet_connected: boolean;
+};
+
+type ActionResult = {
+  ok: boolean;
+  message: string;
+  path?: string | null;
+};
+
+type DownloadResult = {
+  file_name: string;
+  path: string;
+  bytes: number;
+};
+
+type VersionCheck = {
+  local: string;
+  remote: string;
+  is_latest: boolean;
+  repository: string;
+};
+
+type RunningAction =
+  | "driver"
+  | "hand"
+  | "japan"
+  | "taiwan"
+  | "arduino"
+  | "vlc"
+  | "folder"
+  | "version"
+  | "output"
+  | null;
+
+const translations = {
+  zh_TW: {
+    appTitle: "Realtek AMB82-mini工具",
+    language: "語言",
+    mainMenu: "主選單",
+    files: "檔案取得",
+    fileHint: "選擇項目後會開啟 Windows 存檔視窗",
+    driver: "CH340/CH341安裝檔",
+    hand: "手勢自走車追蹤程式碼/權重",
+    japanModel: "影像分類權重(硬幣/滑鼠/日本硬幣)",
+    taiwanModel: "影像分類權重(硬幣/滑鼠/台灣100紙鈔)",
+    arduino: "Arduino IDE安裝檔",
+    vlc: "VLC 安裝檔",
+    folder: "開啟AmebaPro2資料夾",
+    camera: "AMB相機畫面擷取",
+    version: "版本檢查",
+    github: "GitHub 倉庫",
+    preference: "AMB Preference",
+    copied: "已複製到剪貼簿",
+    online: "外網已連線",
+    offline: "外網未連線",
+    unavailableOffline: "需要外網連線",
+    back: "返回",
+    save: "取得",
+    open: "開啟",
+    check: "檢查",
+    preview: "預覽畫面",
+    scanCamera: "掃描相機",
+    selectCamera: "選擇鏡頭",
+    startPreview: "開啟預覽",
+    startCapture: "開始截圖",
+    stopCapture: "停止截圖",
+    closePreview: "關閉預覽",
+    noCamera: "尚未找到相機",
+    output: "輸出資料夾",
+    lastSaved: "最後儲存",
+    ready: "就緒",
+    latest: "目前為最新版本",
+    update: "偵測到新版本",
+  },
+  en_US: {
+    appTitle: "Realtek AMB82-mini Tool",
+    language: "Language",
+    mainMenu: "Main Menu",
+    files: "Get Files",
+    fileHint: "Each item opens a Windows save dialog",
+    driver: "CH340/CH341 Installer",
+    hand: "Gesture Car Tracking Code/Weight",
+    japanModel: "Image Classification Weight (coin/mouse/Japan coin)",
+    taiwanModel: "Image Classification Weight (coin/mouse/Taiwan 100 banknote)",
+    arduino: "Arduino IDE Installer",
+    vlc: "VLC Installer",
+    folder: "Open AmebaPro2 Folder",
+    camera: "AMB Camera Capture",
+    version: "Version Check",
+    github: "GitHub Repository",
+    preference: "AMB Preference",
+    copied: "Copied to clipboard",
+    online: "Internet connected",
+    offline: "Internet disconnected",
+    unavailableOffline: "Internet required",
+    back: "Back",
+    save: "Get",
+    open: "Open",
+    check: "Check",
+    preview: "Preview",
+    scanCamera: "Scan cameras",
+    selectCamera: "Select camera",
+    startPreview: "Start preview",
+    startCapture: "Start capture",
+    stopCapture: "Stop capture",
+    closePreview: "Close preview",
+    noCamera: "No camera found",
+    output: "Output folder",
+    lastSaved: "Last saved",
+    ready: "Ready",
+    latest: "You are on the latest version",
+    update: "New version available",
+  },
+  ja_JP: {
+    appTitle: "Realtek AMB82-mini ツール",
+    language: "言語",
+    mainMenu: "メニュー",
+    files: "ファイル取得",
+    fileHint: "項目を選ぶと Windows の保存画面を開きます",
+    driver: "CH340/CH341 インストーラー",
+    hand: "ジェスチャーカー追跡コード/重み",
+    japanModel: "画像分類重み(コイン/マウス/日本硬貨)",
+    taiwanModel: "画像分類重み(コイン/マウス/台湾100紙幣)",
+    arduino: "Arduino IDE インストーラー",
+    vlc: "VLC インストーラー",
+    folder: "AmebaPro2 フォルダーを開く",
+    camera: "AMB カメラ撮影",
+    version: "バージョン確認",
+    github: "GitHub リポジトリ",
+    preference: "AMB Preference",
+    copied: "クリップボードにコピーしました",
+    online: "インターネット接続あり",
+    offline: "インターネット接続なし",
+    unavailableOffline: "インターネットが必要です",
+    back: "戻る",
+    save: "取得",
+    open: "開く",
+    check: "確認",
+    preview: "プレビュー",
+    scanCamera: "カメラ検索",
+    selectCamera: "カメラを選択",
+    startPreview: "プレビュー開始",
+    startCapture: "撮影開始",
+    stopCapture: "撮影停止",
+    closePreview: "プレビュー終了",
+    noCamera: "カメラが見つかりません",
+    output: "出力フォルダー",
+    lastSaved: "最後の保存",
+    ready: "準備完了",
+    latest: "最新バージョンです",
+    update: "新しいバージョンがあります",
+  },
+} satisfies Record<Language, Record<string, string>>;
+
+const languageNames: Record<Language, string> = {
+  zh_TW: "繁體中文",
+  en_US: "English",
+  ja_JP: "日本語",
+};
+
+function App() {
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [view, setView] = useState<View>("home");
+  const [running, setRunning] = useState<RunningAction>(null);
+  const [status, setStatus] = useState("");
+  const [isFeedbackLeaving, setIsFeedbackLeaving] = useState(false);
+  const [internetConnected, setInternetConnected] = useState(false);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState("");
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [lastSaved, setLastSaved] = useState("");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const timerRef = useRef<number | null>(null);
+
+  const language = dashboard?.settings.language ?? "zh_TW";
+  const t = translations[language];
+
+  useEffect(() => {
+    void refreshDashboard();
+    const timer = window.setInterval(() => void refreshInternet(), 30000);
+    return () => {
+      window.clearInterval(timer);
+      stopCamera();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!status) return;
+    setIsFeedbackLeaving(false);
+    const leaveTimer = window.setTimeout(() => setIsFeedbackLeaving(true), 5000);
+    const clearTimer = window.setTimeout(() => setStatus(""), 5240);
+    return () => {
+      window.clearTimeout(leaveTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [status]);
+
+  async function refreshDashboard() {
+    const data = await invoke<Dashboard>("get_dashboard");
+    setDashboard(data);
+    setInternetConnected(data.internet_connected);
+    setStatus("");
+  }
+
+  async function refreshInternet() {
+    const online = await invoke<boolean>("check_internet");
+    setInternetConnected(online);
+  }
+
+  async function changeLanguage(language: Language) {
+    const next = await invoke<AppSettings>("set_language", { language });
+    setDashboard((current) => (current ? { ...current, settings: next } : current));
+    setStatus("");
+  }
+
+  async function copyText(text?: string) {
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    setStatus(t.copied);
+  }
+
+  async function runAction<T>(
+    key: Exclude<RunningAction, null>,
+    command: string,
+    next: (result: T) => string,
+  ) {
+    try {
+      setRunning(key);
+      const result = await invoke<T>(command);
+      setStatus(next(result));
+      if (command === "check_version") {
+        await refreshInternet();
+      }
+    } catch (error) {
+      setStatus(String(error));
+    } finally {
+      setRunning(null);
+    }
+  }
+
+  async function scanCameras() {
+    try {
+      stopCaptureTimer();
+      const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      permissionStream.getTracks().forEach((track) => track.stop());
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter((device) => device.kind === "videoinput");
+      const nextCamera =
+        videoDevices.find((device) => device.deviceId === selectedCamera)?.deviceId ||
+        videoDevices[0]?.deviceId ||
+        "";
+      setCameras(videoDevices);
+      setSelectedCamera(nextCamera);
+      setStatus(videoDevices.length ? `${videoDevices.length} camera(s)` : t.noCamera);
+      if (nextCamera) await startPreview(nextCamera);
+    } catch (error) {
+      setStatus(String(error));
+    }
+  }
+
+  async function startPreview(deviceId = selectedCamera) {
+    stopCaptureTimer();
+    stopPreviewStream();
+    if (!deviceId) {
+      setStatus(t.noCamera);
+      return false;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        deviceId: { exact: deviceId },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
+    streamRef.current = stream;
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+    }
+    setIsPreviewing(true);
+    setStatus(t.preview);
+    return true;
+  }
+
+  async function startCapture() {
+    try {
+      if (!isPreviewing) {
+        const started = await startPreview();
+        if (!started) return;
+      }
+      await captureFrame();
+      const interval = Math.max(1, dashboard?.settings.capture_interval ?? 1) * 1000;
+      timerRef.current = window.setInterval(() => void captureFrame(), interval);
+      setIsCapturing(true);
+    } catch (error) {
+      setStatus(String(error));
+    }
+  }
+
+  function stopCaptureTimer() {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsCapturing(false);
+  }
+
+  function stopPreviewStream() {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setIsPreviewing(false);
+  }
+
+  function stopCamera() {
+    stopCaptureTimer();
+    stopPreviewStream();
+  }
+
+  async function selectCamera(deviceId: string) {
+    setSelectedCamera(deviceId);
+    if (!deviceId) {
+      stopCamera();
+      return;
+    }
+
+    try {
+      await startPreview(deviceId);
+    } catch (error) {
+      setStatus(String(error));
+    }
+  }
+
+  async function captureFrame() {
+    const video = videoRef.current;
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.92),
+    );
+    if (!blob) return;
+
+    const buffer = await blob.arrayBuffer();
+    const bytes = Array.from(new Uint8Array(buffer));
+    const result = await invoke<ActionResult>("save_capture_image", { bytes });
+    const path = result.path ?? "";
+    setLastSaved(path);
+    setStatus(path);
+  }
+
+  const fileCards = [
+    {
+      title: t.driver,
+      detail: "CH341SER.EXE",
+      command: "save_driver_as",
+      key: "driver" as const,
+      disabled: false,
+    },
+    {
+      title: t.hand,
+      detail: "hand_code.txt / hand_weight.nb",
+      command: "save_hand_resources_as",
+      key: "hand" as const,
+      disabled: false,
+    },
+    {
+      title: t.japanModel,
+      detail: "img_class_cnn.nb",
+      command: "save_image_model_japan_as",
+      key: "japan" as const,
+      disabled: false,
+    },
+    {
+      title: t.taiwanModel,
+      detail: "img_class_cnn.nb",
+      command: "save_image_model_taiwan_as",
+      key: "taiwan" as const,
+      disabled: false,
+    },
+    {
+      title: t.arduino,
+      detail: "arduino-ide_2.3.6_Windows_64bit.exe",
+      command: "download_arduino_ide_as",
+      key: "arduino" as const,
+      disabled: !internetConnected,
+    },
+    {
+      title: t.vlc,
+      detail: "vlc-3.0.21-win64.exe",
+      command: "download_vlc_as",
+      key: "vlc" as const,
+      disabled: !internetConnected,
+    },
+  ];
+
+  const mainCards = [
+    ...fileCards.map((card) => ({
+      title: card.title,
+      detail: card.detail,
+      icon: PackageCheck,
+      action: () =>
+        runAction<ActionResult | DownloadResult>(
+          card.key,
+          card.command,
+          (result) => result.path ?? ("message" in result ? result.message : ""),
+        ),
+      label: t.save,
+      disabled: card.disabled,
+      key: card.key,
+      actionIcon: Download,
+    })),
+    {
+      title: t.folder,
+      detail: dashboard?.realtek_folder ?? "-",
+      icon: FolderOpen,
+      action: () =>
+        runAction<ActionResult>("folder", "open_realtek_folder", (result) => result.path ?? result.message),
+      label: t.open,
+      disabled: false,
+      key: "folder" as const,
+      actionIcon: CheckCircle2,
+    },
+    {
+      title: t.camera,
+      detail: dashboard?.output_folder ?? "",
+      icon: Camera,
+      action: () => setView("camera"),
+      label: t.open,
+      disabled: false,
+      key: null,
+      actionIcon: CheckCircle2,
+    },
+    {
+      title: t.version,
+      detail: dashboard ? `v${dashboard.metadata.version}` : "",
+      icon: RefreshCcw,
+      action: () =>
+        runAction<VersionCheck>("version", "check_version", (result) =>
+          result.is_latest ? `${t.latest}: ${result.local}` : `${t.update}: ${result.remote} / ${result.local}`,
+        ),
+      label: t.check,
+      disabled: !internetConnected,
+      key: "version" as const,
+      actionIcon: CheckCircle2,
+    },
+  ];
+
+  return (
+    <main className="appShell">
+      <header className="appHeader">
+        <button
+          className="backButton"
+          onClick={() => {
+            stopCamera();
+            setView("home");
+          }}
+          hidden={view === "home"}
+          title={t.back}
+        >
+          <ArrowLeft size={18} />
+          {t.back}
+        </button>
+        <h1>{t.appTitle}</h1>
+        <label className="languageSelect">
+          <Languages size={17} />
+          <span>{t.language}</span>
+          <select value={language} onChange={(event) => void changeLanguage(event.target.value as Language)}>
+            {dashboard?.metadata.supported_languages.map((item) => (
+              <option value={item} key={item}>
+                {languageNames[item]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </header>
+
+      <section className="linkPanel">
+        <button onClick={() => copyText(dashboard?.metadata.repository)} title={t.github}>
+          <span>{t.github}</span>
+          <strong>{dashboard?.metadata.repository}</strong>
+          <Clipboard size={17} />
+        </button>
+        <button onClick={() => copyText(dashboard?.metadata.realtek_package_url)} title={t.preference}>
+          <span>{t.preference}</span>
+          <strong>{dashboard?.metadata.realtek_package_url}</strong>
+          <Clipboard size={17} />
+        </button>
+      </section>
+
+      {status && <div className={`feedbackToast ${isFeedbackLeaving ? "leaving" : ""}`}>{status}</div>}
+
+      {view === "home" && (
+        <section className="contentSection">
+          <h2>{t.mainMenu}</h2>
+          <div className="menuGrid">
+            {mainCards.map((card, index) => {
+              const Icon = card.icon;
+              const isRunning = card.key !== null && running === card.key;
+              const ActionIcon = card.actionIcon;
+              return (
+                <article className="menuCard" key={card.title}>
+                  <span className="cardIndex">{String(index + 1).padStart(2, "0")}</span>
+                  <div className="cardIcon">
+                    <Icon size={24} />
+                  </div>
+                  <div className="cardText">
+                    <h3>{card.title}</h3>
+                    <p>{card.disabled ? t.unavailableOffline : card.detail}</p>
+                  </div>
+                  <button className="primaryBtn" onClick={card.action} disabled={card.disabled || isRunning}>
+                    {isRunning ? <RefreshCcw className="spin" size={17} /> : <ActionIcon size={17} />}
+                    {card.label}
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {view === "camera" && (
+        <section className="contentSection cameraSection">
+          <div className="sectionTop">
+            <h2>{t.camera}</h2>
+            <button
+              className="secondaryBtn"
+              onClick={() => runAction<ActionResult>("output", "open_output_folder", (result) => result.path ?? result.message)}
+            >
+              <FolderOpen size={17} />
+              {t.output}
+            </button>
+          </div>
+          <div className="videoFrame">
+            <video ref={videoRef} muted playsInline />
+            {!isPreviewing && <span>{t.preview}</span>}
+          </div>
+          <div className="cameraControls">
+            <button className="secondaryBtn" onClick={scanCameras}>
+              <RefreshCcw size={17} />
+              {t.scanCamera}
+            </button>
+            <select value={selectedCamera} onChange={(event) => void selectCamera(event.target.value)} aria-label={t.selectCamera}>
+              <option value="">{t.noCamera}</option>
+              {cameras.map((device, index) => (
+                <option value={device.deviceId} key={device.deviceId}>
+                  {device.label || `Camera ${index}`}
+                </option>
+              ))}
+            </select>
+            <button className="secondaryBtn" onClick={() => void startPreview()} disabled={!selectedCamera}>
+              <Camera size={17} />
+              {t.startPreview}
+            </button>
+            <button className={isCapturing ? "dangerBtn" : "primaryBtn"} onClick={isCapturing ? stopCaptureTimer : startCapture}>
+              {isCapturing ? <Square size={17} /> : <Play size={17} />}
+              {isCapturing ? t.stopCapture : t.startCapture}
+            </button>
+            {isPreviewing && !isCapturing && (
+              <button className="secondaryBtn" onClick={stopCamera}>
+                <Square size={17} />
+                {t.closePreview}
+              </button>
+            )}
+          </div>
+          <dl className="pathList">
+            <div>
+              <dt>{t.output}</dt>
+              <dd>{dashboard?.output_folder ?? ""}</dd>
+            </div>
+            <div>
+              <dt>{t.lastSaved}</dt>
+              <dd>{lastSaved || "-"}</dd>
+            </div>
+          </dl>
+        </section>
+      )}
+
+      <div className={internetConnected ? "networkStatus online" : "networkStatus offline"}>
+        {internetConnected ? <Wifi size={17} /> : <WifiOff size={17} />}
+        {internetConnected ? t.online : t.offline}
+      </div>
+    </main>
+  );
+}
+
+export default App;
