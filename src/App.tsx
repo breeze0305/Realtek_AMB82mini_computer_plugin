@@ -253,8 +253,8 @@ function App() {
   useEffect(() => {
     if (!status) return;
     setIsFeedbackLeaving(false);
-    const leaveTimer = window.setTimeout(() => setIsFeedbackLeaving(true), 5000);
-    const clearTimer = window.setTimeout(() => setStatus(""), 5240);
+    const leaveTimer = window.setTimeout(() => setIsFeedbackLeaving(true), 1500);
+    const clearTimer = window.setTimeout(() => setStatus(""), 1740);
     return () => {
       window.clearTimeout(leaveTimer);
       window.clearTimeout(clearTimer);
