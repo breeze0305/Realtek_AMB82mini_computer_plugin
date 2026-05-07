@@ -34,6 +34,7 @@ amb82-mini-computer-plugin.exe
 ```
 
 此 exe 已內嵌必要資源，不需要額外附帶 `resource/` 資料夾，也不需要安裝 Node.js、Rust、Tauri 或其他開發環境。
+安裝版同樣不需要額外打包 `resource/` 資料夾；必要檔案會由程式內嵌資源提供。
 
 若你的 Windows 10 電腦沒有 WebView2 Runtime，程式可能無法啟動。這種情況可改用安裝版，或先安裝 Microsoft Edge WebView2 Runtime。
 
@@ -68,6 +69,18 @@ output/
 - TypeScript
 - Vite
 - Rust
+
+## 資源內容
+
+程式內嵌並提供下列離線資源：
+
+- `CH341SER.EXE`
+- `gesture_recognition/hand_code.txt`
+- `gesture_recognition/hand_weight.nb`
+- `image_classification_japan/img_class_cnn.nb`
+- `image_classification_taiwan/img_class_cnn.nb`
+
+舊版 JSON 語言檔與舊版資源圖示已移除；目前多語系由前端內建翻譯表提供，應用程式圖示則使用 Tauri bundle icon。
 
 ## 版本
 

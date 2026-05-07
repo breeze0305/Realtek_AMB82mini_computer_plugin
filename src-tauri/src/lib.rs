@@ -2,7 +2,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
-    io::{self, Read, Write},
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
     sync::Mutex,
@@ -58,16 +58,9 @@ impl Default for Settings {
 }
 
 #[derive(Clone, Debug, Serialize)]
-struct ResourceStatus {
-    relative_path: String,
-    exists: bool,
-}
-
-#[derive(Clone, Debug, Serialize)]
 struct Dashboard {
     metadata: Metadata,
     settings: Settings,
-    resources: Vec<ResourceStatus>,
     realtek_folder: Option<String>,
     output_folder: String,
     internet_connected: bool,
@@ -167,10 +160,6 @@ static EMBEDDED_RESOURCES: &[EmbeddedResource] = &[
             "/../resource/image_classification_taiwan/img_class_cnn.nb"
         )),
     },
-    EmbeddedResource {
-        path: "icon.ico",
-        bytes: include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../resource/icon.ico")),
-    },
 ];
 
 pub fn run() {
@@ -186,36 +175,27 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_dashboard,
-            set_capture_interval,
             set_language,
-            copy_driver,
-            copy_hand_resources,
-            copy_image_model,
             open_realtek_folder,
             open_output_folder,
             select_output_folder,
-            open_path,
             open_url,
             save_driver_as,
             save_hand_resources_as,
             save_image_model_japan_as,
             save_image_model_taiwan_as,
-            download_arduino_ide,
-            download_vlc,
             download_arduino_ide_as,
             download_vlc_as,
             check_internet,
             check_version,
-            repair_uvcd_now,
-            save_capture_image,
-            realtek_package_url
+            save_capture_image
         ])
         .run(tauri::generate_context!())
         .expect("failed to run AMB82 desktop application");
 }
 
 #[tauri::command]
-fn get_dashboard(app: AppHandle, state: tauri::State<AppState>) -> Result<Dashboard, AppError> {
+fn get_dashboard(state: tauri::State<AppState>) -> Result<Dashboard, AppError> {
     let settings = state
         .settings
         .lock()
@@ -225,27 +205,10 @@ fn get_dashboard(app: AppHandle, state: tauri::State<AppState>) -> Result<Dashbo
     Ok(Dashboard {
         metadata: metadata(),
         settings,
-        resources: verify_resources_internal(&app),
         realtek_folder: find_realtek_folder().map(display_path),
         output_folder: display_path(output_dir(&state)?),
         internet_connected: has_internet(),
     })
-}
-
-#[tauri::command]
-fn set_capture_interval(seconds: u64, state: tauri::State<AppState>) -> Result<Settings, AppError> {
-    if seconds == 0 {
-        return Err(AppError::Message(
-            "Capture interval must be greater than 0 seconds".into(),
-        ));
-    }
-
-    let mut settings = state
-        .settings
-        .lock()
-        .map_err(|_| AppError::Message("Failed to update settings".into()))?;
-    settings.capture_interval = seconds;
-    Ok(settings.clone())
 }
 
 #[tauri::command]
@@ -261,32 +224,6 @@ fn set_language(language: String, state: tauri::State<AppState>) -> Result<Setti
         .map_err(|_| AppError::Message("Failed to update settings".into()))?;
     settings.language = language;
     Ok(settings.clone())
-}
-
-#[tauri::command]
-fn copy_driver(app: AppHandle) -> Result<ActionResult, AppError> {
-    copy_one_resource(&app, "CH341SER.EXE", "CH341SER.EXE", "CH341SER.EXE copied")
-}
-
-#[tauri::command]
-fn copy_hand_resources(app: AppHandle) -> Result<ActionResult, AppError> {
-    copy_resource_file(&app, "gesture_recognition/hand_code.txt", "hand_code.txt")?;
-    let target = copy_resource_file(&app, "gesture_recognition/hand_weight.nb", "hand_weight.nb")?;
-    Ok(ActionResult {
-        ok: true,
-        message: "Hand recognition files copied".into(),
-        path: Some(display_path(target)),
-    })
-}
-
-#[tauri::command]
-fn copy_image_model(app: AppHandle) -> Result<ActionResult, AppError> {
-    copy_one_resource(
-        &app,
-        "image_classification_japan/img_class_cnn.nb",
-        "img_class_cnn.nb",
-        "Image classification model copied",
-    )
 }
 
 #[tauri::command]
@@ -334,17 +271,6 @@ fn select_output_folder(state: tauri::State<AppState>) -> Result<ActionResult, A
         ok: true,
         message: "Output folder location selected".into(),
         path: Some(display_path(folder)),
-    })
-}
-
-#[tauri::command]
-fn open_path(path: String) -> Result<ActionResult, AppError> {
-    let path = PathBuf::from(path);
-    open_in_explorer(&path)?;
-    Ok(ActionResult {
-        ok: true,
-        message: "Path opened".into(),
-        path: Some(display_path(path)),
     })
 }
 
@@ -414,16 +340,6 @@ fn save_image_model_taiwan_as(app: AppHandle) -> Result<ActionResult, AppError> 
 }
 
 #[tauri::command]
-fn download_arduino_ide() -> Result<DownloadResult, AppError> {
-    download_to_cwd(ARDUINO_IDE_URL)
-}
-
-#[tauri::command]
-fn download_vlc() -> Result<DownloadResult, AppError> {
-    download_to_cwd(VLC_URL)
-}
-
-#[tauri::command]
 fn download_arduino_ide_as(app: AppHandle) -> Result<DownloadResult, AppError> {
     download_url_as(
         &app,
@@ -469,11 +385,6 @@ fn check_version() -> Result<VersionCheck, AppError> {
 }
 
 #[tauri::command]
-fn repair_uvcd_now() -> Result<UvcdResult, AppError> {
-    repair_uvcd()
-}
-
-#[tauri::command]
 fn save_capture_image(
     bytes: Vec<u8>,
     state: tauri::State<AppState>,
@@ -488,11 +399,6 @@ fn save_capture_image(
         message: "Image saved".into(),
         path: Some(display_path(file_path)),
     })
-}
-
-#[tauri::command]
-fn realtek_package_url() -> &'static str {
-    REALTEK_PACKAGE_URL
 }
 
 fn metadata() -> Metadata {
@@ -519,36 +425,6 @@ fn start_uvcd_worker(app: AppHandle) {
             }
         }
     });
-}
-
-fn verify_resources_internal(app: &AppHandle) -> Vec<ResourceStatus> {
-    EMBEDDED_RESOURCES
-        .iter()
-        .map(|resource| ResourceStatus {
-            relative_path: resource.path.to_string(),
-            exists: resource_exists(app, resource.path),
-        })
-        .collect()
-}
-
-fn copy_one_resource(
-    app: &AppHandle,
-    source: &str,
-    target: &str,
-    message: &str,
-) -> Result<ActionResult, AppError> {
-    let target = copy_resource_file(app, source, target)?;
-    Ok(ActionResult {
-        ok: true,
-        message: message.into(),
-        path: Some(display_path(target)),
-    })
-}
-
-fn copy_resource_file(app: &AppHandle, source: &str, target: &str) -> Result<PathBuf, AppError> {
-    let target_path = std::env::current_dir()?.join(target);
-    copy_resource_to(app, source, &target_path)?;
-    Ok(target_path)
 }
 
 fn save_one_resource_as(
@@ -605,27 +481,6 @@ fn copy_resource_to(app: &AppHandle, source: &str, target: &Path) -> Result<(), 
     };
     fs::write(target, bytes)?;
     Ok(())
-}
-
-fn download_to_cwd(url: &str) -> Result<DownloadResult, AppError> {
-    let file_name = url
-        .rsplit('/')
-        .next()
-        .filter(|name| !name.is_empty())
-        .ok_or_else(|| AppError::Message("Download URL does not include a file name".into()))?;
-    let target = std::env::current_dir()?.join(file_name);
-
-    let response = http_agent().get(url).call().map_err(http_error)?;
-    let mut file = fs::File::create(&target)?;
-    let mut reader = response.into_reader();
-    let bytes = io::copy(&mut reader, &mut file)?;
-    file.flush()?;
-
-    Ok(DownloadResult {
-        file_name: file_name.into(),
-        path: display_path(target),
-        bytes,
-    })
 }
 
 fn download_url_as(
@@ -835,10 +690,6 @@ fn next_image_path(folder: &Path) -> Result<PathBuf, AppError> {
     }
 
     Ok(folder.join(format!("image_{:05}.jpg", max_id + 1)))
-}
-
-fn resource_exists(app: &AppHandle, source: &str) -> bool {
-    external_resource_path(app, source).is_some() || embedded_resource_bytes(source).is_some()
 }
 
 fn embedded_resource_bytes(source: &str) -> Option<&'static [u8]> {

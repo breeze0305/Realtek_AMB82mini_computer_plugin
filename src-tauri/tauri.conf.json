@@ -28,10 +28,6 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "icon": ["icons/icon.ico"],
-    "resources": {
-      "../resource": "resource",
-      "../version.txt": "version.txt"
-    }
+    "icon": ["icons/icon.ico"]
   }
 }
