@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Camera,
   CheckCircle2,
+  ChevronDown,
   Clipboard,
   Download,
   ExternalLink,
@@ -246,7 +247,9 @@ function App() {
   const [selectedCamera, setSelectedCamera] = useState("");
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [lastSaved, setLastSaved] = useState("");
+  const languageMenuRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -312,6 +315,7 @@ function App() {
   async function changeLanguage(language: Language) {
     const next = await invoke<AppSettings>("set_language", { language });
     setDashboard((current) => (current ? { ...current, settings: next } : current));
+    setIsLanguageMenuOpen(false);
     setStatus("");
   }
 
@@ -621,17 +625,45 @@ function App() {
           {t.back}
         </button>
         <h1>{t.appTitle}</h1>
-        <label className="languageSelect">
-          <Languages size={17} />
-          <span>{t.language}</span>
-          <select value={language} onChange={(event) => void changeLanguage(event.target.value as Language)}>
-            {dashboard?.metadata.supported_languages.map((item) => (
-              <option value={item} key={item}>
-                {languageNames[item]}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div
+          className={`languageSelect ${isLanguageMenuOpen ? "isOpen" : ""}`}
+          ref={languageMenuRef}
+          onBlur={(event) => {
+            const nextTarget = event.relatedTarget as Node | null;
+            if (!nextTarget || !languageMenuRef.current?.contains(nextTarget)) {
+              setIsLanguageMenuOpen(false);
+            }
+          }}
+        >
+          <button
+            type="button"
+            className="languageSelectButton"
+            aria-haspopup="listbox"
+            aria-expanded={isLanguageMenuOpen}
+            onClick={() => setIsLanguageMenuOpen((current) => !current)}
+          >
+            <Languages size={17} />
+            <span>{t.language}</span>
+            <strong>{languageNames[language]}</strong>
+            <ChevronDown size={17} />
+          </button>
+          {isLanguageMenuOpen && (
+            <div className="languageMenu" role="listbox">
+              {dashboard?.metadata.supported_languages.map((item) => (
+                <button
+                  type="button"
+                  className={item === language ? "isSelected" : ""}
+                  role="option"
+                  aria-selected={item === language}
+                  onClick={() => void changeLanguage(item)}
+                  key={item}
+                >
+                  {languageNames[item]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </header>
 
       <section className="linkPanel">

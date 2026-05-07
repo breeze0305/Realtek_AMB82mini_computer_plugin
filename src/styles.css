@@ -63,7 +63,7 @@ button:disabled {
 }
 
 .backButton,
-.languageSelect,
+.languageSelectButton,
 .linkPanel button,
 .primaryBtn,
 .secondaryBtn,
@@ -91,6 +91,10 @@ button:disabled {
 }
 
 .languageSelect {
+  position: relative;
+}
+
+.languageSelectButton {
   min-height: 40px;
   padding: 0 12px;
   border: 1px solid #d8d1c4;
@@ -99,17 +103,57 @@ button:disabled {
   background: #fffdf8;
 }
 
-.languageSelect span {
+.languageSelectButton span {
   color: #6a746f;
   font-size: 13px;
 }
 
-.languageSelect select {
-  min-width: 118px;
-  border: 0;
-  outline: 0;
+.languageSelectButton strong {
+  min-width: 92px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.languageSelectButton svg:last-child {
+  transition: transform 160ms ease;
+}
+
+.languageSelect.isOpen .languageSelectButton svg:last-child {
+  transform: rotate(180deg);
+}
+
+.languageMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  display: grid;
+  min-width: 100%;
+  padding: 6px;
+  border: 1px solid #d8d1c4;
+  border-radius: 8px;
+  background: #fffdf8;
+  box-shadow: 0 12px 28px rgba(31, 47, 45, 0.14);
+}
+
+.languageMenu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 6px;
   color: #273331;
   background: transparent;
+  text-align: left;
+}
+
+.languageMenu button:hover,
+.languageMenu button:focus-visible,
+.languageMenu button.isSelected {
+  color: #0f5b52;
+  background: #dceee6;
 }
 
 .linkPanel {
