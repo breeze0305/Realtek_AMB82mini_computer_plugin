@@ -41,7 +41,8 @@ button:disabled {
   min-height: 100vh;
   max-height: 100vh;
   padding: 24px 34px 72px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0)),
     #f5f3ee;
@@ -160,12 +161,15 @@ button:disabled {
   display: grid;
   gap: 10px;
   width: min(980px, 100%);
+  min-width: 0;
   max-width: 980px;
   justify-self: center;
 }
 
 .linkPanel button {
   justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
   min-height: 52px;
   padding: 10px 14px;
   border: 1px solid #ded7c9;
@@ -183,6 +187,7 @@ button:disabled {
 }
 
 .linkPanel strong {
+  display: block;
   min-width: 0;
   flex: 1;
   overflow: hidden;
