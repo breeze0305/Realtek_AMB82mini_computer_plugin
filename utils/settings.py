@@ -10,7 +10,7 @@ import requests
 APP_METADATA = {
     "author": "NTNU Feng",
     "contact_email": "benfeng99@gmail.com",
-    "version": "2.2.2",
+    "version": "2.2.3",
 }
 
 APP_LINKS = {

@@ -2,6 +2,8 @@ build
 dist
 bash.sh
 main.spec
+amb_plugin.spec
 agents.md
 __pycache__/
 *.pyc
+require.md
