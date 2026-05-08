@@ -2,7 +2,18 @@
 
 Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助 AMB82-mini 使用者快速取得開發所需檔案、開啟 AmebaPro2 套件資料夾、進行相機畫面擷取，以及檢查軟體版本。
 
-此版本由原本的 Python CLI 工具重新設計為桌面應用程式，使用更直覺的圖形介面與即時相機預覽流程。
+This is a Windows desktop assistant for Realtek AMB82-mini developers. It helps with driver distribution, camera capture, bundled resource extraction, Realtek environment navigation, and update/download utilities.
+
+本專案由舊版 Python CLI 工具重構而來，保留原本的核心功能，但改以 Tauri + React 桌面介面重新設計。新版不再要求使用者安裝 Python、OpenCV 或其他開發環境，並把原本的文字選單流程改成更直覺、輕量、可直接發佈的 Windows 應用程式。
+
+## 重構重點
+
+- 從 Python CLI / PyInstaller 重構為 Tauri 桌面應用程式。
+- 原本「複製到目前目錄」的資源功能改為 Windows 存檔視窗，讓使用者自行指定位置。
+- 原本 OpenCV 相機視窗改為 WebView 即時預覽，可在畫面中直接選擇鏡頭與截圖輸出位置。
+- 原本 `lang/*.json` 多語系檔改為前端內建翻譯表，減少外部資源。
+- 必要離線資源內嵌到 exe，不需要額外附帶 `resource/` 資料夾。
+- `UVCD_pram.h` 修正保留為背景工作，不顯示在使用者介面中干擾流程。
 
 ## 主要功能
 
@@ -33,8 +44,7 @@ Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助
 amb82-mini-computer-plugin.exe
 ```
 
-此 exe 已內嵌必要資源，不需要額外附帶 `resource/` 資料夾，也不需要安裝 Node.js、Rust、Tauri 或其他開發環境。
-安裝版同樣不需要額外打包 `resource/` 資料夾；必要檔案會由程式內嵌資源提供。
+此 exe 已內嵌必要資源，不需要額外附帶 `resource/` 資料夾，也不需要安裝 Node.js、Rust、Tauri、Python 或 OpenCV。
 
 若你的 Windows 10 電腦沒有 WebView2 Runtime，程式可能無法啟動。這種情況可改用安裝版，或先安裝 Microsoft Edge WebView2 Runtime。
 
@@ -42,11 +52,10 @@ amb82-mini-computer-plugin.exe
 
 - 固定大小視窗，不會因拖拉造成排版跑掉。
 - 主選單卡片皆有 index 編號，方便對照操作項目。
-- GitHub 倉庫與 AMB Preference 連結區塊置中顯示，與主選單寬度一致。
 - GitHub 倉庫連結可直接開啟網頁；AMB Preference 連結可一鍵複製。
-- Arduino IDE 與 VLC 下載時，卡片會以深一點的淺綠色覆蓋層顯示下載進度。
-- 操作結果會以半透明淺綠色提示浮窗顯示，1.5 秒後淡出。
-- `UVCD_pram.h` 修正會在背景自動嘗試，不干擾一般使用流程。
+- Arduino IDE 與 VLC 下載時，卡片會以覆蓋層顯示下載進度。
+- 操作結果會以半透明提示浮窗顯示，並自動淡出。
+- 語言切換支援繁體中文、英文、日文。
 
 ## 檔案輸出
 
@@ -80,7 +89,7 @@ output/
 - `image_classification_japan/img_class_cnn.nb`
 - `image_classification_taiwan/img_class_cnn.nb`
 
-舊版 JSON 語言檔與舊版資源圖示已移除；目前多語系由前端內建翻譯表提供，應用程式圖示則使用 Tauri bundle icon。
+舊版 JSON 語言檔與舊版資源圖示已移除；目前多語系由前端內建翻譯表提供，應用程式圖示使用 Tauri bundle icon。
 
 ## 版本
 

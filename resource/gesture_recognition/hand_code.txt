@@ -17,10 +17,10 @@ NNObjectDetection ObjDet;
 StreamIO videoStreamer(1, 1);
 StreamIO videoStreamerNN(1, 1);
 
-int a=19;
-int b=20;
-int c=21;
-int d=22;
+int a=1;
+int b=2;
+int c=3;
+int d=4;
 void setup() {
     Serial.begin(115200);
     pinMode(a, OUTPUT);
