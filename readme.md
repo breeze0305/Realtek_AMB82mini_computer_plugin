@@ -6,6 +6,10 @@ This is a Windows desktop assistant for Realtek AMB82-mini developers. It helps 
 
 本專案由舊版 Python CLI 工具重構而來，保留原本的核心功能，但改以 Tauri + React 桌面介面重新設計。新版不再要求使用者安裝 Python、OpenCV 或其他開發環境，並把原本的文字選單流程改成更直覺、輕量、可直接發佈的 Windows 應用程式。
 
+## 畫面預覽
+
+![Realtek AMB82-mini Computer Plugin screenshot](resource/screenshot.jpg)
+
 ## 主要功能
 
 - 取得 CH340/CH341 安裝檔。
