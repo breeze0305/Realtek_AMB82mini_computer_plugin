@@ -659,8 +659,8 @@ fn repair_uvcd_content(original: &str) -> Result<String, AppError> {
         .map_err(|error| AppError::Message(error.to_string()))?;
     Ok(re
         .replace_all(original, |captures: &regex::Captures<'_>| {
-            if &captures[2] == "UVCD_H264" {
-                captures[0].to_string()
+            if &captures[2] == "UVCD_MJPG" {
+                format!("{}{}{}1", &captures[1], &captures[2], &captures[3])
             } else {
                 format!("{}{}{}0", &captures[1], &captures[2], &captures[3])
             }
@@ -805,7 +805,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn repair_uvcd_content_keeps_h264_and_disables_other_uvcd_formats() {
+    fn repair_uvcd_content_enables_mjpg_and_disables_other_uvcd_formats() {
         let original = "\
 #define VIDEO_FHD_WIDTH_UVCD  1920
 #define UVCD_YUY2 1
@@ -820,8 +820,8 @@ mod tests {
         assert!(repaired.contains("#define VIDEO_FHD_WIDTH_UVCD  1920"));
         assert!(repaired.contains("#define UVCD_YUY2 0"));
         assert!(repaired.contains("#define UVCD_NV12 0"));
-        assert!(repaired.contains("#define UVCD_MJPG 0"));
-        assert!(repaired.contains("#define UVCD_H264 1"));
+        assert!(repaired.contains("#define UVCD_MJPG 1"));
+        assert!(repaired.contains("#define UVCD_H264 0"));
         assert!(repaired.contains("#define UVCD_H265 0"));
     }
 }
