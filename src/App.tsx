@@ -119,6 +119,7 @@ const translations = {
     output: "輸出資料夾",
     chooseOutput: "選擇資料夾",
     lastSaved: "最後儲存",
+    savedPhoto: "已儲存第 {count} 張照片",
     cameraGuideTitle: "拍攝教學",
     ready: "就緒",
     latest: "目前為最新版本",
@@ -157,6 +158,7 @@ const translations = {
     output: "Output folder",
     chooseOutput: "Choose folder",
     lastSaved: "Last saved",
+    savedPhoto: "Saved photo #{count}",
     cameraGuideTitle: "Capture Guide",
     ready: "Ready",
     latest: "You are on the latest version",
@@ -195,6 +197,7 @@ const translations = {
     output: "出力フォルダー",
     chooseOutput: "フォルダー選択",
     lastSaved: "最後の保存",
+    savedPhoto: "{count} 枚目の写真を保存しました",
     cameraGuideTitle: "撮影ガイド",
     ready: "準備完了",
     latest: "最新バージョンです",
@@ -207,6 +210,16 @@ const languageNames: Record<Language, string> = {
   en_US: "English",
   ja_JP: "日本語",
 };
+
+function savedPhotoText(language: Language, path: string, fallback: string) {
+  const match = path.match(/image_(\d+)\.jpg$/i);
+  if (!match) return fallback;
+
+  const count = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(count)) return fallback;
+
+  return translations[language].savedPhoto.replace("{count}", String(count));
+}
 
 const cameraGuideSteps: Record<Language, string[]> = {
   zh_TW: [
@@ -508,8 +521,9 @@ function App() {
     const bytes = Array.from(new Uint8Array(buffer));
     const result = await invoke<ActionResult>("save_capture_image", { bytes });
     const path = result.path ?? "";
-    setLastSaved(path);
-    setStatus(path);
+    const savedText = savedPhotoText(language, path, result.message);
+    setLastSaved(savedText);
+    setStatus(savedText);
   }
 
   const fileCards = [
