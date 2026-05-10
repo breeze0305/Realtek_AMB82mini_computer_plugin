@@ -100,6 +100,7 @@ const translations = {
     vlc: "VLC 安裝檔",
     folder: "開啟AmebaPro2資料夾",
     camera: "AMB相機畫面擷取",
+    modelConverter: "模型轉換網站",
     version: "版本檢查",
     github: "GitHub 倉庫",
     preference: "AMB Preference",
@@ -139,6 +140,7 @@ const translations = {
     vlc: "VLC Installer",
     folder: "Open AmebaPro2 Folder",
     camera: "AMB Camera Capture",
+    modelConverter: "Model Converter Website",
     version: "Version Check",
     github: "GitHub Repository",
     preference: "AMB Preference",
@@ -178,6 +180,7 @@ const translations = {
     vlc: "VLC インストーラー",
     folder: "AmebaPro2 フォルダーを開く",
     camera: "AMB カメラ撮影",
+    modelConverter: "モデル変換サイト",
     version: "バージョン確認",
     github: "GitHub リポジトリ",
     preference: "AMB Preference",
@@ -210,6 +213,8 @@ const languageNames: Record<Language, string> = {
   en_US: "English",
   ja_JP: "日本語",
 };
+
+const MODEL_CONVERTER_URL = "https://modelconverter.ntnu-aiot.com/";
 
 function savedPhotoText(language: Language, path: string, fallback: string) {
   const match = path.match(/image_(\d+)\.jpg$/i);
@@ -607,6 +612,16 @@ function App() {
       disabled: false,
       key: null,
       actionIcon: CheckCircle2,
+    },
+    {
+      title: t.modelConverter,
+      detail: "",
+      icon: ExternalLink,
+      action: () => void openUrl(MODEL_CONVERTER_URL),
+      label: t.open,
+      disabled: !internetConnected,
+      key: null,
+      actionIcon: ExternalLink,
     },
     {
       title: t.version,

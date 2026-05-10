@@ -20,6 +20,7 @@ This is a Windows desktop assistant for Realtek AMB82-mini developers. It helps 
 - 下載 Arduino IDE 安裝檔。
 - 下載 VLC 安裝檔。
 - 開啟本機 Realtek AmebaPro2 Arduino 套件資料夾。
+- 開啟模型轉換網站：`https://modelconverter.ntnu-aiot.com/`
 - AMB 相機畫面擷取：
   - 進入相機頁時自動掃描本機可用鏡頭
   - 下拉選單切換鏡頭
@@ -76,7 +77,7 @@ output/
 
 ## 版本
 
-目前版本：`3.0.2`
+目前版本：`3.0.3`
 
 版本檢查來源：
 
