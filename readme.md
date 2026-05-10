@@ -1,3 +1,9 @@
+<div align="center">
+
+[![Realtek AMB82-mini Computer Plugin](src-tauri/icons/icon.png)](#readme)
+
+</div>
+
 # Realtek AMB82-mini Computer Plugin
 
 Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助 AMB82-mini 使用者快速取得開發所需檔案、開啟 AmebaPro2 套件資料夾、進行相機畫面擷取，以及檢查軟體版本。
