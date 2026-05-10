@@ -1,6 +1,8 @@
 <div align="center">
 
-[![Realtek AMB82-mini Computer Plugin](src-tauri/icons/icon.png)](#readme)
+<a href="#readme">
+  <img src="src-tauri/icons/icon.png" alt="Realtek AMB82-mini Computer Plugin" width="160">
+</a>
 
 </div>
 
