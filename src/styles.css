@@ -505,7 +505,7 @@ dd {
   position: fixed;
   left: 50%;
   bottom: 76px;
-  z-index: 20;
+  z-index: 100;
   width: min(900px, calc(100vw - 96px));
   max-height: 112px;
   padding: 14px 18px;

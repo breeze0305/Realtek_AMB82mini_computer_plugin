@@ -214,17 +214,14 @@ const languageNames: Record<Language, string> = {
   ja_JP: "日本語",
 };
 
-const arduinoActionLabels: Record<Language, { download: string; autoInstall: string }> = {
+const arduinoActionLabels: Record<Language, { autoInstall: string }> = {
   zh_TW: {
-    download: "一般下載",
     autoInstall: "自動安裝",
   },
   en_US: {
-    download: "Download",
     autoInstall: "Auto install",
   },
   ja_JP: {
-    download: "通常ダウンロード",
     autoInstall: "自動インストール",
   },
 };
@@ -610,10 +607,6 @@ function App() {
         menuActions:
           card.key === "arduino"
             ? [
-                {
-                  label: arduinoActionLabels[language].download,
-                  action,
-                },
                 {
                   label: arduinoActionLabels[language].autoInstall,
                   action: () =>
