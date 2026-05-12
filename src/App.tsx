@@ -214,6 +214,21 @@ const languageNames: Record<Language, string> = {
   ja_JP: "日本語",
 };
 
+const arduinoActionLabels: Record<Language, { download: string; autoInstall: string }> = {
+  zh_TW: {
+    download: "一般下載",
+    autoInstall: "自動安裝",
+  },
+  en_US: {
+    download: "Download",
+    autoInstall: "Auto install",
+  },
+  ja_JP: {
+    download: "通常ダウンロード",
+    autoInstall: "自動インストール",
+  },
+};
+
 const MODEL_CONVERTER_URL = "https://modelconverter.ntnu-aiot.com/";
 
 function savedPhotoText(language: Language, path: string, fallback: string) {
@@ -266,6 +281,7 @@ function App() {
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
+  const [openActionMenu, setOpenActionMenu] = useState<"arduino" | null>(null);
   const [lastSaved, setLastSaved] = useState("");
   const languageMenuRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -358,6 +374,7 @@ function App() {
     next: (result: T) => string,
   ) {
     try {
+      setOpenActionMenu(null);
       setRunning(key);
       if (isDownloadKey(key)) {
         setDownloadProgress((current) => ({ ...current, [key]: 0.02 }));
@@ -562,7 +579,7 @@ function App() {
     },
     {
       title: t.arduino,
-      detail: "arduino-ide_2.3.6_Windows_64bit.exe",
+      detail: "arduino-ide_2.3.8_Windows_64bit.exe",
       command: "download_arduino_ide_as",
       key: "arduino" as const,
       disabled: !internetConnected,
@@ -577,21 +594,43 @@ function App() {
   ];
 
   const mainCards = [
-    ...fileCards.map((card) => ({
-      title: card.title,
-      detail: card.detail,
-      icon: PackageCheck,
-      action: () =>
+    ...fileCards.map((card) => {
+      const action = () =>
         runAction<ActionResult | DownloadResult>(
           card.key,
           card.command,
           (result) => result.path ?? ("message" in result ? result.message : ""),
-        ),
-      label: t.save,
-      disabled: card.disabled,
-      key: card.key,
-      actionIcon: Download,
-    })),
+        );
+
+      return {
+        title: card.title,
+        detail: card.detail,
+        icon: PackageCheck,
+        action,
+        menuActions:
+          card.key === "arduino"
+            ? [
+                {
+                  label: arduinoActionLabels[language].download,
+                  action,
+                },
+                {
+                  label: arduinoActionLabels[language].autoInstall,
+                  action: () =>
+                    runAction<DownloadResult>(
+                      "arduino",
+                      "download_and_install_arduino_ide",
+                      (result) => result.path,
+                    ),
+                },
+              ]
+            : undefined,
+        label: t.save,
+        disabled: card.disabled,
+        key: card.key,
+        actionIcon: Download,
+      };
+    }),
     {
       title: t.folder,
       detail: "",
@@ -602,6 +641,7 @@ function App() {
       disabled: false,
       key: "folder" as const,
       actionIcon: CheckCircle2,
+      menuActions: undefined,
     },
     {
       title: t.camera,
@@ -612,6 +652,7 @@ function App() {
       disabled: false,
       key: null,
       actionIcon: CheckCircle2,
+      menuActions: undefined,
     },
     {
       title: t.modelConverter,
@@ -622,6 +663,7 @@ function App() {
       disabled: !internetConnected,
       key: null,
       actionIcon: ExternalLink,
+      menuActions: undefined,
     },
     {
       title: t.version,
@@ -635,6 +677,7 @@ function App() {
       disabled: !internetConnected,
       key: "version" as const,
       actionIcon: CheckCircle2,
+      menuActions: undefined,
     },
   ];
 
@@ -727,7 +770,9 @@ function App() {
                     } as CSSProperties);
               return (
                 <article
-                  className={`menuCard ${progress === undefined ? "" : "isDownloading"}`}
+                  className={`menuCard ${progress === undefined ? "" : "isDownloading"} ${
+                    openActionMenu === card.key ? "hasOpenActionMenu" : ""
+                  }`}
                   key={card.title}
                   style={progressStyle}
                 >
@@ -739,10 +784,61 @@ function App() {
                     <h3>{card.title}</h3>
                     {(card.disabled || card.detail) && <p>{card.disabled ? t.unavailableOffline : card.detail}</p>}
                   </div>
-                  <button className="primaryBtn" onClick={card.action} disabled={card.disabled || isRunning}>
-                    {isRunning ? <RefreshCcw className="spin" size={17} /> : <ActionIcon size={17} />}
-                    {card.label}
-                  </button>
+                  {card.menuActions ? (
+                    <div
+                      className={`splitAction ${openActionMenu === card.key ? "isOpen" : ""}`}
+                      onBlur={(event) => {
+                        const nextTarget = event.relatedTarget as Node | null;
+                        if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
+                          setOpenActionMenu(null);
+                        }
+                      }}
+                    >
+                      <button
+                        className="primaryBtn splitMain"
+                        onClick={card.action}
+                        disabled={card.disabled || isRunning}
+                      >
+                        {isRunning ? <RefreshCcw className="spin" size={17} /> : <ActionIcon size={17} />}
+                        {card.label}
+                      </button>
+                      <button
+                        type="button"
+                        className="primaryBtn splitToggle"
+                        aria-haspopup="menu"
+                        aria-expanded={openActionMenu === card.key}
+                        aria-label={card.title}
+                        onClick={() =>
+                          setOpenActionMenu((current) => (current === "arduino" ? null : "arduino"))
+                        }
+                        disabled={card.disabled || isRunning}
+                      >
+                        <ChevronDown size={17} />
+                      </button>
+                      {openActionMenu === card.key && (
+                        <div className="actionMenu" role="menu">
+                          {card.menuActions.map((item) => (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setOpenActionMenu(null);
+                                item.action();
+                              }}
+                              key={item.label}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <button className="primaryBtn" onClick={card.action} disabled={card.disabled || isRunning}>
+                      {isRunning ? <RefreshCcw className="spin" size={17} /> : <ActionIcon size={17} />}
+                      {card.label}
+                    </button>
+                  )}
                 </article>
               );
             })}

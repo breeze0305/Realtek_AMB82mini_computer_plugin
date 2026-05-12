@@ -12,14 +12,16 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager};
 use thiserror::Error;
 
-const VERSION: &str = "3.0.3";
+const VERSION: &str = "3.0.4";
 const AUTHOR: &str = "breeze0305";
 const CONTACT: &str = "breeze0305";
 const REPOSITORY: &str = "https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin";
 const VERSION_URL: &str =
     "https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_computer_plugin/main/version.txt";
 const ARDUINO_IDE_URL: &str =
-    "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.6_Windows_64bit.exe";
+    "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.exe";
+const ARDUINO_IDE_MSI_URL: &str =
+    "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.msi";
 const VLC_URL: &str = "https://free.nchc.org.tw/vlc/vlc/3.0.21/win64/vlc-3.0.21-win64.exe";
 const REALTEK_PACKAGE_URL: &str = "https://github.com/Ameba-AIoT/ameba-arduino-pro2/raw/dev/Arduino_package/package_realtek_amebapro2_early_index.json";
 const INTERNET_CHECK_URL: &str = "https://www.cloudflare.com/cdn-cgi/trace";
@@ -185,6 +187,7 @@ pub fn run() {
             save_image_model_japan_as,
             save_image_model_taiwan_as,
             download_arduino_ide_as,
+            download_and_install_arduino_ide,
             download_vlc_as,
             check_internet,
             check_version,
@@ -347,6 +350,21 @@ fn download_arduino_ide_as(app: AppHandle) -> Result<DownloadResult, AppError> {
         ARDUINO_IDE_URL,
         "Save Arduino IDE installer",
     )
+}
+
+#[tauri::command]
+fn download_and_install_arduino_ide(app: AppHandle) -> Result<DownloadResult, AppError> {
+    if !has_internet() {
+        return Err(AppError::Message(
+            "Internet connection is not available".into(),
+        ));
+    }
+
+    let file_name = file_name_from_url(ARDUINO_IDE_MSI_URL)?;
+    let target = std::env::temp_dir().join(file_name);
+    let result = download_to_path(&app, "arduino", ARDUINO_IDE_MSI_URL, &target)?;
+    install_msi(&target)?;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -574,7 +592,7 @@ fn http_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(120))
         .timeout_connect(Duration::from_secs(20))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.0.3")
+        .user_agent("AMB82-Mini-Computer-Plugin/3.0.4")
         .build()
 }
 
@@ -582,7 +600,7 @@ fn internet_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(3))
         .timeout_connect(Duration::from_secs(2))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.0.3")
+        .user_agent("AMB82-Mini-Computer-Plugin/3.0.4")
         .build()
 }
 
@@ -794,6 +812,26 @@ fn open_in_browser(url: &str) -> Result<(), AppError> {
     }
 
     Ok(())
+}
+
+fn install_msi(path: &Path) -> Result<(), AppError> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("msiexec")
+            .arg("/i")
+            .arg(path)
+            .arg("/passive")
+            .spawn()?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = path;
+        Err(AppError::Message(
+            "MSI installation is only supported on Windows".into(),
+        ))
+    }
 }
 
 fn display_path(path: impl AsRef<Path>) -> String {

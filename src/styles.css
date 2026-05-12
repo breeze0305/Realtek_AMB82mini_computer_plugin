@@ -236,7 +236,7 @@ button:disabled {
   border: 1px solid #ded7c9;
   border-radius: 8px;
   background: #fffdf8;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .menuCard::before {
@@ -252,6 +252,10 @@ button:disabled {
 
 .menuCard.isDownloading::before {
   width: var(--card-progress, 4%);
+}
+
+.menuCard.hasOpenActionMenu {
+  z-index: 20;
 }
 
 .menuCard > * {
@@ -311,6 +315,72 @@ button:disabled {
 .primaryBtn {
   color: #fffaf0;
   background: #0f766e;
+}
+
+.splitAction {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  min-width: 132px;
+}
+
+.splitAction .primaryBtn {
+  min-width: 0;
+}
+
+.splitMain {
+  min-width: 98px;
+  border-radius: 7px 0 0 7px;
+}
+
+.splitToggle {
+  width: 38px;
+  padding: 0;
+  border-left: 1px solid rgba(255, 250, 240, 0.28);
+  border-radius: 0 7px 7px 0;
+}
+
+.splitToggle svg {
+  transition: transform 160ms ease;
+}
+
+.splitAction.isOpen .splitToggle svg {
+  transform: rotate(180deg);
+}
+
+.actionMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  width: max-content;
+  min-width: 132px;
+  padding: 6px;
+  border: 1px solid #d8d1c4;
+  border-radius: 8px;
+  background: #fffdf8;
+  box-shadow: 0 12px 28px rgba(31, 47, 45, 0.14);
+}
+
+.actionMenu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: #273331;
+  background: transparent;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.actionMenu button:hover,
+.actionMenu button:focus-visible {
+  color: #0f5b52;
+  background: #dceee6;
 }
 
 .secondaryBtn {
