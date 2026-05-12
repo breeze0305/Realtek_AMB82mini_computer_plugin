@@ -100,7 +100,23 @@ https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_computer_plugin/m
 
 本工具用於輔助 Realtek AMB82-mini 開發流程。Arduino IDE、VLC、Realtek AmebaPro2 套件與相關第三方工具仍依各自官方授權與使用條款為準。
 
-## Author
+## 貢獻者
 
-- Author: NTNU Feng
+### 主要貢獻者
+
+- NTNU Feng
 - Email: benfeng99@gmail.com
+
+### 共同貢獻者
+
+- 賴彥廷
+- 范哲瑋
+- 陳柏序
+- 李易修
+- 黃琮善
+- 陳品妤
+- 余品誼
+- 李鍇灝
+- 吳祐安
+- 王威達
+- 吳子安
