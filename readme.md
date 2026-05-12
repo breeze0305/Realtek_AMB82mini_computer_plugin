@@ -25,7 +25,7 @@ This is a Windows desktop assistant for Realtek AMB82-mini developers. It helps 
 - 取得影像分類權重：
   - 硬幣 / 滑鼠 / 日本硬幣
   - 硬幣 / 滑鼠 / 台灣100紙鈔
-- 下載 Arduino IDE 安裝檔。
+- 下載 Arduino IDE 安裝檔；也可選擇自動安裝，下載 MSI 後以 Windows Installer passive 模式啟動安裝。
 - 下載 VLC 安裝檔。
 - 開啟本機 Realtek AmebaPro2 Arduino 套件資料夾。
 - 開啟模型轉換網站：`https://modelconverter.ntnu-aiot.com/`
@@ -49,6 +49,9 @@ amb82-mini-computer-plugin.exe
 ```
 
 若你的 Windows 10 電腦沒有 WebView2 Runtime，程式可能無法啟動。這種情況可改用安裝版，或先安裝 Microsoft Edge WebView2 Runtime。
+
+> [!WARNING]  
+> **此插件會修改使用者的AMB UVC device狀態至MJPG，以用於鏡頭串流。每次打開插件時，都會自動修改。**
 
 ## 檔案輸出
 
