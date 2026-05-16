@@ -135,8 +135,8 @@ const translations = {
     cameraGuideTitle: "拍攝教學",
     settings: "設定",
     uvcDeviceSettings: "UVC device屬性設定",
-    uvcFormat: "UVC格式",
     uvcdSaved: "UVC設定已儲存",
+    defaultOption: "預設",
     ready: "就緒",
     latest: "目前為最新版本",
     update: "偵測到新版本",
@@ -179,8 +179,8 @@ const translations = {
     cameraGuideTitle: "Capture Guide",
     settings: "Settings",
     uvcDeviceSettings: "UVC device properties",
-    uvcFormat: "UVC format",
     uvcdSaved: "UVC setting saved",
+    defaultOption: "default",
     ready: "Ready",
     latest: "You are on the latest version",
     update: "New version available",
@@ -223,8 +223,8 @@ const translations = {
     cameraGuideTitle: "撮影ガイド",
     settings: "設定",
     uvcDeviceSettings: "UVC device properties",
-    uvcFormat: "UVC format",
     uvcdSaved: "UVC setting saved",
+    defaultOption: "既定",
     ready: "準備完了",
     latest: "最新バージョンです",
     update: "新しいバージョンがあります",
@@ -257,6 +257,10 @@ const uvcdFormatOptions: Array<{ value: UvcdFormat; label: string }> = [
   { value: "H264", label: "H264" },
   { value: "H265", label: "H265" },
 ];
+
+function uvcdOptionLabel(option: { value: UvcdFormat; label: string }, defaultLabel: string) {
+  return option.value === "MJPG" ? `${option.label} (${defaultLabel})` : option.label;
+}
 
 function savedPhotoText(language: Language, path: string, fallback: string) {
   const match = path.match(/image_(\d+)\.jpg$/i);
@@ -708,17 +712,6 @@ function App() {
       menuActions: undefined,
     },
     {
-      title: t.settings,
-      detail: t.uvcDeviceSettings,
-      icon: SettingsIcon,
-      action: () => void openSettingsView(),
-      label: t.open,
-      disabled: false,
-      key: null,
-      actionIcon: CheckCircle2,
-      menuActions: undefined,
-    },
-    {
       title: t.modelConverter,
       detail: "",
       icon: ExternalLink,
@@ -746,74 +739,101 @@ function App() {
   ];
 
   return (
-    <main className="appShell">
-      <header className="appHeader">
-        <button
-          className="backButton"
-          onClick={() => {
-            stopCamera();
-            setView("home");
-          }}
-          hidden={view === "home"}
-          title={t.back}
-        >
-          <ArrowLeft size={18} />
-          {t.back}
-        </button>
-        <h1>{t.appTitle}</h1>
-        <div
-          className={`languageSelect ${isLanguageMenuOpen ? "isOpen" : ""}`}
-          ref={languageMenuRef}
-          onBlur={(event) => {
-            const nextTarget = event.relatedTarget as Node | null;
-            if (!nextTarget || !languageMenuRef.current?.contains(nextTarget)) {
-              setIsLanguageMenuOpen(false);
-            }
-          }}
-        >
+    <main className={`appShell ${view === "settings" ? "settingsShell" : ""}`}>
+      <header className={`appHeader ${view === "settings" ? "settingsPageHeader" : ""}`}>
+        {view === "settings" ? (
           <button
             type="button"
-            className="languageSelectButton"
-            aria-haspopup="listbox"
-            aria-expanded={isLanguageMenuOpen}
-            onClick={() => setIsLanguageMenuOpen((current) => !current)}
+            className="settingsBackButton"
+            onClick={() => setView("home")}
+            title={t.back}
           >
-            <Languages size={17} />
-            <span>{t.language}</span>
-            <strong>{languageNames[language]}</strong>
-            <ChevronDown size={17} />
+            <ArrowLeft size={18} />
+            <span>{t.settings}</span>
           </button>
-          {isLanguageMenuOpen && (
-            <div className="languageMenu" role="listbox">
-              {dashboard?.metadata.supported_languages.map((item) => (
+        ) : (
+          <>
+            <button
+              className="backButton"
+              onClick={() => {
+                stopCamera();
+                setView("home");
+              }}
+              hidden={view === "home"}
+              title={t.back}
+            >
+              <ArrowLeft size={18} />
+              {t.back}
+            </button>
+            <h1>{t.appTitle}</h1>
+            <div className="headerActions">
+              <div
+                className={`languageSelect ${isLanguageMenuOpen ? "isOpen" : ""}`}
+                ref={languageMenuRef}
+                onBlur={(event) => {
+                  const nextTarget = event.relatedTarget as Node | null;
+                  if (!nextTarget || !languageMenuRef.current?.contains(nextTarget)) {
+                    setIsLanguageMenuOpen(false);
+                  }
+                }}
+              >
                 <button
                   type="button"
-                  className={item === language ? "isSelected" : ""}
-                  role="option"
-                  aria-selected={item === language}
-                  onClick={() => void changeLanguage(item)}
-                  key={item}
+                  className="languageSelectButton"
+                  aria-haspopup="listbox"
+                  aria-expanded={isLanguageMenuOpen}
+                  onClick={() => setIsLanguageMenuOpen((current) => !current)}
                 >
-                  {languageNames[item]}
+                  <Languages size={17} />
+                  <span>{t.language}</span>
+                  <strong>{languageNames[language]}</strong>
+                  <ChevronDown size={17} />
                 </button>
-              ))}
+                {isLanguageMenuOpen && (
+                  <div className="languageMenu" role="listbox">
+                    {dashboard?.metadata.supported_languages.map((item) => (
+                      <button
+                        type="button"
+                        className={item === language ? "isSelected" : ""}
+                        role="option"
+                        aria-selected={item === language}
+                        onClick={() => void changeLanguage(item)}
+                        key={item}
+                      >
+                        {languageNames[item]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                className="settingsIconButton"
+                onClick={() => void openSettingsView()}
+                title={t.settings}
+                aria-label={t.settings}
+              >
+                <SettingsIcon size={18} />
+              </button>
             </div>
-          )}
-        </div>
+          </>
+        )}
       </header>
 
-      <section className="linkPanel">
-        <button onClick={() => void openUrl(dashboard?.metadata.repository)} title={t.github}>
-          <span>{t.github}</span>
-          <strong>{dashboard?.metadata.repository}</strong>
-          <ExternalLink size={17} />
-        </button>
-        <button onClick={() => copyText(dashboard?.metadata.realtek_package_url)} title={t.preference}>
-          <span>{t.preference}</span>
-          <strong>{dashboard?.metadata.realtek_package_url}</strong>
-          <Clipboard size={17} />
-        </button>
-      </section>
+      {view !== "settings" && (
+        <section className="linkPanel">
+          <button onClick={() => void openUrl(dashboard?.metadata.repository)} title={t.github}>
+            <span>{t.github}</span>
+            <strong>{dashboard?.metadata.repository}</strong>
+            <ExternalLink size={17} />
+          </button>
+          <button onClick={() => copyText(dashboard?.metadata.realtek_package_url)} title={t.preference}>
+            <span>{t.preference}</span>
+            <strong>{dashboard?.metadata.realtek_package_url}</strong>
+            <Clipboard size={17} />
+          </button>
+        </section>
+      )}
 
       {status && <div className={`feedbackToast ${isFeedbackLeaving ? "leaving" : ""}`}>{status}</div>}
 
@@ -912,7 +932,6 @@ function App() {
 
       {view === "settings" && (
         <section className="contentSection settingsSection">
-          <h2>{t.settings}</h2>
           <div className="settingsRow">
             <label htmlFor="uvcd-format">{t.uvcDeviceSettings}</label>
             <select
@@ -923,17 +942,11 @@ function App() {
             >
               {uvcdFormatOptions.map((item) => (
                 <option value={item.value} key={item.value}>
-                  {item.label}
+                  {uvcdOptionLabel(item, t.defaultOption)}
                 </option>
               ))}
             </select>
           </div>
-          <dl className="pathList">
-            <div>
-              <dt>{t.uvcFormat}</dt>
-              <dd>{uvcdFormatOptions.find((item) => item.value === selectedUvcdFormat)?.label ?? selectedUvcdFormat}</dd>
-            </div>
-          </dl>
         </section>
       )}
 
@@ -992,10 +1005,12 @@ function App() {
         </section>
       )}
 
-      <div className={internetConnected ? "networkStatus online" : "networkStatus offline"}>
-        {internetConnected ? <Wifi size={17} /> : <WifiOff size={17} />}
-        {internetConnected ? t.online : t.offline}
-      </div>
+      {view !== "settings" && (
+        <div className={internetConnected ? "networkStatus online" : "networkStatus offline"}>
+          {internetConnected ? <Wifi size={17} /> : <WifiOff size={17} />}
+          {internetConnected ? t.online : t.offline}
+        </div>
+      )}
     </main>
   );
 }

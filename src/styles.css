@@ -48,6 +48,11 @@ button:disabled {
     #f5f3ee;
 }
 
+.settingsShell {
+  gap: 26px;
+  padding: 46px 56px 72px;
+}
+
 .appHeader {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -65,6 +70,8 @@ button:disabled {
 
 .backButton,
 .languageSelectButton,
+.settingsIconButton,
+.settingsBackButton,
 .linkPanel button,
 .primaryBtn,
 .secondaryBtn,
@@ -89,6 +96,61 @@ button:disabled {
 .backButton[hidden] {
   visibility: hidden;
   display: inline-flex;
+}
+
+.settingsPageHeader {
+  width: min(560px, 100%);
+  grid-template-columns: 1fr;
+  justify-self: center;
+}
+
+.settingsPageHeader .settingsBackButton {
+  justify-self: start;
+}
+
+.headerActions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.settingsIconButton {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #d8d1c4;
+  border-radius: 8px;
+  color: #273331;
+  background: #fffdf8;
+}
+
+.settingsIconButton:hover,
+.settingsIconButton:focus-visible,
+.settingsBackButton:hover,
+.settingsBackButton:focus-visible {
+  color: #0f5b52;
+}
+
+.settingsIconButton:hover,
+.settingsIconButton:focus-visible {
+  background: #dceee6;
+}
+
+.settingsBackButton:hover,
+.settingsBackButton:focus-visible {
+  background: transparent;
+}
+
+.settingsBackButton {
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: #273331;
+  background: transparent;
+  font-size: 22px;
+  font-weight: 700;
 }
 
 .languageSelect {
@@ -399,15 +461,15 @@ button:disabled {
 }
 
 .settingsSection {
-  max-width: 720px;
+  width: min(560px, 100%);
+  max-width: 560px;
+  justify-self: center;
 }
 
 .settingsRow {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(260px, 1fr);
-  align-items: center;
-  gap: 12px;
-  padding: 18px;
+  gap: 14px;
+  padding: 22px;
   border: 1px solid #ded7c9;
   border-radius: 8px;
   background: #fffdf8;
@@ -420,12 +482,14 @@ button:disabled {
 }
 
 .settingsRow select {
-  min-height: 42px;
-  padding: 0 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
   border: 1px solid #d8d1c4;
   border-radius: 7px;
   color: #273331;
   background: #ffffff;
+  font-size: 16px;
 }
 
 .videoFrame {
@@ -610,11 +674,11 @@ dd {
     grid-template-columns: 1fr;
   }
 
-  .settingsRow {
-    grid-template-columns: 1fr;
+  .appShell {
+    padding-inline: 22px;
   }
 
-  .appShell {
+  .settingsShell {
     padding-inline: 22px;
   }
 }
