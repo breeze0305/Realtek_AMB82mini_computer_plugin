@@ -12,7 +12,7 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager};
 use thiserror::Error;
 
-const VERSION: &str = "3.0.4";
+const VERSION: &str = "3.0.5";
 const AUTHOR: &str = "breeze0305";
 const CONTACT: &str = "breeze0305";
 const REPOSITORY: &str = "https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin";
@@ -627,7 +627,7 @@ fn http_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(120))
         .timeout_connect(Duration::from_secs(20))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.0.4")
+        .user_agent("AMB82-Mini-Computer-Plugin/3.0.5")
         .build()
 }
 
@@ -635,7 +635,7 @@ fn internet_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(3))
         .timeout_connect(Duration::from_secs(2))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.0.4")
+        .user_agent("AMB82-Mini-Computer-Plugin/3.0.5")
         .build()
 }
 
