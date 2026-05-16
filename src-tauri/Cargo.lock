@@ -39,6 +39,7 @@ dependencies = [
  "regex",
  "rfd",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-codegen",

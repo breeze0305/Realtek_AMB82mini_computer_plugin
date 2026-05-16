@@ -11,6 +11,7 @@ import {
   PackageCheck,
   Play,
   RefreshCcw,
+  Settings as SettingsIcon,
   Square,
   Wifi,
   WifiOff,
@@ -20,7 +21,8 @@ import { listen } from "@tauri-apps/api/event";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 type Language = "zh_TW" | "en_US" | "ja_JP";
-type View = "home" | "camera";
+type View = "home" | "camera" | "settings";
+type UvcdFormat = "YUY2" | "NV12" | "MJPG" | "H264" | "H265";
 
 type Metadata = {
   author: string;
@@ -36,6 +38,7 @@ type Metadata = {
 type AppSettings = {
   capture_interval: number;
   language: Language;
+  uvcd_format: UvcdFormat;
 };
 
 type Dashboard = {
@@ -73,6 +76,13 @@ type VersionCheck = {
   repository: string;
 };
 
+type UvcdResult = {
+  changed: boolean;
+  message: string;
+  path?: string | null;
+  format: UvcdFormat;
+};
+
 type RunningAction =
   | "driver"
   | "hand"
@@ -81,6 +91,7 @@ type RunningAction =
   | "arduino"
   | "vlc"
   | "folder"
+  | "settings"
   | "version"
   | "output"
   | null;
@@ -122,6 +133,10 @@ const translations = {
     lastSaved: "最後儲存",
     savedPhoto: "已儲存第 {count} 張照片",
     cameraGuideTitle: "拍攝教學",
+    settings: "設定",
+    uvcDeviceSettings: "UVC device屬性設定",
+    uvcFormat: "UVC格式",
+    uvcdSaved: "UVC設定已儲存",
     ready: "就緒",
     latest: "目前為最新版本",
     update: "偵測到新版本",
@@ -162,6 +177,10 @@ const translations = {
     lastSaved: "Last saved",
     savedPhoto: "Saved photo #{count}",
     cameraGuideTitle: "Capture Guide",
+    settings: "Settings",
+    uvcDeviceSettings: "UVC device properties",
+    uvcFormat: "UVC format",
+    uvcdSaved: "UVC setting saved",
     ready: "Ready",
     latest: "You are on the latest version",
     update: "New version available",
@@ -202,6 +221,10 @@ const translations = {
     lastSaved: "最後の保存",
     savedPhoto: "{count} 枚目の写真を保存しました",
     cameraGuideTitle: "撮影ガイド",
+    settings: "設定",
+    uvcDeviceSettings: "UVC device properties",
+    uvcFormat: "UVC format",
+    uvcdSaved: "UVC setting saved",
     ready: "準備完了",
     latest: "最新バージョンです",
     update: "新しいバージョンがあります",
@@ -227,6 +250,13 @@ const arduinoActionLabels: Record<Language, { autoInstall: string }> = {
 };
 
 const MODEL_CONVERTER_URL = "https://modelconverter.ntnu-aiot.com/";
+const uvcdFormatOptions: Array<{ value: UvcdFormat; label: string }> = [
+  { value: "YUY2", label: "YUY2" },
+  { value: "NV12", label: "NV12" },
+  { value: "MJPG", label: "MJPG" },
+  { value: "H264", label: "H264" },
+  { value: "H265", label: "H265" },
+];
 
 function savedPhotoText(language: Language, path: string, fallback: string) {
   const match = path.match(/image_(\d+)\.jpg$/i);
@@ -287,6 +317,7 @@ function App() {
 
   const language = dashboard?.settings.language ?? "zh_TW";
   const t = translations[language];
+  const selectedUvcdFormat = dashboard?.settings.uvcd_format ?? "MJPG";
 
   useEffect(() => {
     void refreshDashboard();
@@ -348,6 +379,30 @@ function App() {
     setDashboard((current) => (current ? { ...current, settings: next } : current));
     setIsLanguageMenuOpen(false);
     setStatus("");
+  }
+
+  async function changeUvcdFormat(format: UvcdFormat) {
+    try {
+      setRunning("settings");
+      const result = await invoke<UvcdResult>("set_uvcd_format", { format });
+      setDashboard((current) =>
+        current
+          ? {
+              ...current,
+              settings: {
+                ...current.settings,
+                uvcd_format: result.format,
+              },
+            }
+          : current,
+      );
+      const label = uvcdFormatOptions.find((item) => item.value === result.format)?.label ?? result.format;
+      setStatus(result.path ? `${t.uvcdSaved}: ${label}` : result.message);
+    } catch (error) {
+      setStatus(String(error));
+    } finally {
+      setRunning(null);
+    }
   }
 
   async function copyText(text?: string) {
@@ -422,6 +477,11 @@ function App() {
     setSelectedCamera("");
     setLastSaved("");
     setView("camera");
+  }
+
+  function openSettingsView() {
+    stopCamera();
+    setView("settings");
   }
 
   async function scanCameras() {
@@ -648,6 +708,17 @@ function App() {
       menuActions: undefined,
     },
     {
+      title: t.settings,
+      detail: t.uvcDeviceSettings,
+      icon: SettingsIcon,
+      action: () => void openSettingsView(),
+      label: t.open,
+      disabled: false,
+      key: null,
+      actionIcon: CheckCircle2,
+      menuActions: undefined,
+    },
+    {
       title: t.modelConverter,
       detail: "",
       icon: ExternalLink,
@@ -836,6 +907,33 @@ function App() {
               );
             })}
           </div>
+        </section>
+      )}
+
+      {view === "settings" && (
+        <section className="contentSection settingsSection">
+          <h2>{t.settings}</h2>
+          <div className="settingsRow">
+            <label htmlFor="uvcd-format">{t.uvcDeviceSettings}</label>
+            <select
+              id="uvcd-format"
+              value={selectedUvcdFormat}
+              onChange={(event) => void changeUvcdFormat(event.target.value as UvcdFormat)}
+              disabled={running === "settings"}
+            >
+              {uvcdFormatOptions.map((item) => (
+                <option value={item.value} key={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <dl className="pathList">
+            <div>
+              <dt>{t.uvcFormat}</dt>
+              <dd>{uvcdFormatOptions.find((item) => item.value === selectedUvcdFormat)?.label ?? selectedUvcdFormat}</dd>
+            </div>
+          </dl>
         </section>
       )}
 

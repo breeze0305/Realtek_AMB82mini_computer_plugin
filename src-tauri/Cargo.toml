@@ -16,6 +16,7 @@ tauri-build = { version = "=2.0.6", features = [] }
 regex = "1"
 rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tauri = { version = "=2.0.6", features = [] }
 tauri-codegen = "=2.0.5"
 tauri-macros = "=2.0.5"

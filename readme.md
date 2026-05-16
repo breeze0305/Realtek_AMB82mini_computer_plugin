@@ -51,7 +51,7 @@ amb82-mini-computer-plugin.exe
 若你的 Windows 10 電腦沒有 WebView2 Runtime，程式可能無法啟動。這種情況可改用安裝版，或先安裝 Microsoft Edge WebView2 Runtime。
 
 > [!WARNING]  
-> **此插件會修改使用者的AMB UVC device狀態至MJPG，以用於鏡頭串流。每次打開插件時，都會自動修改。**
+> **此插件會依照設定頁選擇修改使用者的 AMB UVC device 格式，預設為 MJPG。每次打開插件時，都會自動覆寫 `UVCD_pram.h`。**
 
 ## 檔案輸出
 

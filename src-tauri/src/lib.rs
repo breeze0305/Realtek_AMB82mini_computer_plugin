@@ -26,6 +26,8 @@ const VLC_URL: &str = "https://free.nchc.org.tw/vlc/vlc/3.0.21/win64/vlc-3.0.21-
 const REALTEK_PACKAGE_URL: &str = "https://github.com/Ameba-AIoT/ameba-arduino-pro2/raw/dev/Arduino_package/package_realtek_amebapro2_early_index.json";
 const INTERNET_CHECK_URL: &str = "https://www.cloudflare.com/cdn-cgi/trace";
 const DEFAULT_LANGUAGE: &str = "zh_TW";
+const DEFAULT_UVCD_FORMAT: &str = "MJPG";
+const SUPPORTED_UVCD_FORMATS: &[&str] = &["YUY2", "NV12", "MJPG", "H264", "H265"];
 
 #[derive(Debug, Error)]
 enum AppError {
@@ -45,9 +47,11 @@ impl Serialize for AppError {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 struct Settings {
     capture_interval: u64,
     language: String,
+    uvcd_format: String,
 }
 
 impl Default for Settings {
@@ -55,6 +59,7 @@ impl Default for Settings {
         Self {
             capture_interval: 1,
             language: DEFAULT_LANGUAGE.to_string(),
+            uvcd_format: DEFAULT_UVCD_FORMAT.to_string(),
         }
     }
 }
@@ -114,6 +119,7 @@ struct UvcdResult {
     changed: bool,
     message: String,
     path: Option<String>,
+    format: String,
 }
 
 struct AppState {
@@ -165,9 +171,11 @@ static EMBEDDED_RESOURCES: &[EmbeddedResource] = &[
 ];
 
 pub fn run() {
+    let settings = load_settings().unwrap_or_default();
+
     tauri::Builder::default()
         .manage(AppState {
-            settings: Mutex::new(Settings::default()),
+            settings: Mutex::new(settings),
             output_folder: Mutex::new(None),
         })
         .setup(|app| {
@@ -178,6 +186,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_dashboard,
             set_language,
+            set_uvcd_format,
             open_realtek_folder,
             open_output_folder,
             select_output_folder,
@@ -226,7 +235,32 @@ fn set_language(language: String, state: tauri::State<AppState>) -> Result<Setti
         .lock()
         .map_err(|_| AppError::Message("Failed to update settings".into()))?;
     settings.language = language;
-    Ok(settings.clone())
+    let next = settings.clone();
+    save_settings(&next)?;
+    Ok(next)
+}
+
+#[tauri::command]
+fn set_uvcd_format(format: String, state: tauri::State<AppState>) -> Result<UvcdResult, AppError> {
+    let format = normalize_uvcd_format(&format)?;
+    {
+        let mut settings = state
+            .settings
+            .lock()
+            .map_err(|_| AppError::Message("Failed to update settings".into()))?;
+        settings.uvcd_format = format.clone();
+        save_settings(&settings)?;
+    }
+
+    match repair_uvcd(&format) {
+        Ok(result) => Ok(result),
+        Err(error) => Ok(UvcdResult {
+            changed: false,
+            message: format!("UVC setting saved; {error}"),
+            path: None,
+            format,
+        }),
+    }
 }
 
 #[tauri::command]
@@ -434,7 +468,8 @@ fn metadata() -> Metadata {
 
 fn start_uvcd_worker(app: AppHandle) {
     thread::spawn(move || loop {
-        match repair_uvcd() {
+        let format = current_uvcd_format(&app).unwrap_or_else(|_| DEFAULT_UVCD_FORMAT.to_string());
+        match repair_uvcd(&format) {
             Ok(result) if result.changed => break,
             Ok(_) => break,
             Err(_) => {
@@ -612,6 +647,60 @@ fn http_error(error: ureq::Error) -> AppError {
     AppError::Message(format!("HTTP error: {error}"))
 }
 
+fn current_uvcd_format(app: &AppHandle) -> Result<String, AppError> {
+    let state = app.state::<AppState>();
+    let settings = state
+        .settings
+        .lock()
+        .map_err(|_| AppError::Message("Failed to read settings".into()))?;
+    normalize_uvcd_format(&settings.uvcd_format)
+}
+
+fn normalize_uvcd_format(format: &str) -> Result<String, AppError> {
+    let normalized = format.trim().to_ascii_uppercase();
+
+    if SUPPORTED_UVCD_FORMATS.contains(&normalized.as_str()) {
+        Ok(normalized)
+    } else {
+        Err(AppError::Message(format!(
+            "Unsupported UVC device format: {format}"
+        )))
+    }
+}
+
+fn load_settings() -> Result<Settings, AppError> {
+    let path = settings_path()?;
+    if !path.exists() {
+        return Ok(Settings::default());
+    }
+
+    let content = fs::read_to_string(path)?;
+    let mut settings: Settings = serde_json::from_str(&content)
+        .map_err(|error| AppError::Message(format!("Settings file error: {error}")))?;
+    settings.uvcd_format = normalize_uvcd_format(&settings.uvcd_format)?;
+    Ok(settings)
+}
+
+fn save_settings(settings: &Settings) -> Result<(), AppError> {
+    let path = settings_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let content = serde_json::to_string_pretty(settings)
+        .map_err(|error| AppError::Message(format!("Settings file error: {error}")))?;
+    fs::write(path, content)?;
+    Ok(())
+}
+
+fn settings_path() -> Result<PathBuf, AppError> {
+    let base = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    Ok(base
+        .join("AMB82 Mini Computer Plugin")
+        .join("settings.json"))
+}
+
 fn find_realtek_folder() -> Option<PathBuf> {
     let user_profile = std::env::var_os("USERPROFILE").map(PathBuf::from)?;
     let root = user_profile
@@ -637,7 +726,8 @@ fn find_realtek_folder() -> Option<PathBuf> {
     versions.pop().or(Some(root))
 }
 
-fn repair_uvcd() -> Result<UvcdResult, AppError> {
+fn repair_uvcd(format: &str) -> Result<UvcdResult, AppError> {
+    let format = normalize_uvcd_format(format)?;
     let version_folder = find_realtek_folder()
         .ok_or_else(|| AppError::Message("Realtek AmebaPro2 folder was not found".into()))?;
     let target = version_folder
@@ -654,7 +744,7 @@ fn repair_uvcd() -> Result<UvcdResult, AppError> {
     }
 
     let original = fs::read_to_string(&target)?;
-    let repaired = repair_uvcd_content(&original)?;
+    let repaired = repair_uvcd_content(&original, &format)?;
     let changed = repaired != original;
 
     if changed {
@@ -664,20 +754,23 @@ fn repair_uvcd() -> Result<UvcdResult, AppError> {
     Ok(UvcdResult {
         changed,
         message: if changed {
-            "UVCD_pram.h repaired".into()
+            format!("UVCD_pram.h repaired for {format}")
         } else {
-            "UVCD_pram.h already matches the expected values".into()
+            format!("UVCD_pram.h already matches {format}")
         },
         path: Some(display_path(target)),
+        format,
     })
 }
 
-fn repair_uvcd_content(original: &str) -> Result<String, AppError> {
+fn repair_uvcd_content(original: &str, format: &str) -> Result<String, AppError> {
+    let format = normalize_uvcd_format(format)?;
+    let enabled_define = format!("UVCD_{format}");
     let re = Regex::new(r"(?m)^(#define\s+)(UVCD_[A-Za-z0-9_]+)(\s+)\d+")
         .map_err(|error| AppError::Message(error.to_string()))?;
     Ok(re
         .replace_all(original, |captures: &regex::Captures<'_>| {
-            if &captures[2] == "UVCD_MJPG" {
+            if &captures[2] == enabled_define.as_str() {
                 format!("{}{}{}1", &captures[1], &captures[2], &captures[3])
             } else {
                 format!("{}{}{}0", &captures[1], &captures[2], &captures[3])
@@ -853,7 +946,7 @@ mod tests {
 #define UVCD_H265 1
 ";
 
-        let repaired = repair_uvcd_content(original).expect("uvcd content should repair");
+        let repaired = repair_uvcd_content(original, "MJPG").expect("uvcd content should repair");
 
         assert!(repaired.contains("#define VIDEO_FHD_WIDTH_UVCD  1920"));
         assert!(repaired.contains("#define UVCD_YUY2 0"));
@@ -861,5 +954,29 @@ mod tests {
         assert!(repaired.contains("#define UVCD_MJPG 1"));
         assert!(repaired.contains("#define UVCD_H264 0"));
         assert!(repaired.contains("#define UVCD_H265 0"));
+    }
+
+    #[test]
+    fn repair_uvcd_content_enables_selected_format() {
+        let original = "\
+#define UVCD_YUY2 1
+#define UVCD_NV12 1
+#define UVCD_MJPG 1
+#define UVCD_H264 0
+#define UVCD_H265 0
+";
+
+        let repaired = repair_uvcd_content(original, "H264").expect("uvcd content should repair");
+
+        assert!(repaired.contains("#define UVCD_YUY2 0"));
+        assert!(repaired.contains("#define UVCD_NV12 0"));
+        assert!(repaired.contains("#define UVCD_MJPG 0"));
+        assert!(repaired.contains("#define UVCD_H264 1"));
+        assert!(repaired.contains("#define UVCD_H265 0"));
+    }
+
+    #[test]
+    fn normalize_uvcd_format_accepts_yuy2() {
+        assert_eq!(normalize_uvcd_format("YUY2").unwrap(), "YUY2");
     }
 }

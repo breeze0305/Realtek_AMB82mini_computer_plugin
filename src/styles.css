@@ -398,6 +398,36 @@ button:disabled {
   max-width: 1040px;
 }
 
+.settingsSection {
+  max-width: 720px;
+}
+
+.settingsRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(260px, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid #ded7c9;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.settingsRow label {
+  color: #273331;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settingsRow select {
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid #d8d1c4;
+  border-radius: 7px;
+  color: #273331;
+  background: #ffffff;
+}
+
 .videoFrame {
   position: relative;
   display: grid;
@@ -577,6 +607,10 @@ dd {
 
 @media (max-width: 1040px) {
   .menuGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsRow {
     grid-template-columns: 1fr;
   }
 
