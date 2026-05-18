@@ -1,6 +1,7 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp::Ordering,
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -116,6 +117,7 @@ struct VersionCheck {
     local: String,
     remote: String,
     is_latest: bool,
+    is_beta: bool,
     repository: &'static str,
 }
 
@@ -487,9 +489,18 @@ fn check_version() -> Result<VersionCheck, AppError> {
         .trim()
         .to_string();
 
+    let ordering = compare_version_numbers(VERSION, &remote).unwrap_or_else(|| {
+        if remote == VERSION {
+            Ordering::Equal
+        } else {
+            Ordering::Less
+        }
+    });
+
     Ok(VersionCheck {
         local: VERSION.to_string(),
-        is_latest: remote == VERSION,
+        is_latest: ordering == Ordering::Equal,
+        is_beta: ordering == Ordering::Greater,
         remote,
         repository: REPOSITORY,
     })
@@ -745,6 +756,40 @@ fn preference_url(version: &str) -> &'static str {
     } else {
         REALTEK_PACKAGE_BETA_URL
     }
+}
+
+fn compare_version_numbers(local: &str, remote: &str) -> Option<Ordering> {
+    let local = version_numbers(local)?;
+    let remote = version_numbers(remote)?;
+
+    for (local_part, remote_part) in local.iter().zip(remote.iter()) {
+        match local_part.cmp(remote_part) {
+            Ordering::Equal => continue,
+            ordering => return Some(ordering),
+        }
+    }
+
+    Some(Ordering::Equal)
+}
+
+fn version_numbers(version: &str) -> Option<[u64; 3]> {
+    let normalized = version.trim().trim_start_matches(['v', 'V']);
+    let mut numbers = [0_u64; 3];
+    let mut parts = normalized.split('.');
+
+    for number in &mut numbers {
+        let part = parts.next()?;
+        let digits: String = part
+            .chars()
+            .take_while(|character| character.is_ascii_digit())
+            .collect();
+        if digits.is_empty() {
+            return None;
+        }
+        *number = digits.parse().ok()?;
+    }
+
+    Some(numbers)
 }
 
 fn load_settings() -> Result<Settings, AppError> {
@@ -1067,5 +1112,25 @@ mod tests {
             REALTEK_PACKAGE_BETA_URL
         );
         assert_eq!(preference_url("release"), REALTEK_PACKAGE_RELEASE_URL);
+    }
+
+    #[test]
+    fn compare_version_numbers_checks_major_minor_then_patch() {
+        assert_eq!(
+            compare_version_numbers("3.6.2", "3.6.1"),
+            Some(Ordering::Greater)
+        );
+        assert_eq!(
+            compare_version_numbers("3.6.2", "3.7.0"),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            compare_version_numbers("4.0.0", "3.9.9"),
+            Some(Ordering::Greater)
+        );
+        assert_eq!(
+            compare_version_numbers("3.6.2", "3.6.2"),
+            Some(Ordering::Equal)
+        );
     }
 }

@@ -75,6 +75,7 @@ type VersionCheck = {
   local: string;
   remote: string;
   is_latest: boolean;
+  is_beta: boolean;
   repository: string;
 };
 
@@ -154,6 +155,7 @@ const translations = {
     ready: "就緒",
     latest: "目前為最新版本",
     update: "偵測到新版本",
+    betaCurrent: "當前為beta版本",
   },
   en_US: {
     appTitle: "Realtek AMB82-mini Tool",
@@ -205,6 +207,7 @@ const translations = {
     ready: "Ready",
     latest: "You are on the latest version",
     update: "New version available",
+    betaCurrent: "Current beta version",
   },
   ja_JP: {
     appTitle: "Realtek AMB82-mini ツール",
@@ -256,6 +259,7 @@ const translations = {
     ready: "準備完了",
     latest: "最新バージョンです",
     update: "新しいバージョンがあります",
+    betaCurrent: "現在はbetaバージョンです",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -677,6 +681,20 @@ function App() {
       disabled: false,
     },
     {
+      title: t.arduino,
+      detail: "arduino-ide_2.3.8_Windows_64bit.exe",
+      command: "download_arduino_ide_as",
+      key: "arduino" as const,
+      disabled: !internetConnected,
+    },
+    {
+      title: t.vlc,
+      detail: "vlc-3.0.21-win64.exe",
+      command: "download_vlc_as",
+      key: "vlc" as const,
+      disabled: !internetConnected,
+    },
+    {
       title: t.hand,
       detail: "hand_code.txt / hand_weight.nb",
       command: "save_hand_resources_as",
@@ -696,20 +714,6 @@ function App() {
       command: "save_image_model_taiwan_as",
       key: "taiwan" as const,
       disabled: false,
-    },
-    {
-      title: t.arduino,
-      detail: "arduino-ide_2.3.8_Windows_64bit.exe",
-      command: "download_arduino_ide_as",
-      key: "arduino" as const,
-      disabled: !internetConnected,
-    },
-    {
-      title: t.vlc,
-      detail: "vlc-3.0.21-win64.exe",
-      command: "download_vlc_as",
-      key: "vlc" as const,
-      disabled: !internetConnected,
     },
   ];
 
@@ -748,6 +752,17 @@ function App() {
       };
     }),
     {
+      title: t.camera,
+      detail: "",
+      icon: Camera,
+      action: () => void openCameraView(),
+      label: t.open,
+      disabled: false,
+      key: null,
+      actionIcon: CheckCircle2,
+      menuActions: undefined,
+    },
+    {
       title: t.folder,
       detail: "",
       icon: FolderOpen,
@@ -756,17 +771,6 @@ function App() {
       label: t.open,
       disabled: false,
       key: "folder" as const,
-      actionIcon: CheckCircle2,
-      menuActions: undefined,
-    },
-    {
-      title: t.camera,
-      detail: "",
-      icon: Camera,
-      action: () => void openCameraView(),
-      label: t.open,
-      disabled: false,
-      key: null,
       actionIcon: CheckCircle2,
       menuActions: undefined,
     },
@@ -786,9 +790,11 @@ function App() {
       detail: dashboard ? `v${dashboard.metadata.version}` : "",
       icon: RefreshCcw,
       action: () =>
-        runAction<VersionCheck>("version", "check_version", (result) =>
-          result.is_latest ? `${t.latest}: ${result.local}` : `${t.update}: ${result.remote} / ${result.local}`,
-        ),
+        runAction<VersionCheck>("version", "check_version", (result) => {
+          if (result.is_beta) return t.betaCurrent;
+          if (result.is_latest) return `${t.latest}: ${result.local}`;
+          return `${t.update}: ${result.remote}`;
+        }),
       label: t.check,
       disabled: !internetConnected,
       key: "version" as const,
