@@ -468,14 +468,19 @@ button:disabled {
 
 .settingsRow {
   display: grid;
-  gap: 14px;
+  gap: 20px;
   padding: 22px;
   border: 1px solid #ded7c9;
   border-radius: 8px;
   background: #fffdf8;
 }
 
-.settingsRow label {
+.settingsField {
+  display: grid;
+  gap: 10px;
+}
+
+.settingsFieldLabel {
   color: #273331;
   font-size: 15px;
   font-weight: 700;
@@ -490,6 +495,37 @@ button:disabled {
   color: #273331;
   background: #ffffff;
   font-size: 16px;
+}
+
+.segmentedToggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  min-height: 46px;
+  padding: 4px;
+  border: 1px solid #d8d1c4;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.segmentedToggle button {
+  border-radius: 6px;
+  color: #58635f;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.segmentedToggle button.isSelected {
+  color: #fffaf0;
+  background: #0f766e;
+  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.18);
+}
+
+.segmentedToggle button:not(.isSelected):hover,
+.segmentedToggle button:not(.isSelected):focus-visible {
+  color: #0f5b52;
+  background: #dceee6;
 }
 
 .videoFrame {

@@ -12,7 +12,7 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager};
 use thiserror::Error;
 
-const VERSION: &str = "3.0.5";
+const VERSION: &str = "3.6.1";
 const AUTHOR: &str = "breeze0305";
 const CONTACT: &str = "breeze0305";
 const REPOSITORY: &str = "https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin";
@@ -23,11 +23,14 @@ const ARDUINO_IDE_URL: &str =
 const ARDUINO_IDE_MSI_URL: &str =
     "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.msi";
 const VLC_URL: &str = "https://free.nchc.org.tw/vlc/vlc/3.0.21/win64/vlc-3.0.21-win64.exe";
-const REALTEK_PACKAGE_URL: &str = "https://github.com/Ameba-AIoT/ameba-arduino-pro2/raw/dev/Arduino_package/package_realtek_amebapro2_early_index.json";
+const REALTEK_PACKAGE_BETA_URL: &str = "https://github.com/Ameba-AIoT/ameba-arduino-pro2/raw/dev/Arduino_package/package_realtek_amebapro2_early_index.json";
+const REALTEK_PACKAGE_RELEASE_URL: &str = "https://github.com/ambiot/ambpro2_arduino/raw/main/Arduino_package/package_realtek_amebapro2_index.json";
 const INTERNET_CHECK_URL: &str = "https://www.cloudflare.com/cdn-cgi/trace";
 const DEFAULT_LANGUAGE: &str = "zh_TW";
 const DEFAULT_UVCD_FORMAT: &str = "MJPG";
+const DEFAULT_PREFERENCE_VERSION: &str = "beta";
 const SUPPORTED_UVCD_FORMATS: &[&str] = &["YUY2", "NV12", "MJPG", "H264", "H265"];
+const SUPPORTED_PREFERENCE_VERSIONS: &[&str] = &["release", "beta"];
 
 #[derive(Debug, Error)]
 enum AppError {
@@ -52,6 +55,7 @@ struct Settings {
     capture_interval: u64,
     language: String,
     uvcd_format: String,
+    preference_version: String,
 }
 
 impl Default for Settings {
@@ -60,6 +64,7 @@ impl Default for Settings {
             capture_interval: 1,
             language: DEFAULT_LANGUAGE.to_string(),
             uvcd_format: DEFAULT_UVCD_FORMAT.to_string(),
+            preference_version: DEFAULT_PREFERENCE_VERSION.to_string(),
         }
     }
 }
@@ -81,7 +86,7 @@ struct Metadata {
     repository: &'static str,
     arduino_ide_url: &'static str,
     vlc_url: &'static str,
-    realtek_package_url: &'static str,
+    realtek_package_url: String,
     supported_languages: Vec<&'static str>,
 }
 
@@ -187,6 +192,7 @@ pub fn run() {
             get_dashboard,
             set_language,
             set_uvcd_format,
+            set_preference_version,
             open_realtek_folder,
             open_output_folder,
             select_output_folder,
@@ -215,7 +221,7 @@ fn get_dashboard(state: tauri::State<AppState>) -> Result<Dashboard, AppError> {
         .clone();
 
     Ok(Dashboard {
-        metadata: metadata(),
+        metadata: metadata(&settings.preference_version),
         settings,
         realtek_folder: find_realtek_folder().map(display_path),
         output_folder: display_path(output_dir(&state)?),
@@ -261,6 +267,24 @@ fn set_uvcd_format(format: String, state: tauri::State<AppState>) -> Result<Uvcd
             format,
         }),
     }
+}
+
+#[tauri::command]
+fn set_preference_version(
+    version: String,
+    state: tauri::State<AppState>,
+) -> Result<Dashboard, AppError> {
+    let version = normalize_preference_version(&version)?;
+    {
+        let mut settings = state
+            .settings
+            .lock()
+            .map_err(|_| AppError::Message("Failed to update settings".into()))?;
+        settings.preference_version = version;
+        save_settings(&settings)?;
+    }
+
+    get_dashboard(state)
 }
 
 #[tauri::command]
@@ -453,7 +477,7 @@ fn save_capture_image(
     })
 }
 
-fn metadata() -> Metadata {
+fn metadata(preference_version: &str) -> Metadata {
     Metadata {
         author: AUTHOR,
         contact: CONTACT,
@@ -461,7 +485,7 @@ fn metadata() -> Metadata {
         repository: REPOSITORY,
         arduino_ide_url: ARDUINO_IDE_URL,
         vlc_url: VLC_URL,
-        realtek_package_url: REALTEK_PACKAGE_URL,
+        realtek_package_url: preference_url(preference_version).to_string(),
         supported_languages: vec!["zh_TW", "en_US", "ja_JP"],
     }
 }
@@ -627,7 +651,7 @@ fn http_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(120))
         .timeout_connect(Duration::from_secs(20))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.0.5")
+        .user_agent("AMB82-Mini-Computer-Plugin/3.6.1")
         .build()
 }
 
@@ -635,7 +659,7 @@ fn internet_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(3))
         .timeout_connect(Duration::from_secs(2))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.0.5")
+        .user_agent("AMB82-Mini-Computer-Plugin/3.6.1")
         .build()
 }
 
@@ -668,6 +692,26 @@ fn normalize_uvcd_format(format: &str) -> Result<String, AppError> {
     }
 }
 
+fn normalize_preference_version(version: &str) -> Result<String, AppError> {
+    let normalized = version.trim().to_ascii_lowercase();
+
+    if SUPPORTED_PREFERENCE_VERSIONS.contains(&normalized.as_str()) {
+        Ok(normalized)
+    } else {
+        Err(AppError::Message(format!(
+            "Unsupported preference version: {version}"
+        )))
+    }
+}
+
+fn preference_url(version: &str) -> &'static str {
+    if version == "release" {
+        REALTEK_PACKAGE_RELEASE_URL
+    } else {
+        REALTEK_PACKAGE_BETA_URL
+    }
+}
+
 fn load_settings() -> Result<Settings, AppError> {
     let path = settings_path()?;
     if !path.exists() {
@@ -678,6 +722,7 @@ fn load_settings() -> Result<Settings, AppError> {
     let mut settings: Settings = serde_json::from_str(&content)
         .map_err(|error| AppError::Message(format!("Settings file error: {error}")))?;
     settings.uvcd_format = normalize_uvcd_format(&settings.uvcd_format)?;
+    settings.preference_version = normalize_preference_version(&settings.preference_version)?;
     Ok(settings)
 }
 
@@ -978,5 +1023,14 @@ mod tests {
     #[test]
     fn normalize_uvcd_format_accepts_yuy2() {
         assert_eq!(normalize_uvcd_format("YUY2").unwrap(), "YUY2");
+    }
+
+    #[test]
+    fn preference_url_uses_beta_by_default_and_release_when_selected() {
+        assert_eq!(
+            preference_url(DEFAULT_PREFERENCE_VERSION),
+            REALTEK_PACKAGE_BETA_URL
+        );
+        assert_eq!(preference_url("release"), REALTEK_PACKAGE_RELEASE_URL);
     }
 }

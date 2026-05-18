@@ -23,6 +23,7 @@ import { type CSSProperties, useEffect, useRef, useState } from "react";
 type Language = "zh_TW" | "en_US" | "ja_JP";
 type View = "home" | "camera" | "settings";
 type UvcdFormat = "YUY2" | "NV12" | "MJPG" | "H264" | "H265";
+type PreferenceVersion = "release" | "beta";
 
 type Metadata = {
   author: string;
@@ -39,6 +40,7 @@ type AppSettings = {
   capture_interval: number;
   language: Language;
   uvcd_format: UvcdFormat;
+  preference_version: PreferenceVersion;
 };
 
 type Dashboard = {
@@ -135,6 +137,10 @@ const translations = {
     cameraGuideTitle: "拍攝教學",
     settings: "設定",
     uvcDeviceSettings: "UVC device屬性設定",
+    preferenceVersion: "Preference version",
+    releaseVersion: "Release version",
+    betaVersion: "Beta version",
+    preferenceSaved: "Preference version已儲存",
     uvcdSaved: "UVC設定已儲存",
     defaultOption: "預設",
     ready: "就緒",
@@ -179,6 +185,10 @@ const translations = {
     cameraGuideTitle: "Capture Guide",
     settings: "Settings",
     uvcDeviceSettings: "UVC device properties",
+    preferenceVersion: "Preference version",
+    releaseVersion: "Release version",
+    betaVersion: "Beta version",
+    preferenceSaved: "Preference version saved",
     uvcdSaved: "UVC setting saved",
     defaultOption: "default",
     ready: "Ready",
@@ -223,6 +233,10 @@ const translations = {
     cameraGuideTitle: "撮影ガイド",
     settings: "設定",
     uvcDeviceSettings: "UVC device properties",
+    preferenceVersion: "Preference version",
+    releaseVersion: "Release version",
+    betaVersion: "Beta version",
+    preferenceSaved: "Preference version saved",
     uvcdSaved: "UVC setting saved",
     defaultOption: "既定",
     ready: "準備完了",
@@ -322,6 +336,7 @@ function App() {
   const language = dashboard?.settings.language ?? "zh_TW";
   const t = translations[language];
   const selectedUvcdFormat = dashboard?.settings.uvcd_format ?? "MJPG";
+  const selectedPreferenceVersion = dashboard?.settings.preference_version ?? "beta";
 
   useEffect(() => {
     void refreshDashboard();
@@ -402,6 +417,22 @@ function App() {
       );
       const label = uvcdFormatOptions.find((item) => item.value === result.format)?.label ?? result.format;
       setStatus(result.path ? `${t.uvcdSaved}: ${label}` : result.message);
+    } catch (error) {
+      setStatus(String(error));
+    } finally {
+      setRunning(null);
+    }
+  }
+
+  async function changePreferenceVersion(version: PreferenceVersion) {
+    if (version === selectedPreferenceVersion) return;
+
+    try {
+      setRunning("settings");
+      const next = await invoke<Dashboard>("set_preference_version", { version });
+      setDashboard(next);
+      setInternetConnected(next.internet_connected);
+      setStatus(`${t.preferenceSaved}: ${version === "beta" ? t.betaVersion : t.releaseVersion}`);
     } catch (error) {
       setStatus(String(error));
     } finally {
@@ -933,19 +964,44 @@ function App() {
       {view === "settings" && (
         <section className="contentSection settingsSection">
           <div className="settingsRow">
-            <label htmlFor="uvcd-format">{t.uvcDeviceSettings}</label>
-            <select
-              id="uvcd-format"
-              value={selectedUvcdFormat}
-              onChange={(event) => void changeUvcdFormat(event.target.value as UvcdFormat)}
-              disabled={running === "settings"}
-            >
-              {uvcdFormatOptions.map((item) => (
-                <option value={item.value} key={item.value}>
-                  {uvcdOptionLabel(item, t.defaultOption)}
-                </option>
-              ))}
-            </select>
+            <div className="settingsField">
+              <span className="settingsFieldLabel">{t.preferenceVersion}</span>
+              <div className="segmentedToggle" role="group" aria-label={t.preferenceVersion}>
+                <button
+                  type="button"
+                  className={selectedPreferenceVersion === "release" ? "isSelected" : ""}
+                  onClick={() => void changePreferenceVersion("release")}
+                  disabled={running === "settings"}
+                >
+                  {t.releaseVersion}
+                </button>
+                <button
+                  type="button"
+                  className={selectedPreferenceVersion === "beta" ? "isSelected" : ""}
+                  onClick={() => void changePreferenceVersion("beta")}
+                  disabled={running === "settings"}
+                >
+                  {t.betaVersion}
+                </button>
+              </div>
+            </div>
+            <div className="settingsField">
+              <label className="settingsFieldLabel" htmlFor="uvcd-format">
+                {t.uvcDeviceSettings}
+              </label>
+              <select
+                id="uvcd-format"
+                value={selectedUvcdFormat}
+                onChange={(event) => void changeUvcdFormat(event.target.value as UvcdFormat)}
+                disabled={running === "settings"}
+              >
+                {uvcdFormatOptions.map((item) => (
+                  <option value={item.value} key={item.value}>
+                    {uvcdOptionLabel(item, t.defaultOption)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </section>
       )}
