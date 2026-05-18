@@ -475,6 +475,13 @@ button:disabled {
   background: #fffdf8;
 }
 
+.settingsNotice {
+  margin: 0;
+  color: #59645f;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
 .settingsField {
   display: grid;
   gap: 10px;
@@ -524,6 +531,32 @@ button:disabled {
 
 .segmentedToggle button:not(.isSelected):hover,
 .segmentedToggle button:not(.isSelected):focus-visible {
+  color: #0f5b52;
+  background: #dceee6;
+}
+
+.settingsFooter {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.resetSettingsButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #d8d1c4;
+  border-radius: 7px;
+  color: #273331;
+  background: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.resetSettingsButton:hover,
+.resetSettingsButton:focus-visible {
   color: #0f5b52;
   background: #dceee6;
 }

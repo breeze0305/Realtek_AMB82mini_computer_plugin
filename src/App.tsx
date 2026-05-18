@@ -85,6 +85,11 @@ type UvcdResult = {
   format: UvcdFormat;
 };
 
+type SettingsResetResult = {
+  dashboard: Dashboard;
+  uvcd: UvcdResult;
+};
+
 type RunningAction =
   | "driver"
   | "hand"
@@ -136,6 +141,9 @@ const translations = {
     savedPhoto: "已儲存第 {count} 張照片",
     cameraGuideTitle: "拍攝教學",
     settings: "設定",
+    settingsNotice: "如果不知道這些設定是做什麼，請不要變更。",
+    resetSettings: "重置設定",
+    settingsReset: "設定已恢復預設",
     uvcDeviceSettings: "UVC device屬性設定",
     preferenceVersion: "Preference version",
     releaseVersion: "Release version",
@@ -184,6 +192,9 @@ const translations = {
     savedPhoto: "Saved photo #{count}",
     cameraGuideTitle: "Capture Guide",
     settings: "Settings",
+    settingsNotice: "If you are not sure what these settings do, please leave them unchanged.",
+    resetSettings: "Reset settings",
+    settingsReset: "Settings restored to defaults",
     uvcDeviceSettings: "UVC device properties",
     preferenceVersion: "Preference version",
     releaseVersion: "Release version",
@@ -232,6 +243,9 @@ const translations = {
     savedPhoto: "{count} 枚目の写真を保存しました",
     cameraGuideTitle: "撮影ガイド",
     settings: "設定",
+    settingsNotice: "これらの設定の用途が分からない場合は、変更しないでください。",
+    resetSettings: "設定をリセット",
+    settingsReset: "設定を既定値に戻しました",
     uvcDeviceSettings: "UVC device properties",
     preferenceVersion: "Preference version",
     releaseVersion: "Release version",
@@ -433,6 +447,20 @@ function App() {
       setDashboard(next);
       setInternetConnected(next.internet_connected);
       setStatus(`${t.preferenceSaved}: ${version === "beta" ? t.betaVersion : t.releaseVersion}`);
+    } catch (error) {
+      setStatus(String(error));
+    } finally {
+      setRunning(null);
+    }
+  }
+
+  async function resetSettings() {
+    try {
+      setRunning("settings");
+      const result = await invoke<SettingsResetResult>("reset_settings");
+      setDashboard(result.dashboard);
+      setInternetConnected(result.dashboard.internet_connected);
+      setStatus(result.uvcd.path ? t.settingsReset : `${t.settingsReset}: ${result.uvcd.message}`);
     } catch (error) {
       setStatus(String(error));
     } finally {
@@ -964,6 +992,7 @@ function App() {
       {view === "settings" && (
         <section className="contentSection settingsSection">
           <div className="settingsRow">
+            <p className="settingsNotice">{t.settingsNotice}</p>
             <div className="settingsField">
               <span className="settingsFieldLabel">{t.preferenceVersion}</span>
               <div className="segmentedToggle" role="group" aria-label={t.preferenceVersion}>
@@ -1001,6 +1030,17 @@ function App() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="settingsFooter">
+              <button
+                type="button"
+                className="resetSettingsButton"
+                onClick={() => void resetSettings()}
+                disabled={running === "settings"}
+              >
+                <RefreshCcw className={running === "settings" ? "spin" : undefined} size={17} />
+                {t.resetSettings}
+              </button>
             </div>
           </div>
         </section>

@@ -12,7 +12,7 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager};
 use thiserror::Error;
 
-const VERSION: &str = "3.6.1";
+const VERSION: &str = "3.6.2";
 const AUTHOR: &str = "breeze0305";
 const CONTACT: &str = "breeze0305";
 const REPOSITORY: &str = "https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin";
@@ -127,6 +127,12 @@ struct UvcdResult {
     format: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+struct SettingsResetResult {
+    dashboard: Dashboard,
+    uvcd: UvcdResult,
+}
+
 struct AppState {
     settings: Mutex<Settings>,
     output_folder: Mutex<Option<PathBuf>>,
@@ -193,6 +199,7 @@ pub fn run() {
             set_language,
             set_uvcd_format,
             set_preference_version,
+            reset_settings,
             open_realtek_folder,
             open_output_folder,
             select_output_folder,
@@ -285,6 +292,34 @@ fn set_preference_version(
     }
 
     get_dashboard(state)
+}
+
+#[tauri::command]
+fn reset_settings(state: tauri::State<AppState>) -> Result<SettingsResetResult, AppError> {
+    {
+        let mut settings = state
+            .settings
+            .lock()
+            .map_err(|_| AppError::Message("Failed to reset settings".into()))?;
+        settings.uvcd_format = DEFAULT_UVCD_FORMAT.to_string();
+        settings.preference_version = DEFAULT_PREFERENCE_VERSION.to_string();
+        save_settings(&settings)?;
+    }
+
+    let uvcd = match repair_uvcd(DEFAULT_UVCD_FORMAT) {
+        Ok(result) => result,
+        Err(error) => UvcdResult {
+            changed: false,
+            message: format!("Settings reset; {error}"),
+            path: None,
+            format: DEFAULT_UVCD_FORMAT.to_string(),
+        },
+    };
+
+    Ok(SettingsResetResult {
+        dashboard: get_dashboard(state)?,
+        uvcd,
+    })
 }
 
 #[tauri::command]
@@ -651,7 +686,7 @@ fn http_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(120))
         .timeout_connect(Duration::from_secs(20))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.6.1")
+        .user_agent("AMB82-Mini-Computer-Plugin/3.6.2")
         .build()
 }
 
@@ -659,7 +694,7 @@ fn internet_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(3))
         .timeout_connect(Duration::from_secs(2))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.6.1")
+        .user_agent("AMB82-Mini-Computer-Plugin/3.6.2")
         .build()
 }
 
