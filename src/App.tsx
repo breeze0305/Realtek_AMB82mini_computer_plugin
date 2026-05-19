@@ -269,7 +269,7 @@ const languageNames: Record<Language, string> = {
   ja_JP: "日本語",
 };
 
-const arduinoActionLabels: Record<Language, { autoInstall: string }> = {
+const installActionLabels: Record<Language, { autoInstall: string }> = {
   zh_TW: {
     autoInstall: "自動安裝",
   },
@@ -344,7 +344,7 @@ function App() {
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
-  const [openActionMenu, setOpenActionMenu] = useState<"arduino" | null>(null);
+  const [openActionMenu, setOpenActionMenu] = useState<"arduino" | "vlc" | null>(null);
   const [lastSaved, setLastSaved] = useState("");
   const languageMenuRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -689,7 +689,7 @@ function App() {
     },
     {
       title: t.vlc,
-      detail: "vlc-3.0.21-win64.exe",
+      detail: "vlc-3.0.23-win32.exe",
       command: "download_vlc_as",
       key: "vlc" as const,
       disabled: !internetConnected,
@@ -732,14 +732,14 @@ function App() {
         icon: PackageCheck,
         action,
         menuActions:
-          card.key === "arduino"
+          card.key === "arduino" || card.key === "vlc"
             ? [
                 {
-                  label: arduinoActionLabels[language].autoInstall,
+                  label: installActionLabels[language].autoInstall,
                   action: () =>
                     runAction<DownloadResult>(
-                      "arduino",
-                      "download_and_install_arduino_ide",
+                      card.key,
+                      card.key === "arduino" ? "download_and_install_arduino_ide" : "download_and_install_vlc",
                       (result) => result.path,
                     ),
                 },
@@ -957,9 +957,11 @@ function App() {
                         aria-haspopup="menu"
                         aria-expanded={openActionMenu === card.key}
                         aria-label={card.title}
-                        onClick={() =>
-                          setOpenActionMenu((current) => (current === "arduino" ? null : "arduino"))
-                        }
+                        onClick={() => {
+                          if (card.key !== "arduino" && card.key !== "vlc") return;
+                          const menuKey = card.key;
+                          setOpenActionMenu((current) => (current === menuKey ? null : menuKey));
+                        }}
                         disabled={card.disabled || isRunning}
                       >
                         <ChevronDown size={17} />

@@ -23,7 +23,7 @@ const ARDUINO_IDE_URL: &str =
     "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.exe";
 const ARDUINO_IDE_MSI_URL: &str =
     "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.msi";
-const VLC_URL: &str = "https://free.nchc.org.tw/vlc/vlc/3.0.21/win64/vlc-3.0.21-win64.exe";
+const VLC_URL: &str = "https://mirror.twds.com.tw/videolan/vlc/3.0.23/win32/vlc-3.0.23-win32.exe";
 const REALTEK_PACKAGE_BETA_URL: &str = "https://github.com/Ameba-AIoT/ameba-arduino-pro2/raw/dev/Arduino_package/package_realtek_amebapro2_early_index.json";
 const REALTEK_PACKAGE_RELEASE_URL: &str = "https://github.com/ambiot/ambpro2_arduino/raw/main/Arduino_package/package_realtek_amebapro2_index.json";
 const INTERNET_CHECK_URL: &str = "https://www.cloudflare.com/cdn-cgi/trace";
@@ -213,6 +213,7 @@ pub fn run() {
             download_arduino_ide_as,
             download_and_install_arduino_ide,
             download_vlc_as,
+            download_and_install_vlc,
             check_internet,
             check_version,
             save_capture_image
@@ -465,6 +466,21 @@ fn download_and_install_arduino_ide(app: AppHandle) -> Result<DownloadResult, Ap
 #[tauri::command]
 fn download_vlc_as(app: AppHandle) -> Result<DownloadResult, AppError> {
     download_url_as(&app, "vlc", VLC_URL, "Save VLC installer")
+}
+
+#[tauri::command]
+fn download_and_install_vlc(app: AppHandle) -> Result<DownloadResult, AppError> {
+    if !has_internet() {
+        return Err(AppError::Message(
+            "Internet connection is not available".into(),
+        ));
+    }
+
+    let file_name = file_name_from_url(VLC_URL)?;
+    let target = std::env::temp_dir().join(file_name);
+    let result = download_to_path(&app, "vlc", VLC_URL, &target)?;
+    install_exe_silent(&target)?;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -1048,6 +1064,22 @@ fn install_msi(path: &Path) -> Result<(), AppError> {
         let _ = path;
         Err(AppError::Message(
             "MSI installation is only supported on Windows".into(),
+        ))
+    }
+}
+
+fn install_exe_silent(path: &Path) -> Result<(), AppError> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new(path).arg("/S").spawn()?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = path;
+        Err(AppError::Message(
+            "EXE installation is only supported on Windows".into(),
         ))
     }
 }
