@@ -282,6 +282,10 @@ const installActionLabels: Record<Language, { autoInstall: string }> = {
 };
 
 const MODEL_CONVERTER_URL = "https://modelconverter.ntnu-aiot.com/";
+const TOAST_DISPLAY_MS = 1500;
+const TOAST_FADE_MS = 240;
+const PREFERENCE_COPY_MESSAGE =
+  "已複製，請到Arduino IDE左上角 File -> Preferences -> Additional boards manager URLs 貼上 建議版本選擇 4.0.9";
 const uvcdFormatOptions: Array<{ value: UvcdFormat; label: string }> = [
   { value: "YUY2", label: "YUY2" },
   { value: "NV12", label: "NV12" },
@@ -385,8 +389,9 @@ function App() {
   useEffect(() => {
     if (!status) return;
     setIsFeedbackLeaving(false);
-    const leaveTimer = window.setTimeout(() => setIsFeedbackLeaving(true), 1500);
-    const clearTimer = window.setTimeout(() => setStatus(""), 1740);
+    const displayMs = status === PREFERENCE_COPY_MESSAGE ? TOAST_DISPLAY_MS * 2 : TOAST_DISPLAY_MS;
+    const leaveTimer = window.setTimeout(() => setIsFeedbackLeaving(true), displayMs);
+    const clearTimer = window.setTimeout(() => setStatus(""), displayMs + TOAST_FADE_MS);
     return () => {
       window.clearTimeout(leaveTimer);
       window.clearTimeout(clearTimer);
@@ -472,10 +477,10 @@ function App() {
     }
   }
 
-  async function copyText(text?: string) {
+  async function copyText(text?: string, message = t.copied) {
     if (!text) return;
     await navigator.clipboard.writeText(text);
-    setStatus(t.copied);
+    setStatus(message);
   }
 
   async function openUrl(url?: string) {
@@ -892,7 +897,10 @@ function App() {
             <strong>{dashboard?.metadata.repository}</strong>
             <ExternalLink size={17} />
           </button>
-          <button onClick={() => copyText(dashboard?.metadata.realtek_package_url)} title={t.preference}>
+          <button
+            onClick={() => copyText(dashboard?.metadata.realtek_package_url, PREFERENCE_COPY_MESSAGE)}
+            title={t.preference}
+          >
             <span>{t.preference}</span>
             <strong>{dashboard?.metadata.realtek_package_url}</strong>
             <Clipboard size={17} />

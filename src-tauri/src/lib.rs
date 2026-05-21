@@ -13,7 +13,7 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager};
 use thiserror::Error;
 
-const VERSION: &str = "3.7.1";
+const VERSION: &str = "3.7.2";
 const AUTHOR: &str = "breeze0305";
 const CONTACT: &str = "breeze0305";
 const REPOSITORY: &str = "https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin";
@@ -713,7 +713,7 @@ fn http_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(120))
         .timeout_connect(Duration::from_secs(20))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.7.1")
+        .user_agent("AMB82-Mini-Computer-Plugin/3.7.2")
         .build()
 }
 
@@ -721,7 +721,7 @@ fn internet_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(3))
         .timeout_connect(Duration::from_secs(2))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.7.1")
+        .user_agent("AMB82-Mini-Computer-Plugin/3.7.2")
         .build()
 }
 
@@ -1149,11 +1149,11 @@ mod tests {
     #[test]
     fn compare_version_numbers_checks_major_minor_then_patch() {
         assert_eq!(
-            compare_version_numbers("3.7.1", "3.7.0"),
+            compare_version_numbers("3.7.2", "3.7.1"),
             Some(Ordering::Greater)
         );
         assert_eq!(
-            compare_version_numbers("3.7.1", "3.8.0"),
+            compare_version_numbers("3.7.2", "3.8.0"),
             Some(Ordering::Less)
         );
         assert_eq!(
@@ -1161,7 +1161,7 @@ mod tests {
             Some(Ordering::Greater)
         );
         assert_eq!(
-            compare_version_numbers("3.7.1", "3.7.1"),
+            compare_version_numbers("3.7.2", "3.7.2"),
             Some(Ordering::Equal)
         );
     }
