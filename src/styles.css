@@ -472,12 +472,13 @@ button:disabled {
 }
 
 .converterCard {
+  position: relative;
   width: min(1016px, 100%);
   min-height: 620px;
   display: grid;
   align-content: center;
   gap: 26px;
-  padding: 54px 70px;
+  padding: 76px 70px 54px;
   border: 1px solid rgba(216, 209, 196, 0.7);
   border-radius: 8px;
   background: #fffdf8;
@@ -486,13 +487,13 @@ button:disabled {
 
 .converterTop {
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 18px;
+  justify-items: center;
+  min-height: 92px;
 }
 
 .converterTop h2 {
   margin: 0;
+  max-width: 680px;
   color: #1f2f2d;
   font-size: 38px;
   line-height: 1.15;
@@ -500,6 +501,9 @@ button:disabled {
 }
 
 .converterExternalBtn {
+  position: absolute;
+  top: 26px;
+  right: 26px;
   min-height: 40px;
   padding: 0 14px;
   white-space: nowrap;
@@ -947,7 +951,8 @@ dd {
   }
 
   .converterTop {
-    grid-template-columns: 1fr;
+    min-height: 0;
+    gap: 18px;
   }
 
   .converterTop h2 {
@@ -955,7 +960,9 @@ dd {
   }
 
   .converterExternalBtn {
+    position: static;
     justify-self: center;
+    transform: none;
   }
 
   .converterTabs button,
