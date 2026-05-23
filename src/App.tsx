@@ -6,6 +6,7 @@ import {
   Clipboard,
   Download,
   ExternalLink,
+  FileArchive,
   FolderOpen,
   Languages,
   PackageCheck,
@@ -13,6 +14,7 @@ import {
   RefreshCcw,
   Settings as SettingsIcon,
   Square,
+  UploadCloud,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -21,9 +23,10 @@ import { listen } from "@tauri-apps/api/event";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 type Language = "zh_TW" | "en_US" | "ja_JP";
-type View = "home" | "camera" | "settings";
+type View = "home" | "camera" | "settings" | "converter";
 type UvcdFormat = "YUY2" | "NV12" | "MJPG" | "H264" | "H265";
 type PreferenceVersion = "release" | "beta";
+type ModelType = "yolo" | "classification";
 
 type Metadata = {
   author: string;
@@ -63,7 +66,7 @@ type DownloadResult = {
   bytes: number;
 };
 
-type DownloadKey = "arduino" | "vlc";
+type DownloadKey = "arduino" | "vlc" | "converter";
 
 type DownloadProgress = {
   key: DownloadKey;
@@ -91,6 +94,46 @@ type SettingsResetResult = {
   uvcd: UvcdResult;
 };
 
+type ConverterModel = {
+  type: ModelType;
+  label: string;
+  input_extensions: string[];
+  download_name: string;
+};
+
+type ConverterModelsResponse = {
+  models: ConverterModel[];
+  max_file_size_mb: number;
+};
+
+type ConversionCreateResponse = {
+  task_id: string;
+  status: ConversionStatus;
+  status_url: string;
+  download_url: string;
+  expires_in_seconds?: number;
+};
+
+type ConversionStatus = "queued" | "running" | "success" | "failed" | "expired";
+
+type ConversionStatusResponse = {
+  task_id: string;
+  status: ConversionStatus;
+  model_type: ModelType;
+  original_filename: string;
+  download_name: string;
+  download_url?: string;
+  error?: {
+    code: string;
+    message: string;
+  };
+};
+
+type CompletedConversion = {
+  downloadUrl: string;
+  fileName: string;
+};
+
 type RunningAction =
   | "driver"
   | "hand"
@@ -102,6 +145,7 @@ type RunningAction =
   | "settings"
   | "version"
   | "output"
+  | "converter"
   | null;
 
 const translations = {
@@ -119,7 +163,7 @@ const translations = {
     vlc: "VLC 安裝檔",
     folder: "開啟AmebaPro2資料夾",
     camera: "AMB相機畫面擷取",
-    modelConverter: "模型轉換網站",
+    modelConverter: "模型量化轉換",
     version: "版本檢查",
     github: "GitHub 倉庫",
     preference: "AMB Preference",
@@ -156,6 +200,24 @@ const translations = {
     latest: "目前為最新版本",
     update: "偵測到新版本",
     betaCurrent: "當前為beta版本",
+    converterTitle: "Realtek AMB82 mini Model Quantizer",
+    objectDetection: "Object Detection",
+    classification: "Classification",
+    selectFile: "Click to select file",
+    selectedFile: "Selected file",
+    supportsFiles: "Supports {extensions} files",
+    startConversion: "Start Conversion",
+    openExternal: "以外部瀏覽器打開",
+    loadingModels: "正在讀取模型類型",
+    uploadQueued: "模型已上傳，等待轉換",
+    conversionRunning: "模型轉換中",
+    conversionSuccess: "轉換完成，可以下載",
+    conversionSaved: "轉換檔案已儲存",
+    downloadConverted: "Download",
+    noFileSelected: "請先選擇模型檔案",
+    invalidFileType: "檔案格式不符合目前模型類型",
+    chooseAnotherFile: "選擇其他檔案",
+    dropFileHint: "也可以將檔案拖放到這裡",
   },
   en_US: {
     appTitle: "Realtek AMB82-mini Tool",
@@ -171,7 +233,7 @@ const translations = {
     vlc: "VLC Installer",
     folder: "Open AmebaPro2 Folder",
     camera: "AMB Camera Capture",
-    modelConverter: "Model Converter Website",
+    modelConverter: "Model Quantization",
     version: "Version Check",
     github: "GitHub Repository",
     preference: "AMB Preference",
@@ -208,6 +270,24 @@ const translations = {
     latest: "You are on the latest version",
     update: "New version available",
     betaCurrent: "Current beta version",
+    converterTitle: "Realtek AMB82 mini Model Quantizer",
+    objectDetection: "Object Detection",
+    classification: "Classification",
+    selectFile: "Click to select file",
+    selectedFile: "Selected file",
+    supportsFiles: "Supports {extensions} files",
+    startConversion: "Start Conversion",
+    openExternal: "Open in external browser",
+    loadingModels: "Loading model types",
+    uploadQueued: "Model uploaded; waiting for conversion",
+    conversionRunning: "Converting model",
+    conversionSuccess: "Conversion complete; ready to download",
+    conversionSaved: "Converted model saved",
+    downloadConverted: "Download",
+    noFileSelected: "Choose a model file first",
+    invalidFileType: "File type does not match the selected model type",
+    chooseAnotherFile: "Choose another file",
+    dropFileHint: "You can also drop a file here",
   },
   ja_JP: {
     appTitle: "Realtek AMB82-mini ツール",
@@ -223,7 +303,7 @@ const translations = {
     vlc: "VLC インストーラー",
     folder: "AmebaPro2 フォルダーを開く",
     camera: "AMB カメラ撮影",
-    modelConverter: "モデル変換サイト",
+    modelConverter: "Model Quantization",
     version: "バージョン確認",
     github: "GitHub リポジトリ",
     preference: "AMB Preference",
@@ -260,6 +340,24 @@ const translations = {
     latest: "最新バージョンです",
     update: "新しいバージョンがあります",
     betaCurrent: "現在はbetaバージョンです",
+    converterTitle: "Realtek AMB82 mini Model Quantizer",
+    objectDetection: "Object Detection",
+    classification: "Classification",
+    selectFile: "Click to select file",
+    selectedFile: "Selected file",
+    supportsFiles: "Supports {extensions} files",
+    startConversion: "Start Conversion",
+    openExternal: "Open in external browser",
+    loadingModels: "Loading model types",
+    uploadQueued: "Model uploaded; waiting for conversion",
+    conversionRunning: "Converting model",
+    conversionSuccess: "Conversion complete; ready to download",
+    conversionSaved: "Converted model saved",
+    downloadConverted: "Download",
+    noFileSelected: "Choose a model file first",
+    invalidFileType: "File type does not match the selected model type",
+    chooseAnotherFile: "Choose another file",
+    dropFileHint: "You can also drop a file here",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -282,6 +380,7 @@ const installActionLabels: Record<Language, { autoInstall: string }> = {
 };
 
 const MODEL_CONVERTER_URL = "https://modelconverter.ntnu-aiot.com/";
+const MODEL_CONVERTER_API_BASE = "https://modelconverter.ntnu-aiot.com/api/v1";
 const TOAST_DISPLAY_MS = 1500;
 const TOAST_FADE_MS = 240;
 const PREFERENCE_COPY_MESSAGE =
@@ -293,6 +392,23 @@ const uvcdFormatOptions: Array<{ value: UvcdFormat; label: string }> = [
   { value: "H264", label: "H264" },
   { value: "H265", label: "H265" },
 ];
+
+const converterModelDefaults: Record<ModelType, ConverterModel> = {
+  yolo: {
+    type: "yolo",
+    label: "Object Detection",
+    input_extensions: [".pt"],
+    download_name: "yolov7_tiny.nb",
+  },
+  classification: {
+    type: "classification",
+    label: "Classification",
+    input_extensions: [".h5"],
+    download_name: "img_class_cnn.nb",
+  },
+};
+
+const converterModelOrder: ModelType[] = ["yolo", "classification"];
 
 function uvcdOptionLabel(option: { value: UvcdFormat; label: string }, defaultLabel: string) {
   return option.value === "MJPG" ? `${option.label} (${defaultLabel})` : option.label;
@@ -306,6 +422,34 @@ function savedPhotoText(language: Language, path: string, fallback: string) {
   if (!Number.isFinite(count)) return fallback;
 
   return translations[language].savedPhoto.replace("{count}", String(count));
+}
+
+function converterApiUrl(path: string) {
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  const normalized = path.startsWith("/api/v1")
+    ? path.slice("/api/v1".length)
+    : path.startsWith("/")
+      ? path
+      : `/${path}`;
+  return `${MODEL_CONVERTER_API_BASE}${normalized}`;
+}
+
+function fileMatchesExtensions(file: File, extensions: string[]) {
+  const name = file.name.toLowerCase();
+  return extensions.some((extension) => name.endsWith(extension.toLowerCase()));
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function readApiJson<T>(response: Response): Promise<T> {
+  const data = await response.json();
+  if (!response.ok) {
+    const message = data?.error?.message || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+  return data as T;
 }
 
 const cameraGuideSteps: Record<Language, string[]> = {
@@ -350,7 +494,16 @@ function App() {
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [openActionMenu, setOpenActionMenu] = useState<"arduino" | "vlc" | null>(null);
   const [lastSaved, setLastSaved] = useState("");
+  const [converterModels, setConverterModels] = useState<Record<ModelType, ConverterModel>>(converterModelDefaults);
+  const [converterMaxFileSizeMb, setConverterMaxFileSizeMb] = useState(120);
+  const [converterType, setConverterType] = useState<ModelType>("yolo");
+  const [converterFile, setConverterFile] = useState<File | null>(null);
+  const [converterTask, setConverterTask] = useState<ConversionStatusResponse | null>(null);
+  const [completedConversion, setCompletedConversion] = useState<CompletedConversion | null>(null);
+  const [converterStatus, setConverterStatus] = useState("");
+  const [isConverterBusy, setIsConverterBusy] = useState(false);
   const languageMenuRef = useRef<HTMLDivElement | null>(null);
+  const converterInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -359,6 +512,8 @@ function App() {
   const t = translations[language];
   const selectedUvcdFormat = dashboard?.settings.uvcd_format ?? "MJPG";
   const selectedPreferenceVersion = dashboard?.settings.preference_version ?? "beta";
+  const selectedConverterModel = converterModels[converterType];
+  const converterExtensions = selectedConverterModel.input_extensions.join(", ");
 
   useEffect(() => {
     void refreshDashboard();
@@ -401,6 +556,9 @@ function App() {
   useEffect(() => {
     if (view === "camera") {
       void scanCameras();
+    }
+    if (view === "converter") {
+      void loadConverterModels();
     }
   }, [view]);
 
@@ -540,7 +698,7 @@ function App() {
   }
 
   function isDownloadKey(key: RunningAction): key is DownloadKey {
-    return key === "arduino" || key === "vlc";
+    return key === "arduino" || key === "vlc" || key === "converter";
   }
 
   function openCameraView() {
@@ -554,6 +712,159 @@ function App() {
   function openSettingsView() {
     stopCamera();
     setView("settings");
+  }
+
+  function openConverterView() {
+    stopCamera();
+    setConverterStatus("");
+    setConverterTask(null);
+    setView("converter");
+  }
+
+  async function loadConverterModels() {
+    try {
+      setConverterStatus((current) => current || t.loadingModels);
+      const response = await fetch(`${MODEL_CONVERTER_API_BASE}/models`);
+      const data = await readApiJson<ConverterModelsResponse>(response);
+      const nextModels = data.models.reduce<Record<ModelType, ConverterModel>>(
+        (models, model) => {
+          if (model.type === "yolo" || model.type === "classification") {
+            models[model.type] = model;
+          }
+          return models;
+        },
+        { ...converterModelDefaults },
+      );
+      setConverterModels(nextModels);
+      setConverterMaxFileSizeMb(data.max_file_size_mb || 120);
+      setConverterStatus("");
+    } catch (error) {
+      setConverterModels(converterModelDefaults);
+      setConverterStatus(String(error));
+    }
+  }
+
+  function selectConverterType(type: ModelType) {
+    if (isConverterBusy) return;
+    setConverterType(type);
+    setConverterFile(null);
+    setConverterTask(null);
+    setCompletedConversion(null);
+    setConverterStatus("");
+    if (converterInputRef.current) {
+      converterInputRef.current.value = "";
+    }
+  }
+
+  function chooseConverterFile(file?: File | null) {
+    if (!file) return;
+    const model = converterModels[converterType];
+    if (!fileMatchesExtensions(file, model.input_extensions)) {
+      setConverterFile(null);
+      setConverterStatus(t.invalidFileType);
+      return;
+    }
+    if (file.size > converterMaxFileSizeMb * 1024 * 1024) {
+      setConverterFile(null);
+      setConverterStatus(`File exceeds ${converterMaxFileSizeMb} MB`);
+      return;
+    }
+    setConverterFile(file);
+    setConverterTask(null);
+    setCompletedConversion(null);
+    setConverterStatus("");
+  }
+
+  async function startModelConversion() {
+    if (!converterFile) {
+      setConverterStatus(t.noFileSelected);
+      return;
+    }
+
+    const model = converterModels[converterType];
+    if (!fileMatchesExtensions(converterFile, model.input_extensions)) {
+      setConverterStatus(t.invalidFileType);
+      return;
+    }
+
+    try {
+      setIsConverterBusy(true);
+      setDownloadProgress((current) => ({ ...current, converter: 0 }));
+      setConverterStatus(t.uploadQueued);
+      setConverterTask(null);
+      setCompletedConversion(null);
+
+      const form = new FormData();
+      form.append("model_type", model.type);
+      form.append("file", converterFile);
+      const createResponse = await fetch(`${MODEL_CONVERTER_API_BASE}/conversions`, {
+        method: "POST",
+        body: form,
+      });
+      const task = await readApiJson<ConversionCreateResponse>(createResponse);
+      setConverterStatus(t.uploadQueued);
+
+      let statusData: ConversionStatusResponse | null = null;
+      for (let attempt = 0; attempt < 180; attempt += 1) {
+        const statusResponse = await fetch(converterApiUrl(task.status_url));
+        statusData = await readApiJson<ConversionStatusResponse>(statusResponse);
+        setConverterTask(statusData);
+
+        if (statusData.status === "success") break;
+        if (statusData.status === "failed" || statusData.status === "expired") {
+          throw new Error(statusData.error?.message || "Conversion failed");
+        }
+
+        setConverterStatus(statusData.status === "queued" ? t.uploadQueued : t.conversionRunning);
+        await wait(2000);
+      }
+
+      if (!statusData || statusData.status !== "success") {
+        throw new Error("Conversion timed out");
+      }
+
+      setConverterStatus(t.conversionSuccess);
+      const downloadUrl = converterApiUrl(statusData.download_url ?? task.download_url);
+      setCompletedConversion({
+        downloadUrl,
+        fileName: statusData.download_name || model.download_name,
+      });
+    } catch (error) {
+      setConverterStatus(String(error));
+      setStatus(String(error));
+    } finally {
+      setIsConverterBusy(false);
+      setDownloadProgress((current) => {
+        const nextProgress = { ...current };
+        delete nextProgress.converter;
+        return nextProgress;
+      });
+    }
+  }
+
+  async function downloadCompletedConversion() {
+    if (!completedConversion) return;
+
+    try {
+      setIsConverterBusy(true);
+      setDownloadProgress((current) => ({ ...current, converter: 0.02 }));
+      const result = await invoke<DownloadResult>("download_model_conversion_as", {
+        url: completedConversion.downloadUrl,
+        fileName: completedConversion.fileName,
+      });
+      setConverterStatus(`${t.conversionSaved}: ${result.path}`);
+      setStatus(`${t.conversionSaved}: ${result.path}`);
+    } catch (error) {
+      setConverterStatus(String(error));
+      setStatus(String(error));
+    } finally {
+      setIsConverterBusy(false);
+      setDownloadProgress((current) => {
+        const nextProgress = { ...current };
+        delete nextProgress.converter;
+        return nextProgress;
+      });
+    }
   }
 
   async function scanCameras() {
@@ -782,12 +1093,12 @@ function App() {
     {
       title: t.modelConverter,
       detail: "",
-      icon: ExternalLink,
-      action: () => void openUrl(MODEL_CONVERTER_URL),
+      icon: FileArchive,
+      action: () => void openConverterView(),
       label: t.open,
       disabled: !internetConnected,
       key: null,
-      actionIcon: ExternalLink,
+      actionIcon: CheckCircle2,
       menuActions: undefined,
     },
     {
@@ -807,9 +1118,10 @@ function App() {
       menuActions: undefined,
     },
   ];
+  const converterProgress = downloadProgress.converter;
 
   return (
-    <main className={`appShell ${view === "settings" ? "settingsShell" : ""}`}>
+    <main className={`appShell ${view === "settings" ? "settingsShell" : ""} ${view === "converter" ? "converterShell" : ""}`}>
       <header className={`appHeader ${view === "settings" ? "settingsPageHeader" : ""}`}>
         {view === "settings" ? (
           <button
@@ -890,7 +1202,7 @@ function App() {
         )}
       </header>
 
-      {view !== "settings" && (
+      {view !== "settings" && view !== "converter" && (
         <section className="linkPanel">
           <button onClick={() => void openUrl(dashboard?.metadata.repository)} title={t.github}>
             <span>{t.github}</span>
@@ -1062,6 +1374,97 @@ function App() {
         </section>
       )}
 
+      {view === "converter" && (
+        <section className="contentSection converterSection">
+          <div className="converterCard">
+            <div className="converterTop">
+              <h2>{t.converterTitle}</h2>
+              <button
+                type="button"
+                className="secondaryBtn converterExternalBtn"
+                onClick={() => void openUrl(MODEL_CONVERTER_URL)}
+              >
+                <ExternalLink size={17} />
+                {t.openExternal}
+              </button>
+            </div>
+
+            <div className="converterTabs" role="tablist" aria-label={t.modelConverter}>
+              {converterModelOrder.map((type) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={converterType === type}
+                  className={converterType === type ? "isSelected" : ""}
+                  onClick={() => selectConverterType(type)}
+                  disabled={isConverterBusy}
+                  key={type}
+                >
+                  {type === "yolo" ? t.objectDetection : t.classification}
+                </button>
+              ))}
+            </div>
+
+            <label
+              className={`converterDropZone ${converterFile ? "hasFile" : ""}`}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                chooseConverterFile(event.dataTransfer.files.item(0));
+              }}
+            >
+              <input
+                ref={converterInputRef}
+                type="file"
+                accept={selectedConverterModel.input_extensions.join(",")}
+                onChange={(event) => chooseConverterFile(event.target.files?.item(0))}
+                disabled={isConverterBusy}
+              />
+              <UploadCloud size={32} />
+              <strong>{converterFile ? t.selectedFile : t.selectFile}</strong>
+              <span>{converterFile?.name ?? t.supportsFiles.replace("{extensions}", converterExtensions)}</span>
+              {!converterFile && <small>{t.dropFileHint}</small>}
+            </label>
+
+            <button
+              type="button"
+              className="converterStartBtn"
+              onClick={() =>
+                completedConversion ? void downloadCompletedConversion() : void startModelConversion()
+              }
+              disabled={isConverterBusy || !internetConnected || (!completedConversion && !converterFile)}
+            >
+              {isConverterBusy ? <RefreshCcw className="spin" size={18} /> : <Download size={18} />}
+              {completedConversion ? t.downloadConverted : t.startConversion}
+            </button>
+
+            {(converterStatus || converterTask || converterProgress !== undefined) && (
+              <div className="converterStatusPanel">
+                {converterProgress !== undefined && (
+                  <div
+                    className="converterProgressBar"
+                    style={{ "--converter-progress": `${Math.max(4, Math.round(converterProgress * 100))}%` } as CSSProperties}
+                  />
+                )}
+                <p>{converterStatus || t.ready}</p>
+                {converterTask && (
+                  <dl>
+                    <div>
+                      <dt>Task</dt>
+                      <dd>{converterTask.task_id}</dd>
+                    </div>
+                    <div>
+                      <dt>Status</dt>
+                      <dd>{converterTask.status}</dd>
+                    </div>
+                  </dl>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {view === "camera" && (
         <section className="contentSection cameraSection">
           <div className="sectionTop">
@@ -1117,7 +1520,7 @@ function App() {
         </section>
       )}
 
-      {view !== "settings" && (
+      {view !== "settings" && view !== "converter" && (
         <div className={internetConnected ? "networkStatus online" : "networkStatus offline"}>
           {internetConnected ? <Wifi size={17} /> : <WifiOff size={17} />}
           {internetConnected ? t.online : t.offline}

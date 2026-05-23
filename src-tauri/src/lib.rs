@@ -26,6 +26,7 @@ const ARDUINO_IDE_MSI_URL: &str =
 const VLC_URL: &str = "https://mirror.twds.com.tw/videolan/vlc/3.0.23/win32/vlc-3.0.23-win32.exe";
 const REALTEK_PACKAGE_BETA_URL: &str = "https://github.com/Ameba-AIoT/ameba-arduino-pro2/raw/dev/Arduino_package/package_realtek_amebapro2_early_index.json";
 const REALTEK_PACKAGE_RELEASE_URL: &str = "https://github.com/ambiot/ambpro2_arduino/raw/main/Arduino_package/package_realtek_amebapro2_index.json";
+const MODEL_CONVERTER_API_BASE: &str = "https://modelconverter.ntnu-aiot.com/api/v1";
 const INTERNET_CHECK_URL: &str = "https://www.cloudflare.com/cdn-cgi/trace";
 const DEFAULT_LANGUAGE: &str = "zh_TW";
 const DEFAULT_UVCD_FORMAT: &str = "MJPG";
@@ -214,6 +215,7 @@ pub fn run() {
             download_and_install_arduino_ide,
             download_vlc_as,
             download_and_install_vlc,
+            download_model_conversion_as,
             check_internet,
             check_version,
             save_capture_image
@@ -484,6 +486,25 @@ fn download_and_install_vlc(app: AppHandle) -> Result<DownloadResult, AppError> 
 }
 
 #[tauri::command]
+fn download_model_conversion_as(
+    app: AppHandle,
+    url: String,
+    file_name: String,
+) -> Result<DownloadResult, AppError> {
+    let allowed_prefix = format!("{MODEL_CONVERTER_API_BASE}/conversions/");
+    if !url.starts_with(&allowed_prefix) || !url.ends_with("/download") {
+        return Err(AppError::Message(
+            "Only model converter download URLs are allowed".into(),
+        ));
+    }
+
+    let default_name = safe_file_name(&file_name);
+    let target = save_dialog(&default_name, "Save converted model")
+        .ok_or_else(|| AppError::Message("Save was canceled".into()))?;
+    download_to_path(&app, "converter", &url, &target)
+}
+
+#[tauri::command]
 fn check_internet() -> bool {
     has_internet()
 }
@@ -707,6 +728,15 @@ fn file_name_from_url(url: &str) -> Result<&str, AppError> {
         .next()
         .filter(|name| !name.is_empty())
         .ok_or_else(|| AppError::Message("Download URL does not include a file name".into()))
+}
+
+fn safe_file_name(file_name: &str) -> String {
+    Path::new(file_name)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or("converted_model.nb")
+        .to_string()
 }
 
 fn http_agent() -> ureq::Agent {
@@ -1164,5 +1194,11 @@ mod tests {
             compare_version_numbers("3.7.2", "3.7.2"),
             Some(Ordering::Equal)
         );
+    }
+
+    #[test]
+    fn safe_file_name_strips_parent_paths() {
+        assert_eq!(safe_file_name("../model.nb"), "model.nb");
+        assert_eq!(safe_file_name(""), "converted_model.nb");
     }
 }

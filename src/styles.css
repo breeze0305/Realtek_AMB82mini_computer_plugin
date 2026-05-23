@@ -460,6 +460,196 @@ button:disabled {
   max-width: 1040px;
 }
 
+.converterShell {
+  padding-bottom: 34px;
+}
+
+.converterSection {
+  min-height: calc(100vh - 138px);
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.converterCard {
+  width: min(1016px, 100%);
+  min-height: 620px;
+  display: grid;
+  align-content: center;
+  gap: 26px;
+  padding: 54px 70px;
+  border: 1px solid rgba(216, 209, 196, 0.7);
+  border-radius: 8px;
+  background: #fffdf8;
+  box-shadow: 0 18px 46px rgba(31, 47, 45, 0.1);
+}
+
+.converterTop {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 18px;
+}
+
+.converterTop h2 {
+  margin: 0;
+  color: #1f2f2d;
+  font-size: 38px;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.converterExternalBtn {
+  min-height: 40px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.converterTabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #ece9e3;
+}
+
+.converterTabs button {
+  min-height: 72px;
+  border-radius: 7px;
+  color: #44504d;
+  background: transparent;
+  font-size: 28px;
+  font-weight: 760;
+}
+
+.converterTabs button.isSelected {
+  color: #fffdf8;
+  background: #2f6f61;
+  box-shadow: 0 10px 22px rgba(47, 111, 97, 0.22);
+}
+
+.converterDropZone {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  min-height: 190px;
+  padding: 34px 24px;
+  border: 2px dashed #cfc8bc;
+  border-radius: 8px;
+  color: #5c6663;
+  background: #fffefa;
+  cursor: pointer;
+}
+
+.converterDropZone input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.converterDropZone svg {
+  color: #2f6f61;
+}
+
+.converterDropZone strong {
+  color: #4d5754;
+  font-size: 29px;
+  font-weight: 520;
+}
+
+.converterDropZone span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: #7f8581;
+  font-size: 24px;
+}
+
+.converterDropZone small {
+  color: #8f958f;
+  font-size: 14px;
+}
+
+.converterDropZone.hasFile {
+  border-color: #8eb7aa;
+  background: #f7fbf8;
+}
+
+.converterStartBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 74px;
+  border-radius: 8px;
+  color: #fffdf8;
+  background: #2f6f61;
+  font-size: 28px;
+  font-weight: 720;
+}
+
+.converterStartBtn:disabled {
+  background: #8ea69f;
+}
+
+.converterStatusPanel {
+  display: grid;
+  gap: 12px;
+  min-height: 82px;
+  padding: 16px 18px;
+  border: 1px solid #d8d1c4;
+  border-radius: 8px;
+  background: #f8f5ee;
+}
+
+.converterStatusPanel p {
+  margin: 0;
+  color: #2d3b38;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.converterStatusPanel dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.converterStatusPanel div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.converterStatusPanel dt,
+.converterStatusPanel dd {
+  margin: 0;
+  font-size: 13px;
+}
+
+.converterStatusPanel dd {
+  overflow-wrap: anywhere;
+}
+
+.converterProgressBar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5dfd4;
+}
+
+.converterProgressBar::before {
+  display: block;
+  width: var(--converter-progress);
+  height: 100%;
+  border-radius: inherit;
+  background: #2f6f61;
+  content: "";
+}
+
 .settingsSection {
   width: min(560px, 100%);
   max-width: 560px;
@@ -749,5 +939,27 @@ dd {
 
   .settingsShell {
     padding-inline: 22px;
+  }
+
+  .converterCard {
+    min-height: 560px;
+    padding: 34px 28px;
+  }
+
+  .converterTop {
+    grid-template-columns: 1fr;
+  }
+
+  .converterTop h2 {
+    font-size: 30px;
+  }
+
+  .converterExternalBtn {
+    justify-self: center;
+  }
+
+  .converterTabs button,
+  .converterStartBtn {
+    font-size: 22px;
   }
 }
