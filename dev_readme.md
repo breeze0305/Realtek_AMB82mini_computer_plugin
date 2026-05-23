@@ -78,7 +78,7 @@
 目前功能卡包含：
 
 - CH340/CH341 安裝檔
-- 手勢自走車追蹤程式碼/權重
+- 手勢-自走車追蹤程式碼/權重
 - 影像分類權重（日本版本）
 - 影像分類權重（台灣版本）
 - Arduino IDE 安裝檔
@@ -105,7 +105,7 @@
 | UI 項目 | 前端 command | 來源 | 預設檔名 |
 | --- | --- | --- | --- |
 | CH340/CH341 安裝檔 | `save_driver_as` | `resource/CH341SER.EXE` | `CH341SER.EXE` |
-| 手勢自走車追蹤程式碼/權重 | `save_hand_resources_as` | `resource/gesture_recognition/*` | `hand_code.txt`, `yolov7_tiny.nb` |
+| 手勢-自走車追蹤程式碼/權重 | `save_hand_resources_as` | `resource/gesture_recognition/*` | `hand_code.txt`, `yolov7_tiny.nb` |
 | AMB盒子-自走車追蹤程式碼/權重 | `save_object_detection_box_resources_as` | `resource/object_detection_box/*` | `code.txt`, `yolov7_tiny.nb` |
 | 日本影像分類權重 | `save_image_model_japan_as` | `resource/image_classification_japan/img_class_cnn.nb` | `img_class_cnn.nb` |
 | 台灣影像分類權重 | `save_image_model_taiwan_as` | `resource/image_classification_taiwan/img_class_cnn.nb` | `img_class_cnn.nb` |

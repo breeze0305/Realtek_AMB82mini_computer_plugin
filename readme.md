@@ -21,7 +21,7 @@ This is a Windows desktop assistant for Realtek AMB82-mini developers. It helps 
 ## 主要功能
 
 - 取得 CH340/CH341 安裝檔。
-- 取得手勢自走車追蹤程式碼與權重。
+- 取得手勢-自走車追蹤程式碼與權重。
 - 取得影像分類權重：
   - 硬幣 / 滑鼠 / 日本硬幣
   - 硬幣 / 滑鼠 / 台灣100紙鈔
