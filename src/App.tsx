@@ -137,6 +137,7 @@ type CompletedConversion = {
 type RunningAction =
   | "driver"
   | "hand"
+  | "box"
   | "japan"
   | "taiwan"
   | "arduino"
@@ -157,6 +158,7 @@ const translations = {
     fileHint: "選擇項目後會開啟 Windows 存檔視窗",
     driver: "CH340/CH341安裝檔",
     hand: "手勢自走車追蹤程式碼/權重",
+    objectBoxTracking: "AMB盒子-自走車追蹤程式碼/權重",
     japanModel: "影像分類權重(AMB盒子/日本硬幣/滑鼠)",
     taiwanModel: "影像分類權重(AMB盒子/台灣紙鈔/滑鼠)",
     arduino: "Arduino IDE安裝檔",
@@ -227,6 +229,7 @@ const translations = {
     fileHint: "Each item opens a Windows save dialog",
     driver: "CH340/CH341 Installer",
     hand: "Gesture Car Tracking Code/Weight",
+    objectBoxTracking: "AMB Box Car Tracking Code/Weight",
     japanModel: "Image Classification Weight (AMB box/Japan coin/mouse)",
     taiwanModel: "Image Classification Weight (AMB box/Taiwan banknote/mouse)",
     arduino: "Arduino IDE Installer",
@@ -297,6 +300,7 @@ const translations = {
     fileHint: "項目を選ぶと Windows の保存画面を開きます",
     driver: "CH340/CH341 インストーラー",
     hand: "ジェスチャーカー追跡コード/重み",
+    objectBoxTracking: "AMBボックスカー追跡コード/重み",
     japanModel: "画像分類重み(AMBボックス/日本硬貨/マウス)",
     taiwanModel: "画像分類重み(AMBボックス/台湾紙幣/マウス)",
     arduino: "Arduino IDE インストーラー",
@@ -1015,6 +1019,13 @@ function App() {
       detail: "hand_code.txt / yolov7_tiny.nb",
       command: "save_hand_resources_as",
       key: "hand" as const,
+      disabled: false,
+    },
+    {
+      title: t.objectBoxTracking,
+      detail: "code.txt / yolov7_tiny.nb",
+      command: "save_object_detection_box_resources_as",
+      key: "box" as const,
       disabled: false,
     },
     {

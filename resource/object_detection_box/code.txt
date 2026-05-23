@@ -1,0 +1,142 @@
+#include "StreamIO.h"
+#include "VideoStream.h"
+#include "NNObjectDetection.h"
+#include "VideoStreamOverlay.h"
+#include "ObjectClassList.h"
+#include "AmebaServo.h"
+
+#define CHANNEL   0
+#define CHANNELNN 3
+#define NNWIDTH  640
+#define NNHEIGHT 640
+
+VideoSetting config(VIDEO_FHD, 30, VIDEO_H264, 0);
+VideoSetting configNN(NNWIDTH, NNHEIGHT, 10, VIDEO_RGB, 0);
+NNObjectDetection ObjDet;
+StreamIO videoStreamer(1, 1);
+StreamIO videoStreamerNN(1, 1);
+
+// PWM 腳位
+int a = 1;
+int b = 2;
+int c = 3;
+int d = 4;
+
+// PWM 控制參數
+const int maxPWM  = 180;
+const int turnPWM = 100;
+
+void setup()
+{
+    Serial.begin(115200);
+
+    pinMode(a, OUTPUT);
+    pinMode(b, OUTPUT);
+    pinMode(c, OUTPUT);
+    pinMode(d, OUTPUT);
+
+    config.setBitrate(2 * 1024 * 1024);
+    Camera.configVideoChannel(CHANNEL, config);
+    Camera.configVideoChannel(CHANNELNN, configNN);
+    Camera.videoInit();
+
+    ObjDet.configVideo(configNN);
+    ObjDet.modelSelect(OBJECT_DETECTION, DEFAULT_YOLOV7TINY, NA_MODEL, NA_MODEL);
+    ObjDet.begin();
+
+    videoStreamer.registerInput(Camera.getStream(CHANNEL));
+    if (videoStreamer.begin() != 0) {
+        Serial.println("StreamIO link start failed");
+    }
+
+    Camera.channelBegin(CHANNEL);
+
+    videoStreamerNN.registerInput(Camera.getStream(CHANNELNN));
+    videoStreamerNN.setStackSize();
+    videoStreamerNN.setTaskPriority();
+    videoStreamerNN.registerOutput(ObjDet);
+    if (videoStreamerNN.begin() != 0) {
+        Serial.println("StreamIO link start failed");
+    }
+
+    Camera.channelBegin(CHANNELNN);
+}
+
+void loop()
+{
+    std::vector<ObjectDetectionResult> results = ObjDet.getResult();
+    uint16_t im_w = config.width();
+
+    if (ObjDet.getResultCount() > 0) {
+        int bestIndex = -1;
+        float highestScore = -1.0;
+
+        for (int i = 0; i < ObjDet.getResultCount(); i++) {
+            if (itemList[results[i].type()].filter && results[i].score() > highestScore) {
+                highestScore = results[i].score();
+                bestIndex = i;
+            }
+        }
+
+        if (bestIndex != -1) {
+            int obj_type = results[bestIndex].type();
+            if (itemList[obj_type].filter) {
+                ObjectDetectionResult item = results[bestIndex];
+                int xmin = (int)(item.xMin() * im_w);
+                int xmax = (int)(item.xMax() * im_w);
+                int xcenter = (xmin + xmax) / 2;
+
+                const char* position;
+                if (xcenter < im_w / 3) {
+                    position = "left";
+                } else if (xcenter > 2 * im_w / 3) {
+                    position = "right";
+                } else {
+                    position = "mid";
+                }
+
+                if (position == "mid") {  // 前進
+                    analogWrite(a, 0);
+                    analogWrite(b, maxPWM);
+                    analogWrite(c, 0);
+                    analogWrite(d, maxPWM);
+                    delay(300);
+                    analogWrite(a, 0);
+                    analogWrite(b, 0);
+                    analogWrite(c, 0);
+                    analogWrite(d, 0);
+                }
+                else if (position == "right") { // 右轉
+                    analogWrite(a, 0);
+                    analogWrite(b, turnPWM);
+                    analogWrite(c, 0);
+                    analogWrite(d, maxPWM);
+                    delay(150);
+                    analogWrite(a, 0);
+                    analogWrite(b, 0);
+                    analogWrite(c, 0);
+                    analogWrite(d, 0);
+                }
+                else if (position == "left") {  // 左轉
+                    analogWrite(a, 0);
+                    analogWrite(b, maxPWM);
+                    analogWrite(c, 0);
+                    analogWrite(d, turnPWM);
+                    delay(150);
+                    analogWrite(a, 0);
+                    analogWrite(b, 0);
+                    analogWrite(c, 0);
+                    analogWrite(d, 0);
+                }
+                else {
+                    analogWrite(a, 0);
+                    analogWrite(b, 0);
+                    analogWrite(c, 0);
+                    analogWrite(d, 0);
+                }
+            }
+        }
+    }
+
+    delay(100);
+}

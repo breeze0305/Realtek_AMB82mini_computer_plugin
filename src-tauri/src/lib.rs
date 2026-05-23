@@ -169,6 +169,20 @@ static EMBEDDED_RESOURCES: &[EmbeddedResource] = &[
         )),
     },
     EmbeddedResource {
+        path: "object_detection_box/code.txt",
+        bytes: include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../resource/object_detection_box/code.txt"
+        )),
+    },
+    EmbeddedResource {
+        path: "object_detection_box/yolov7_tiny.nb",
+        bytes: include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../resource/object_detection_box/yolov7_tiny.nb"
+        )),
+    },
+    EmbeddedResource {
         path: "image_classification_japan/img_class_cnn.nb",
         bytes: include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -209,6 +223,7 @@ pub fn run() {
             open_url,
             save_driver_as,
             save_hand_resources_as,
+            save_object_detection_box_resources_as,
             save_image_model_japan_as,
             save_image_model_taiwan_as,
             download_arduino_ide_as,
@@ -415,6 +430,25 @@ fn save_hand_resources_as(app: AppHandle) -> Result<ActionResult, AppError> {
                 "gesture_recognition/yolov7_tiny.nb",
                 "yolov7_tiny.nb",
                 "Save hand tracking weight",
+            ),
+        ],
+    )
+}
+
+#[tauri::command]
+fn save_object_detection_box_resources_as(app: AppHandle) -> Result<ActionResult, AppError> {
+    save_resource_set_as(
+        &app,
+        &[
+            (
+                "object_detection_box/code.txt",
+                "code.txt",
+                "Save AMB box tracking code",
+            ),
+            (
+                "object_detection_box/yolov7_tiny.nb",
+                "yolov7_tiny.nb",
+                "Save AMB box tracking weight",
             ),
         ],
     )

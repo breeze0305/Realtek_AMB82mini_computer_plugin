@@ -82,6 +82,8 @@ output/
 - `CH341SER.EXE`
 - `gesture_recognition/hand_code.txt`
 - `gesture_recognition/yolov7_tiny.nb`
+- `object_detection_box/code.txt`
+- `object_detection_box/yolov7_tiny.nb`
 - `image_classification_japan/img_class_cnn.nb`
 - `image_classification_taiwan/img_class_cnn.nb`
 
