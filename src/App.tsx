@@ -1012,7 +1012,7 @@ function App() {
     },
     {
       title: t.hand,
-      detail: "hand_code.txt / hand_weight.nb",
+      detail: "hand_code.txt / yolov7_tiny.nb",
       command: "save_hand_resources_as",
       key: "hand" as const,
       disabled: false,

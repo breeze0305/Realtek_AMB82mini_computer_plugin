@@ -162,10 +162,10 @@ static EMBEDDED_RESOURCES: &[EmbeddedResource] = &[
         )),
     },
     EmbeddedResource {
-        path: "gesture_recognition/hand_weight.nb",
+        path: "gesture_recognition/yolov7_tiny.nb",
         bytes: include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../resource/gesture_recognition/hand_weight.nb"
+            "/../resource/gesture_recognition/yolov7_tiny.nb"
         )),
     },
     EmbeddedResource {
@@ -412,8 +412,8 @@ fn save_hand_resources_as(app: AppHandle) -> Result<ActionResult, AppError> {
                 "Save hand tracking code",
             ),
             (
-                "gesture_recognition/hand_weight.nb",
-                "hand_weight.nb",
+                "gesture_recognition/yolov7_tiny.nb",
+                "yolov7_tiny.nb",
                 "Save hand tracking weight",
             ),
         ],
