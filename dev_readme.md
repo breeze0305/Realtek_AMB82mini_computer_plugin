@@ -4,7 +4,7 @@
 
 目前軟體版本：`3.9.1`
 
-> 注意：`dev_readme.md` 目前列在 `.gitignore`，預設不進 git。若只是更新交接內容，通常不要 commit 這個檔案。
+> 注意：`dev_readme.md` 目前會納入 git 追蹤。若交接內容或維護流程有變更，應和相關程式碼一起 commit。
 
 ## 專案定位
 
@@ -546,7 +546,7 @@ Node 端目前：
   - `dist/`
   - `src-tauri/target/`
   - `.exe`
-- 不 commit `dev_readme.md`，除非使用者明確要求。
+- `dev_readme.md` 是交接文件；若內容跟本次變更相關，應一起 commit。
 - commit 前先看：
 
 ```powershell
