@@ -1,487 +1,51 @@
-import {
-  ArrowLeft,
-  Camera,
-  CheckCircle2,
-  ChevronDown,
-  Clipboard,
-  Download,
-  ExternalLink,
-  FileArchive,
-  FolderOpen,
-  Languages,
-  PackageCheck,
-  Play,
-  RefreshCcw,
-  Settings as SettingsIcon,
-  Square,
-  UploadCloud,
-  Wifi,
-  WifiOff,
-} from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-type Language = "zh_TW" | "en_US" | "ja_JP";
-type View = "home" | "camera" | "settings" | "converter";
-type UvcdFormat = "YUY2" | "NV12" | "MJPG" | "H264" | "H265";
-type PreferenceVersion = "release" | "beta";
-type ModelType = "yolo" | "classification";
-
-type Metadata = {
-  author: string;
-  contact: string;
-  version: string;
-  repository: string;
-  arduino_ide_url: string;
-  vlc_url: string;
-  realtek_package_url: string;
-  model_converter_url: string;
-  model_converter_api_base: string;
-  supported_languages: Language[];
-};
-
-type AppSettings = {
-  capture_interval: number;
-  language: Language;
-  uvcd_format: UvcdFormat;
-  preference_version: PreferenceVersion;
-};
-
-type Dashboard = {
-  metadata: Metadata;
-  settings: AppSettings;
-  realtek_folder: string | null;
-  output_folder: string;
-  internet_connected: boolean;
-};
-
-type ActionResult = {
-  ok: boolean;
-  message: string;
-  path?: string | null;
-};
-
-type DownloadResult = {
-  file_name: string;
-  path: string;
-  bytes: number;
-};
-
-type DownloadKey = "arduino" | "vlc" | "converter";
-
-type DownloadProgress = {
-  key: DownloadKey;
-  downloaded: number;
-  total?: number | null;
-};
-
-type VersionCheck = {
-  local: string;
-  remote: string;
-  is_latest: boolean;
-  is_beta: boolean;
-  repository: string;
-};
-
-type UvcdResult = {
-  changed: boolean;
-  message: string;
-  path?: string | null;
-  format: UvcdFormat;
-};
-
-type SettingsResetResult = {
-  dashboard: Dashboard;
-  uvcd: UvcdResult;
-};
-
-type ConverterModel = {
-  type: ModelType;
-  label: string;
-  input_extensions: string[];
-  download_name: string;
-};
-
-type ConverterModelsResponse = {
-  models: ConverterModel[];
-  max_file_size_mb: number;
-};
-
-type ConversionCreateResponse = {
-  task_id: string;
-  status: ConversionStatus;
-  status_url: string;
-  download_url: string;
-  expires_in_seconds?: number;
-};
-
-type ConversionStatus = "queued" | "running" | "success" | "failed" | "expired";
-
-type ConversionStatusResponse = {
-  task_id: string;
-  status: ConversionStatus;
-  model_type: ModelType;
-  original_filename: string;
-  download_name: string;
-  download_url?: string;
-  error?: {
-    code: string;
-    message: string;
-  };
-};
-
-type CompletedConversion = {
-  downloadUrl: string;
-  fileName: string;
-};
-
-type RunningAction =
-  | "driver"
-  | "hand"
-  | "box"
-  | "japan"
-  | "taiwan"
-  | "arduino"
-  | "vlc"
-  | "folder"
-  | "settings"
-  | "version"
-  | "output"
-  | "converter"
-  | null;
-
-const translations = {
-  zh_TW: {
-    appTitle: "Realtek AMB82-mini工具",
-    language: "語言",
-    mainMenu: "主選單",
-    files: "檔案取得",
-    fileHint: "選擇項目後會開啟 Windows 存檔視窗",
-    driver: "CH340/CH341安裝檔",
-    hand: "手勢-自走車追蹤程式碼/權重",
-    objectBoxTracking: "AMB盒子-自走車追蹤程式碼/權重",
-    japanModel: "影像分類權重(AMB盒子/日本硬幣/滑鼠)",
-    taiwanModel: "影像分類權重(AMB盒子/台灣紙鈔/滑鼠)",
-    arduino: "Arduino IDE安裝檔",
-    vlc: "VLC 安裝檔",
-    folder: "開啟AmebaPro2資料夾",
-    camera: "AMB相機畫面擷取",
-    modelConverter: "模型量化轉換",
-    version: "版本檢查",
-    github: "GitHub 倉庫",
-    preference: "AMB Preference",
-    copied: "已複製到剪貼簿",
-    online: "外網已連線",
-    offline: "外網未連線",
-    unavailableOffline: "需要外網連線",
-    back: "返回",
-    save: "取得",
-    open: "開啟",
-    check: "檢查",
-    preview: "預覽畫面",
-    selectCamera: "選擇鏡頭",
-    startCapture: "開始截圖",
-    stopCapture: "停止截圖",
-    noCamera: "尚未找到相機",
-    output: "輸出資料夾",
-    chooseOutput: "選擇資料夾",
-    lastSaved: "最後儲存",
-    savedPhoto: "已儲存第 {count} 張照片",
-    cameraGuideTitle: "拍攝教學",
-    settings: "設定",
-    settingsNotice: "如果不知道這些設定是做什麼，請不要變更。",
-    resetSettings: "重置設定",
-    settingsReset: "設定已恢復預設",
-    uvcDeviceSettings: "UVC device屬性設定",
-    preferenceVersion: "Preference version",
-    releaseVersion: "Release version",
-    betaVersion: "Beta version",
-    preferenceSaved: "Preference version已儲存",
-    uvcdSaved: "UVC設定已儲存",
-    defaultOption: "預設",
-    ready: "就緒",
-    latest: "目前為最新版本",
-    update: "偵測到新版本",
-    betaCurrent: "當前為beta版本",
-    converterTitle: "Realtek AMB82 mini Model Quantizer",
-    objectDetection: "Object Detection",
-    classification: "Classification",
-    selectFile: "Click to select file",
-    selectedFile: "Selected file",
-    supportsFiles: "Supports {extensions} files",
-    startConversion: "Start Conversion",
-    openExternal: "以外部瀏覽器打開",
-    loadingModels: "正在讀取模型類型",
-    uploadQueued: "模型已上傳，等待轉換",
-    conversionRunning: "模型轉換中",
-    conversionSuccess: "轉換完成，可以下載",
-    conversionSaved: "轉換檔案已儲存",
-    downloadConverted: "Download",
-    noFileSelected: "請先選擇模型檔案",
-    invalidFileType: "檔案格式不符合目前模型類型",
-    chooseAnotherFile: "選擇其他檔案",
-    dropFileHint: "也可以將檔案拖放到這裡",
-  },
-  en_US: {
-    appTitle: "Realtek AMB82-mini Tool",
-    language: "Language",
-    mainMenu: "Main Menu",
-    files: "Get Files",
-    fileHint: "Each item opens a Windows save dialog",
-    driver: "CH340/CH341 Installer",
-    hand: "Gesture - Car Tracking Code/Weight",
-    objectBoxTracking: "AMB Box Car Tracking Code/Weight",
-    japanModel: "Image Classification Weight (AMB box/Japan coin/mouse)",
-    taiwanModel: "Image Classification Weight (AMB box/Taiwan banknote/mouse)",
-    arduino: "Arduino IDE Installer",
-    vlc: "VLC Installer",
-    folder: "Open AmebaPro2 Folder",
-    camera: "AMB Camera Capture",
-    modelConverter: "Model Quantization",
-    version: "Version Check",
-    github: "GitHub Repository",
-    preference: "AMB Preference",
-    copied: "Copied to clipboard",
-    online: "Internet connected",
-    offline: "Internet disconnected",
-    unavailableOffline: "Internet required",
-    back: "Back",
-    save: "Get",
-    open: "Open",
-    check: "Check",
-    preview: "Preview",
-    selectCamera: "Select camera",
-    startCapture: "Start capture",
-    stopCapture: "Stop capture",
-    noCamera: "No camera found",
-    output: "Output folder",
-    chooseOutput: "Choose folder",
-    lastSaved: "Last saved",
-    savedPhoto: "Saved photo #{count}",
-    cameraGuideTitle: "Capture Guide",
-    settings: "Settings",
-    settingsNotice: "If you are not sure what these settings do, please leave them unchanged.",
-    resetSettings: "Reset settings",
-    settingsReset: "Settings restored to defaults",
-    uvcDeviceSettings: "UVC device properties",
-    preferenceVersion: "Preference version",
-    releaseVersion: "Release version",
-    betaVersion: "Beta version",
-    preferenceSaved: "Preference version saved",
-    uvcdSaved: "UVC setting saved",
-    defaultOption: "default",
-    ready: "Ready",
-    latest: "You are on the latest version",
-    update: "New version available",
-    betaCurrent: "Current beta version",
-    converterTitle: "Realtek AMB82 mini Model Quantizer",
-    objectDetection: "Object Detection",
-    classification: "Classification",
-    selectFile: "Click to select file",
-    selectedFile: "Selected file",
-    supportsFiles: "Supports {extensions} files",
-    startConversion: "Start Conversion",
-    openExternal: "Open in external browser",
-    loadingModels: "Loading model types",
-    uploadQueued: "Model uploaded; waiting for conversion",
-    conversionRunning: "Converting model",
-    conversionSuccess: "Conversion complete; ready to download",
-    conversionSaved: "Converted model saved",
-    downloadConverted: "Download",
-    noFileSelected: "Choose a model file first",
-    invalidFileType: "File type does not match the selected model type",
-    chooseAnotherFile: "Choose another file",
-    dropFileHint: "You can also drop a file here",
-  },
-  ja_JP: {
-    appTitle: "Realtek AMB82-mini ツール",
-    language: "言語",
-    mainMenu: "メニュー",
-    files: "ファイル取得",
-    fileHint: "項目を選ぶと Windows の保存画面を開きます",
-    driver: "CH340/CH341 インストーラー",
-    hand: "ジェスチャー-カー追跡コード/重み",
-    objectBoxTracking: "AMBボックスカー追跡コード/重み",
-    japanModel: "画像分類重み(AMBボックス/日本硬貨/マウス)",
-    taiwanModel: "画像分類重み(AMBボックス/台湾紙幣/マウス)",
-    arduino: "Arduino IDE インストーラー",
-    vlc: "VLC インストーラー",
-    folder: "AmebaPro2 フォルダーを開く",
-    camera: "AMB カメラ撮影",
-    modelConverter: "Model Quantization",
-    version: "バージョン確認",
-    github: "GitHub リポジトリ",
-    preference: "AMB Preference",
-    copied: "クリップボードにコピーしました",
-    online: "インターネット接続あり",
-    offline: "インターネット接続なし",
-    unavailableOffline: "インターネットが必要です",
-    back: "戻る",
-    save: "取得",
-    open: "開く",
-    check: "確認",
-    preview: "プレビュー",
-    selectCamera: "カメラを選択",
-    startCapture: "撮影開始",
-    stopCapture: "撮影停止",
-    noCamera: "カメラが見つかりません",
-    output: "出力フォルダー",
-    chooseOutput: "フォルダー選択",
-    lastSaved: "最後の保存",
-    savedPhoto: "{count} 枚目の写真を保存しました",
-    cameraGuideTitle: "撮影ガイド",
-    settings: "設定",
-    settingsNotice: "これらの設定の用途が分からない場合は、変更しないでください。",
-    resetSettings: "設定をリセット",
-    settingsReset: "設定を既定値に戻しました",
-    uvcDeviceSettings: "UVC device properties",
-    preferenceVersion: "Preference version",
-    releaseVersion: "Release version",
-    betaVersion: "Beta version",
-    preferenceSaved: "Preference version saved",
-    uvcdSaved: "UVC setting saved",
-    defaultOption: "既定",
-    ready: "準備完了",
-    latest: "最新バージョンです",
-    update: "新しいバージョンがあります",
-    betaCurrent: "現在はbetaバージョンです",
-    converterTitle: "Realtek AMB82 mini Model Quantizer",
-    objectDetection: "Object Detection",
-    classification: "Classification",
-    selectFile: "Click to select file",
-    selectedFile: "Selected file",
-    supportsFiles: "Supports {extensions} files",
-    startConversion: "Start Conversion",
-    openExternal: "Open in external browser",
-    loadingModels: "Loading model types",
-    uploadQueued: "Model uploaded; waiting for conversion",
-    conversionRunning: "Converting model",
-    conversionSuccess: "Conversion complete; ready to download",
-    conversionSaved: "Converted model saved",
-    downloadConverted: "Download",
-    noFileSelected: "Choose a model file first",
-    invalidFileType: "File type does not match the selected model type",
-    chooseAnotherFile: "Choose another file",
-    dropFileHint: "You can also drop a file here",
-  },
-} satisfies Record<Language, Record<string, string>>;
-
-const languageNames: Record<Language, string> = {
-  zh_TW: "繁體中文",
-  en_US: "English",
-  ja_JP: "日本語",
-};
-
-const installActionLabels: Record<Language, { autoInstall: string }> = {
-  zh_TW: {
-    autoInstall: "自動安裝",
-  },
-  en_US: {
-    autoInstall: "Auto install",
-  },
-  ja_JP: {
-    autoInstall: "自動インストール",
-  },
-};
-
-const TOAST_DISPLAY_MS = 1500;
-const TOAST_FADE_MS = 240;
-const PREFERENCE_COPY_MESSAGE =
-  "已複製，請到Arduino IDE左上角 File -> Preferences -> Additional boards manager URLs 貼上 建議版本選擇 4.0.9";
-const uvcdFormatOptions: Array<{ value: UvcdFormat; label: string }> = [
-  { value: "YUY2", label: "YUY2" },
-  { value: "NV12", label: "NV12" },
-  { value: "MJPG", label: "MJPG" },
-  { value: "H264", label: "H264" },
-  { value: "H265", label: "H265" },
-];
-
-const converterModelDefaults: Record<ModelType, ConverterModel> = {
-  yolo: {
-    type: "yolo",
-    label: "Object Detection",
-    input_extensions: [".pt"],
-    download_name: "yolov7_tiny.nb",
-  },
-  classification: {
-    type: "classification",
-    label: "Classification",
-    input_extensions: [".h5"],
-    download_name: "img_class_cnn.nb",
-  },
-};
-
-const converterModelOrder: ModelType[] = ["yolo", "classification"];
-
-function uvcdOptionLabel(option: { value: UvcdFormat; label: string }, defaultLabel: string) {
-  return option.value === "MJPG" ? `${option.label} (${defaultLabel})` : option.label;
-}
-
-function savedPhotoText(language: Language, path: string, fallback: string) {
-  const match = path.match(/image_(\d+)\.jpg$/i);
-  if (!match) return fallback;
-
-  const count = Number.parseInt(match[1], 10);
-  if (!Number.isFinite(count)) return fallback;
-
-  return translations[language].savedPhoto.replace("{count}", String(count));
-}
-
-function converterApiUrl(apiBase: string, path: string) {
-  if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  const normalized = path.startsWith("/api/v1")
-    ? path.slice("/api/v1".length)
-    : path.startsWith("/")
-      ? path
-      : `/${path}`;
-  return `${apiBase}${normalized}`;
-}
-
-function fileMatchesExtensions(file: File, extensions: string[]) {
-  const name = file.name.toLowerCase();
-  return extensions.some((extension) => name.endsWith(extension.toLowerCase()));
-}
-
-function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-async function readApiJson<T>(response: Response): Promise<T> {
-  const data = await response.json();
-  if (!response.ok) {
-    const message = data?.error?.message || `HTTP ${response.status}`;
-    throw new Error(message);
-  }
-  return data as T;
-}
-
-const cameraGuideSteps: Record<Language, string[]> = {
-  zh_TW: [
-    "將 AMB82 mini 的 CH340 端口插入 USB 線，並連接至電腦。",
-    "打開 Arduino IDE。",
-    "開啟 AMB82 mini 範例中的 AmebaUSB / UVC_device。",
-    "將程式碼直接燒錄到 AMB82 mini 開發板。",
-    "燒錄完成後，將 AMB82 mini 的 USB 線插入另一個 8735 USB 端口。",
-    "回到此頁面，即可選擇 AMB82 mini 作為拍攝鏡頭。",
-  ],
-  en_US: [
-    "Plug a USB cable into the CH340 port on the AMB82 mini, then connect it to the computer.",
-    "Open Arduino IDE.",
-    "Open AmebaUSB / UVC_device from the AMB82 mini examples.",
-    "Upload the sketch directly to the AMB82 mini development board.",
-    "After the upload finishes, move the AMB82 mini USB cable to the other 8735 USB port.",
-    "Return to this page and select AMB82 mini as the capture camera.",
-  ],
-  ja_JP: [
-    "AMB82 mini の CH340 ポートに USB ケーブルを接続し、コンピューターにつなぎます。",
-    "Arduino IDE を開きます。",
-    "AMB82 mini のサンプルから AmebaUSB / UVC_device を開きます。",
-    "スケッチを AMB82 mini 開発ボードへ直接書き込みます。",
-    "書き込み完了後、AMB82 mini の USB ケーブルをもう一方の 8735 USB ポートに差し替えます。",
-    "このページに戻ると、AMB82 mini を撮影用カメラとして選択できます。",
-  ],
-};
+import {
+  converterModelDefaults,
+  TOAST_DISPLAY_MS,
+  TOAST_FADE_MS,
+  uvcdFormatOptions,
+} from "./appConfig";
+import { cameraGuideSteps, PREFERENCE_COPY_MESSAGE, translations } from "./i18n";
+import {
+  converterApiUrl,
+  fileMatchesExtensions,
+  readApiJson,
+  savedPhotoText,
+  wait,
+} from "./converterUtils";
+import { AppHeader } from "./components/AppHeader";
+import { CameraView } from "./components/CameraView";
+import { ConverterView } from "./components/ConverterView";
+import { HomeView } from "./components/HomeView";
+import { LinkPanel } from "./components/LinkPanel";
+import { NetworkStatus } from "./components/NetworkStatus";
+import { SettingsView } from "./components/SettingsView";
+import { createHomeCards } from "./homeCards";
+import type {
+  ActionResult,
+  AppSettings,
+  CompletedConversion,
+  ConversionCreateResponse,
+  ConversionStatusResponse,
+  ConverterModel,
+  ConverterModelsResponse,
+  Dashboard,
+  DownloadKey,
+  DownloadProgress,
+  DownloadResult,
+  Language,
+  ModelType,
+  PreferenceVersion,
+  RunningAction,
+  SettingsResetResult,
+  UvcdFormat,
+  UvcdResult,
+  VersionCheck,
+  View,
+} from "./types";
 
 function App() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -1000,551 +564,118 @@ function App() {
     setStatus(savedText);
   }
 
-  const fileCards = [
-    {
-      title: t.driver,
-      detail: "CH341SER.EXE",
-      command: "save_driver_as",
-      key: "driver" as const,
-      disabled: false,
-    },
-    {
-      title: t.arduino,
-      detail: "arduino-ide_2.3.8_Windows_64bit.exe",
-      command: "download_arduino_ide_as",
-      key: "arduino" as const,
-      disabled: !internetConnected,
-    },
-    {
-      title: t.vlc,
-      detail: "vlc-3.0.23-win32.exe",
-      command: "download_vlc_as",
-      key: "vlc" as const,
-      disabled: !internetConnected,
-    },
-    {
-      title: t.hand,
-      detail: "hand_code.txt / yolov7_tiny.nb",
-      command: "save_hand_resources_as",
-      key: "hand" as const,
-      disabled: false,
-    },
-    {
-      title: t.objectBoxTracking,
-      detail: "code.txt / yolov7_tiny.nb",
-      command: "save_object_detection_box_resources_as",
-      key: "box" as const,
-      disabled: false,
-    },
-    {
-      title: t.japanModel,
-      detail: "img_class_cnn.nb(box/money/mouse)",
-      command: "save_image_model_japan_as",
-      key: "japan" as const,
-      disabled: false,
-    },
-    {
-      title: t.taiwanModel,
-      detail: "img_class_cnn.nb(box/money/mouse)",
-      command: "save_image_model_taiwan_as",
-      key: "taiwan" as const,
-      disabled: false,
-    },
-  ];
-
-  const mainCards = [
-    ...fileCards.map((card) => {
-      const action = () =>
-        runAction<ActionResult | DownloadResult>(
-          card.key,
-          card.command,
-          (result) => result.path ?? ("message" in result ? result.message : ""),
-        );
-
-      return {
-        title: card.title,
-        detail: card.detail,
-        icon: PackageCheck,
-        action,
-        menuActions:
-          card.key === "arduino" || card.key === "vlc"
-            ? [
-                {
-                  label: installActionLabels[language].autoInstall,
-                  action: () =>
-                    runAction<DownloadResult>(
-                      card.key,
-                      card.key === "arduino" ? "download_and_install_arduino_ide" : "download_and_install_vlc",
-                      (result) => result.path,
-                    ),
-                },
-              ]
-            : undefined,
-        label: t.save,
-        disabled: card.disabled,
-        key: card.key,
-        actionIcon: Download,
-      };
-    }),
-    {
-      title: t.camera,
-      detail: "",
-      icon: Camera,
-      action: () => void openCameraView(),
-      label: t.open,
-      disabled: false,
-      key: null,
-      actionIcon: CheckCircle2,
-      menuActions: undefined,
-    },
-    {
-      title: t.folder,
-      detail: "",
-      icon: FolderOpen,
-      action: () =>
-        runAction<ActionResult>("folder", "open_realtek_folder", (result) => result.path ?? result.message),
-      label: t.open,
-      disabled: false,
-      key: "folder" as const,
-      actionIcon: CheckCircle2,
-      menuActions: undefined,
-    },
-    {
-      title: t.modelConverter,
-      detail: "",
-      icon: FileArchive,
-      action: () => void openConverterView(),
-      label: t.open,
-      disabled: !internetConnected,
-      key: null,
-      actionIcon: CheckCircle2,
-      menuActions: undefined,
-    },
-    {
-      title: t.version,
-      detail: dashboard ? `v${dashboard.metadata.version}` : "",
-      icon: RefreshCcw,
-      action: () =>
-        runAction<VersionCheck>("version", "check_version", (result) => {
-          if (result.is_beta) return t.betaCurrent;
-          if (result.is_latest) return `${t.latest}: ${result.local}`;
-          return `${t.update}: ${result.remote}`;
-        }),
-      label: t.check,
-      disabled: !internetConnected,
-      key: "version" as const,
-      actionIcon: CheckCircle2,
-      menuActions: undefined,
-    },
-  ];
-  const converterProgress = downloadProgress.converter;
-
+  const mainCards = createHomeCards({
+    dashboard,
+    internetConnected,
+    language,
+    onOpenCamera: () => void openCameraView(),
+    onOpenConverter: () => void openConverterView(),
+    runAction,
+    t,
+  });
   return (
     <main className={`appShell ${view === "settings" ? "settingsShell" : ""} ${view === "converter" ? "converterShell" : ""}`}>
-      <header className={`appHeader ${view === "settings" ? "settingsPageHeader" : ""}`}>
-        {view === "settings" ? (
-          <button
-            type="button"
-            className="settingsBackButton"
-            onClick={() => setView("home")}
-            title={t.back}
-          >
-            <ArrowLeft size={18} />
-            <span>{t.settings}</span>
-          </button>
-        ) : (
-          <>
-            <button
-              className="backButton"
-              onClick={() => {
-                stopCamera();
-                setView("home");
-              }}
-              hidden={view === "home"}
-              title={t.back}
-            >
-              <ArrowLeft size={18} />
-              {t.back}
-            </button>
-            <h1>{t.appTitle}</h1>
-            <div className="headerActions">
-              <div
-                className={`languageSelect ${isLanguageMenuOpen ? "isOpen" : ""}`}
-                ref={languageMenuRef}
-                onBlur={(event) => {
-                  const nextTarget = event.relatedTarget as Node | null;
-                  if (!nextTarget || !languageMenuRef.current?.contains(nextTarget)) {
-                    setIsLanguageMenuOpen(false);
-                  }
-                }}
-              >
-                <button
-                  type="button"
-                  className="languageSelectButton"
-                  aria-haspopup="listbox"
-                  aria-expanded={isLanguageMenuOpen}
-                  onClick={() => setIsLanguageMenuOpen((current) => !current)}
-                >
-                  <Languages size={17} />
-                  <span>{t.language}</span>
-                  <strong>{languageNames[language]}</strong>
-                  <ChevronDown size={17} />
-                </button>
-                {isLanguageMenuOpen && (
-                  <div className="languageMenu" role="listbox">
-                    {dashboard?.metadata.supported_languages.map((item) => (
-                      <button
-                        type="button"
-                        className={item === language ? "isSelected" : ""}
-                        role="option"
-                        aria-selected={item === language}
-                        onClick={() => void changeLanguage(item)}
-                        key={item}
-                      >
-                        {languageNames[item]}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                className="settingsIconButton"
-                onClick={() => void openSettingsView()}
-                title={t.settings}
-                aria-label={t.settings}
-              >
-                <SettingsIcon size={18} />
-              </button>
-            </div>
-          </>
-        )}
-      </header>
+      <AppHeader
+        dashboard={dashboard}
+        isLanguageMenuOpen={isLanguageMenuOpen}
+        language={language}
+        languageMenuRef={languageMenuRef}
+        onBackHome={() => {
+          stopCamera();
+          setView("home");
+        }}
+        onChangeLanguage={(nextLanguage) => void changeLanguage(nextLanguage)}
+        onCloseLanguageMenu={() => setIsLanguageMenuOpen(false)}
+        onOpenSettings={() => void openSettingsView()}
+        onSettingsBack={() => setView("home")}
+        onToggleLanguageMenu={() => setIsLanguageMenuOpen((current) => !current)}
+        t={t}
+        view={view}
+      />
 
       {view !== "settings" && view !== "converter" && (
-        <section className="linkPanel">
-          <button onClick={() => void openUrl(dashboard?.metadata.repository)} title={t.github}>
-            <span>{t.github}</span>
-            <strong>{dashboard?.metadata.repository}</strong>
-            <ExternalLink size={17} />
-          </button>
-          <button
-            onClick={() => copyText(dashboard?.metadata.realtek_package_url, PREFERENCE_COPY_MESSAGE)}
-            title={t.preference}
-          >
-            <span>{t.preference}</span>
-            <strong>{dashboard?.metadata.realtek_package_url}</strong>
-            <Clipboard size={17} />
-          </button>
-        </section>
+        <LinkPanel
+          onCopyText={(text, message) => void copyText(text, message)}
+          onOpenUrl={(url) => void openUrl(url)}
+          preferenceCopyMessage={PREFERENCE_COPY_MESSAGE}
+          realtekPackageUrl={dashboard?.metadata.realtek_package_url}
+          repository={dashboard?.metadata.repository}
+          t={t}
+        />
       )}
 
       {status && <div className={`feedbackToast ${isFeedbackLeaving ? "leaving" : ""}`}>{status}</div>}
 
       {view === "home" && (
-        <section className="contentSection">
-          <h2>{t.mainMenu}</h2>
-          <div className="menuGrid">
-            {mainCards.map((card, index) => {
-              const Icon = card.icon;
-              const isRunning = card.key !== null && running === card.key;
-              const ActionIcon = card.actionIcon;
-              const progress = isDownloadKey(card.key) ? downloadProgress[card.key] : undefined;
-              const progressStyle =
-                progress === undefined
-                  ? undefined
-                  : ({
-                      "--card-progress": `${Math.max(4, Math.round(progress * 100))}%`,
-                    } as CSSProperties);
-              return (
-                <article
-                  className={`menuCard ${progress === undefined ? "" : "isDownloading"} ${
-                    openActionMenu === card.key ? "hasOpenActionMenu" : ""
-                  }`}
-                  key={card.title}
-                  style={progressStyle}
-                >
-                  <span className="cardIndex">{String(index + 1).padStart(2, "0")}</span>
-                  <div className="cardIcon">
-                    <Icon size={24} />
-                  </div>
-                  <div className="cardText">
-                    <h3>{card.title}</h3>
-                    {(card.disabled || card.detail) && <p>{card.disabled ? t.unavailableOffline : card.detail}</p>}
-                  </div>
-                  {card.menuActions ? (
-                    <div
-                      className={`splitAction ${openActionMenu === card.key ? "isOpen" : ""}`}
-                      onBlur={(event) => {
-                        const nextTarget = event.relatedTarget as Node | null;
-                        if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
-                          setOpenActionMenu(null);
-                        }
-                      }}
-                    >
-                      <button
-                        className="primaryBtn splitMain"
-                        onClick={card.action}
-                        disabled={card.disabled || isRunning}
-                      >
-                        {isRunning ? <RefreshCcw className="spin" size={17} /> : <ActionIcon size={17} />}
-                        {card.label}
-                      </button>
-                      <button
-                        type="button"
-                        className="primaryBtn splitToggle"
-                        aria-haspopup="menu"
-                        aria-expanded={openActionMenu === card.key}
-                        aria-label={card.title}
-                        onClick={() => {
-                          if (card.key !== "arduino" && card.key !== "vlc") return;
-                          const menuKey = card.key;
-                          setOpenActionMenu((current) => (current === menuKey ? null : menuKey));
-                        }}
-                        disabled={card.disabled || isRunning}
-                      >
-                        <ChevronDown size={17} />
-                      </button>
-                      {openActionMenu === card.key && (
-                        <div className="actionMenu" role="menu">
-                          {card.menuActions.map((item) => (
-                            <button
-                              type="button"
-                              role="menuitem"
-                              onClick={() => {
-                                setOpenActionMenu(null);
-                                item.action();
-                              }}
-                              key={item.label}
-                            >
-                              {item.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <button className="primaryBtn" onClick={card.action} disabled={card.disabled || isRunning}>
-                      {isRunning ? <RefreshCcw className="spin" size={17} /> : <ActionIcon size={17} />}
-                      {card.label}
-                    </button>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        </section>
+        <HomeView
+          downloadProgress={downloadProgress}
+          isDownloadKey={isDownloadKey}
+          mainCards={mainCards}
+          openActionMenu={openActionMenu}
+          running={running}
+          setOpenActionMenu={setOpenActionMenu}
+          t={t}
+        />
       )}
 
       {view === "settings" && (
-        <section className="contentSection settingsSection">
-          <div className="settingsRow">
-            <p className="settingsNotice">{t.settingsNotice}</p>
-            <div className="settingsField">
-              <span className="settingsFieldLabel">{t.preferenceVersion}</span>
-              <div className="segmentedToggle" role="group" aria-label={t.preferenceVersion}>
-                <button
-                  type="button"
-                  className={selectedPreferenceVersion === "release" ? "isSelected" : ""}
-                  onClick={() => void changePreferenceVersion("release")}
-                  disabled={running === "settings"}
-                >
-                  {t.releaseVersion}
-                </button>
-                <button
-                  type="button"
-                  className={selectedPreferenceVersion === "beta" ? "isSelected" : ""}
-                  onClick={() => void changePreferenceVersion("beta")}
-                  disabled={running === "settings"}
-                >
-                  {t.betaVersion}
-                </button>
-              </div>
-            </div>
-            <div className="settingsField">
-              <label className="settingsFieldLabel" htmlFor="uvcd-format">
-                {t.uvcDeviceSettings}
-              </label>
-              <select
-                id="uvcd-format"
-                value={selectedUvcdFormat}
-                onChange={(event) => void changeUvcdFormat(event.target.value as UvcdFormat)}
-                disabled={running === "settings"}
-              >
-                {uvcdFormatOptions.map((item) => (
-                  <option value={item.value} key={item.value}>
-                    {uvcdOptionLabel(item, t.defaultOption)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="settingsFooter">
-              <button
-                type="button"
-                className="resetSettingsButton"
-                onClick={() => void resetSettings()}
-                disabled={running === "settings"}
-              >
-                <RefreshCcw className={running === "settings" ? "spin" : undefined} size={17} />
-                {t.resetSettings}
-              </button>
-            </div>
-          </div>
-        </section>
+        <SettingsView
+          onChangePreferenceVersion={(version) => void changePreferenceVersion(version)}
+          onChangeUvcdFormat={(format) => void changeUvcdFormat(format)}
+          onResetSettings={() => void resetSettings()}
+          running={running}
+          selectedPreferenceVersion={selectedPreferenceVersion}
+          selectedUvcdFormat={selectedUvcdFormat}
+          t={t}
+        />
       )}
 
       {view === "converter" && (
-        <section className="contentSection converterSection">
-          <div className="converterCard">
-            <div className="converterTop">
-              <h2>{t.converterTitle}</h2>
-              <button
-                type="button"
-                className="secondaryBtn converterExternalBtn"
-                onClick={() => void openUrl(modelConverterUrl)}
-              >
-                <ExternalLink size={17} />
-                {t.openExternal}
-              </button>
-            </div>
-
-            <div className="converterTabs" role="tablist" aria-label={t.modelConverter}>
-              {converterModelOrder.map((type) => (
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={converterType === type}
-                  className={converterType === type ? "isSelected" : ""}
-                  onClick={() => selectConverterType(type)}
-                  disabled={isConverterBusy}
-                  key={type}
-                >
-                  {type === "yolo" ? t.objectDetection : t.classification}
-                </button>
-              ))}
-            </div>
-
-            <label
-              className={`converterDropZone ${converterFile ? "hasFile" : ""}`}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                chooseConverterFile(event.dataTransfer.files.item(0));
-              }}
-            >
-              <input
-                ref={converterInputRef}
-                type="file"
-                accept={selectedConverterModel.input_extensions.join(",")}
-                onChange={(event) => chooseConverterFile(event.target.files?.item(0))}
-                disabled={isConverterBusy}
-              />
-              <UploadCloud size={32} />
-              <strong>{converterFile ? t.selectedFile : t.selectFile}</strong>
-              <span>{converterFile?.name ?? t.supportsFiles.replace("{extensions}", converterExtensions)}</span>
-              {!converterFile && <small>{t.dropFileHint}</small>}
-            </label>
-
-            <button
-              type="button"
-              className="converterStartBtn"
-              onClick={() =>
-                completedConversion ? void downloadCompletedConversion() : void startModelConversion()
-              }
-              disabled={isConverterBusy || !internetConnected || (!completedConversion && !converterFile)}
-            >
-              {isConverterBusy ? <RefreshCcw className="spin" size={18} /> : <Download size={18} />}
-              {completedConversion ? t.downloadConverted : t.startConversion}
-            </button>
-
-            {(converterStatus || converterTask || converterProgress !== undefined) && (
-              <div className="converterStatusPanel">
-                {converterProgress !== undefined && (
-                  <div
-                    className="converterProgressBar"
-                    style={{ "--converter-progress": `${Math.max(4, Math.round(converterProgress * 100))}%` } as CSSProperties}
-                  />
-                )}
-                <p>{converterStatus || t.ready}</p>
-                {converterTask && (
-                  <dl>
-                    <div>
-                      <dt>Task</dt>
-                      <dd>{converterTask.task_id}</dd>
-                    </div>
-                    <div>
-                      <dt>Status</dt>
-                      <dd>{converterTask.status}</dd>
-                    </div>
-                  </dl>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
+        <ConverterView
+          completedConversion={completedConversion}
+          converterExtensions={converterExtensions}
+          converterFile={converterFile}
+          converterInputRef={converterInputRef}
+          converterProgress={downloadProgress.converter}
+          converterStatus={converterStatus}
+          converterTask={converterTask}
+          converterType={converterType}
+          internetConnected={internetConnected}
+          isConverterBusy={isConverterBusy}
+          modelConverterUrl={modelConverterUrl}
+          onChooseFile={chooseConverterFile}
+          onDownloadCompletedConversion={() => void downloadCompletedConversion()}
+          onOpenUrl={(url) => void openUrl(url)}
+          onSelectType={selectConverterType}
+          onStartModelConversion={() => void startModelConversion()}
+          selectedConverterModel={selectedConverterModel}
+          t={t}
+        />
       )}
 
       {view === "camera" && (
-        <section className="contentSection cameraSection">
-          <div className="sectionTop">
-            <h2>{t.camera}</h2>
-            <button
-              className="secondaryBtn"
-              onClick={() => runAction<ActionResult>("output", "open_output_folder", (result) => result.path ?? result.message)}
-            >
-              <FolderOpen size={17} />
-              {t.output}
-            </button>
-          </div>
-          <div className="videoFrame">
-            <video ref={videoRef} muted playsInline />
-            {!isPreviewing && <span>{t.preview}</span>}
-          </div>
-          <div className="cameraControls">
-            <select value={selectedCamera} onChange={(event) => void selectCamera(event.target.value)} aria-label={t.selectCamera}>
-              <option value="">{t.noCamera}</option>
-              {cameras.map((device, index) => (
-                <option value={device.deviceId} key={device.deviceId}>
-                  {device.label || `Camera ${index}`}
-                </option>
-              ))}
-            </select>
-            <button className={isCapturing ? "dangerBtn" : "primaryBtn"} onClick={isCapturing ? stopCaptureTimer : startCapture}>
-              {isCapturing ? <Square size={17} /> : <Play size={17} />}
-              {isCapturing ? t.stopCapture : t.startCapture}
-            </button>
-            <button className="secondaryBtn" onClick={() => void selectOutputFolder()} disabled={isCapturing || running === "output"}>
-              <FolderOpen size={17} />
-              {t.chooseOutput}
-            </button>
-          </div>
-          <dl className="pathList">
-            <div>
-              <dt>{t.output}</dt>
-              <dd>{dashboard?.output_folder ?? ""}</dd>
-            </div>
-            <div>
-              <dt>{t.lastSaved}</dt>
-              <dd>{lastSaved || "-"}</dd>
-            </div>
-          </dl>
-          <section className="cameraGuide">
-            <h3>{t.cameraGuideTitle}</h3>
-            <ol>
-              {cameraGuideSteps[language].map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
-          </section>
-        </section>
+        <CameraView
+          cameraGuideSteps={cameraGuideSteps[language]}
+          cameras={cameras}
+          isCapturing={isCapturing}
+          isPreviewing={isPreviewing}
+          lastSaved={lastSaved}
+          onOpenOutputFolder={() =>
+            void runAction<ActionResult>("output", "open_output_folder", (result) => result.path ?? result.message)
+          }
+          onSelectCamera={(deviceId) => void selectCamera(deviceId)}
+          onSelectOutputFolder={() => void selectOutputFolder()}
+          onStartCapture={() => void startCapture()}
+          onStopCaptureTimer={stopCaptureTimer}
+          outputFolder={dashboard?.output_folder ?? ""}
+          running={running}
+          selectedCamera={selectedCamera}
+          t={t}
+          videoRef={videoRef}
+        />
       )}
 
-      {view !== "settings" && view !== "converter" && (
-        <div className={internetConnected ? "networkStatus online" : "networkStatus offline"}>
-          {internetConnected ? <Wifi size={17} /> : <WifiOff size={17} />}
-          {internetConnected ? t.online : t.offline}
-        </div>
-      )}
+      {view !== "settings" && view !== "converter" && <NetworkStatus internetConnected={internetConnected} t={t} />}
     </main>
   );
 }
