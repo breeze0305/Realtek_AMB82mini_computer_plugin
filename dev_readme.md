@@ -53,6 +53,11 @@
 - `src-tauri/tauri.conf.json`
   - 視窗大小、bundle 設定、產品名稱、Tauri app version。
 
+- `src-tauri/endpoint_manifest.json`
+  - 外部端點集中設定。
+  - 包含 GitHub repository、版本檢查 URL、Arduino / VLC 下載 URL 與 fallback、Realtek package URL、模型轉換服務 URL、網路檢查 URL。
+  - 若外部服務改版、下載來源失效、需要新增 mirror，優先改這裡。
+
 - `src-tauri/Cargo.toml`
   - Rust crate 設定與 Tauri 版本鎖定。
 
@@ -276,10 +281,11 @@ Reset：
 
 網路下載流程：
 
-1. 在 `src-tauri/src/lib.rs` 新增或更新 URL const。
-2. 使用 `download_url_as`。
-3. 若要進度條，給固定 download key，並在前端 `DownloadKey` 加上該 key。
-4. 若要自動安裝，新增對應的 `download_and_install_*` command，並在前端 `menuActions` 接 split button。
+1. 在 `src-tauri/endpoint_manifest.json` 新增或更新 URL。
+2. 每個 `urls` 陣列的第一個網址會用來決定預設檔名；後面的網址是 fallback mirror。
+3. Rust 端使用 `download_url_as` / `download_to_path_with_fallback` 依序嘗試 `urls`。
+4. 若要進度條，給固定 download key，並在前端 `DownloadKey` 加上該 key。
+5. 若要自動安裝，新增對應的 `download_and_install_*` command，並在前端 `menuActions` 接 split button。
 
 ### 修改相機功能
 
@@ -340,8 +346,14 @@ Reset：
 
 後端：
 
-- `REALTEK_PACKAGE_BETA_URL`
-- `REALTEK_PACKAGE_RELEASE_URL`
+- `src-tauri/endpoint_manifest.json`
+  - `realtek_packages.beta.urls`
+  - `realtek_packages.release.urls`
+  - `version_check.urls`
+  - `downloads.*.urls`
+  - `model_converter.site_url`
+  - `model_converter.api_base`
+  - `internet_check_urls`
 - `DEFAULT_PREFERENCE_VERSION`
 - `SUPPORTED_PREFERENCE_VERSIONS`
 - `Settings.preference_version`
