@@ -16,23 +16,15 @@ use thiserror::Error;
 const VERSION: &str = "3.9.1";
 const AUTHOR: &str = "breeze0305";
 const CONTACT: &str = "breeze0305";
-const REPOSITORY: &str = "https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin";
-const VERSION_URL: &str =
-    "https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_computer_plugin/main/version.txt";
-const ARDUINO_IDE_URL: &str =
-    "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.exe";
-const ARDUINO_IDE_MSI_URL: &str =
-    "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.msi";
-const VLC_URL: &str = "https://mirror.twds.com.tw/videolan/vlc/3.0.23/win32/vlc-3.0.23-win32.exe";
-const REALTEK_PACKAGE_BETA_URL: &str = "https://github.com/Ameba-AIoT/ameba-arduino-pro2/raw/dev/Arduino_package/package_realtek_amebapro2_early_index.json";
-const REALTEK_PACKAGE_RELEASE_URL: &str = "https://github.com/ambiot/ambpro2_arduino/raw/main/Arduino_package/package_realtek_amebapro2_index.json";
-const MODEL_CONVERTER_API_BASE: &str = "https://modelconverter.ntnu-aiot.com/api/v1";
-const INTERNET_CHECK_URL: &str = "https://www.cloudflare.com/cdn-cgi/trace";
 const DEFAULT_LANGUAGE: &str = "zh_TW";
 const DEFAULT_UVCD_FORMAT: &str = "MJPG";
 const DEFAULT_PREFERENCE_VERSION: &str = "beta";
 const SUPPORTED_UVCD_FORMATS: &[&str] = &["YUY2", "NV12", "MJPG", "H264", "H265"];
 const SUPPORTED_PREFERENCE_VERSIONS: &[&str] = &["release", "beta"];
+const ENDPOINT_MANIFEST_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/endpoint_manifest.json"
+));
 
 #[derive(Debug, Error)]
 enum AppError {
@@ -85,10 +77,12 @@ struct Metadata {
     author: &'static str,
     contact: &'static str,
     version: &'static str,
-    repository: &'static str,
-    arduino_ide_url: &'static str,
-    vlc_url: &'static str,
+    repository: String,
+    arduino_ide_url: String,
+    vlc_url: String,
     realtek_package_url: String,
+    model_converter_url: String,
+    model_converter_api_base: String,
     supported_languages: Vec<&'static str>,
 }
 
@@ -119,7 +113,7 @@ struct VersionCheck {
     remote: String,
     is_latest: bool,
     is_beta: bool,
-    repository: &'static str,
+    repository: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -134,6 +128,40 @@ struct UvcdResult {
 struct SettingsResetResult {
     dashboard: Dashboard,
     uvcd: UvcdResult,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct EndpointManifest {
+    repository: String,
+    version_check: UrlSet,
+    downloads: DownloadManifest,
+    realtek_packages: RealtekPackageManifest,
+    model_converter: ModelConverterManifest,
+    internet_check_urls: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct DownloadManifest {
+    arduino_ide: UrlSet,
+    arduino_ide_msi: UrlSet,
+    vlc: UrlSet,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct RealtekPackageManifest {
+    beta: UrlSet,
+    release: UrlSet,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ModelConverterManifest {
+    site_url: String,
+    api_base: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct UrlSet {
+    urls: Vec<String>,
 }
 
 struct AppState {
@@ -248,7 +276,7 @@ fn get_dashboard(state: tauri::State<AppState>) -> Result<Dashboard, AppError> {
         .clone();
 
     Ok(Dashboard {
-        metadata: metadata(&settings.preference_version),
+        metadata: metadata(&settings.preference_version)?,
         settings,
         realtek_folder: find_realtek_folder().map(display_path),
         output_folder: display_path(output_dir(&state)?),
@@ -476,10 +504,11 @@ fn save_image_model_taiwan_as(app: AppHandle) -> Result<ActionResult, AppError> 
 
 #[tauri::command]
 fn download_arduino_ide_as(app: AppHandle) -> Result<DownloadResult, AppError> {
+    let manifest = endpoint_manifest()?;
     download_url_as(
         &app,
         "arduino",
-        ARDUINO_IDE_URL,
+        &manifest.downloads.arduino_ide.urls,
         "Save Arduino IDE installer",
     )
 }
@@ -492,16 +521,19 @@ fn download_and_install_arduino_ide(app: AppHandle) -> Result<DownloadResult, Ap
         ));
     }
 
-    let file_name = file_name_from_url(ARDUINO_IDE_MSI_URL)?;
+    let manifest = endpoint_manifest()?;
+    let urls = &manifest.downloads.arduino_ide_msi.urls;
+    let file_name = file_name_from_url(first_url(urls)?)?;
     let target = std::env::temp_dir().join(file_name);
-    let result = download_to_path(&app, "arduino", ARDUINO_IDE_MSI_URL, &target)?;
+    let result = download_to_path_with_fallback(&app, "arduino", urls, &target)?;
     install_msi(&target)?;
     Ok(result)
 }
 
 #[tauri::command]
 fn download_vlc_as(app: AppHandle) -> Result<DownloadResult, AppError> {
-    download_url_as(&app, "vlc", VLC_URL, "Save VLC installer")
+    let manifest = endpoint_manifest()?;
+    download_url_as(&app, "vlc", &manifest.downloads.vlc.urls, "Save VLC installer")
 }
 
 #[tauri::command]
@@ -512,9 +544,11 @@ fn download_and_install_vlc(app: AppHandle) -> Result<DownloadResult, AppError> 
         ));
     }
 
-    let file_name = file_name_from_url(VLC_URL)?;
+    let manifest = endpoint_manifest()?;
+    let urls = &manifest.downloads.vlc.urls;
+    let file_name = file_name_from_url(first_url(urls)?)?;
     let target = std::env::temp_dir().join(file_name);
-    let result = download_to_path(&app, "vlc", VLC_URL, &target)?;
+    let result = download_to_path_with_fallback(&app, "vlc", urls, &target)?;
     install_exe_silent(&target)?;
     Ok(result)
 }
@@ -525,7 +559,8 @@ fn download_model_conversion_as(
     url: String,
     file_name: String,
 ) -> Result<DownloadResult, AppError> {
-    let allowed_prefix = format!("{MODEL_CONVERTER_API_BASE}/conversions/");
+    let manifest = endpoint_manifest()?;
+    let allowed_prefix = format!("{}/conversions/", manifest.model_converter.api_base);
     if !url.starts_with(&allowed_prefix) || !url.ends_with("/download") {
         return Err(AppError::Message(
             "Only model converter download URLs are allowed".into(),
@@ -551,12 +586,8 @@ fn check_version() -> Result<VersionCheck, AppError> {
         ));
     }
 
-    let remote = http_agent()
-        .get(VERSION_URL)
-        .call()
-        .map_err(http_error)?
-        .into_string()
-        .map_err(|error| AppError::Message(format!("HTTP read error: {error}")))?
+    let manifest = endpoint_manifest()?;
+    let remote = get_text_with_fallback(&manifest.version_check.urls)?
         .trim()
         .to_string();
 
@@ -573,7 +604,7 @@ fn check_version() -> Result<VersionCheck, AppError> {
         is_latest: ordering == Ordering::Equal,
         is_beta: ordering == Ordering::Greater,
         remote,
-        repository: REPOSITORY,
+        repository: manifest.repository,
     })
 }
 
@@ -594,17 +625,20 @@ fn save_capture_image(
     })
 }
 
-fn metadata(preference_version: &str) -> Metadata {
-    Metadata {
+fn metadata(preference_version: &str) -> Result<Metadata, AppError> {
+    let manifest = endpoint_manifest()?;
+    Ok(Metadata {
         author: AUTHOR,
         contact: CONTACT,
         version: VERSION,
-        repository: REPOSITORY,
-        arduino_ide_url: ARDUINO_IDE_URL,
-        vlc_url: VLC_URL,
-        realtek_package_url: preference_url(preference_version).to_string(),
+        repository: manifest.repository,
+        arduino_ide_url: first_url(&manifest.downloads.arduino_ide.urls)?.to_string(),
+        vlc_url: first_url(&manifest.downloads.vlc.urls)?.to_string(),
+        realtek_package_url: preference_url(preference_version)?,
+        model_converter_url: manifest.model_converter.site_url,
+        model_converter_api_base: manifest.model_converter.api_base,
         supported_languages: vec!["zh_TW", "en_US", "ja_JP"],
-    }
+    })
 }
 
 fn start_uvcd_worker(app: AppHandle) {
@@ -680,7 +714,7 @@ fn copy_resource_to(app: &AppHandle, source: &str, target: &Path) -> Result<(), 
 fn download_url_as(
     app: &AppHandle,
     key: &'static str,
-    url: &str,
+    urls: &[String],
     title: &str,
 ) -> Result<DownloadResult, AppError> {
     if !has_internet() {
@@ -689,10 +723,31 @@ fn download_url_as(
         ));
     }
 
-    let file_name = file_name_from_url(url)?;
+    let file_name = file_name_from_url(first_url(urls)?)?;
     let target = save_dialog(file_name, title)
         .ok_or_else(|| AppError::Message("Save was canceled".into()))?;
-    download_to_path(app, key, url, &target)
+    download_to_path_with_fallback(app, key, urls, &target)
+}
+
+fn download_to_path_with_fallback(
+    app: &AppHandle,
+    key: &'static str,
+    urls: &[String],
+    target: &Path,
+) -> Result<DownloadResult, AppError> {
+    let mut errors = Vec::new();
+
+    for url in urls {
+        match download_to_path(app, key, url, target) {
+            Ok(result) => return Ok(result),
+            Err(error) => errors.push(format!("{url}: {error}")),
+        }
+    }
+
+    Err(AppError::Message(format!(
+        "All download URLs failed: {}",
+        errors.join("; ")
+    )))
 }
 
 fn download_to_path(
@@ -773,6 +828,38 @@ fn safe_file_name(file_name: &str) -> String {
         .to_string()
 }
 
+fn endpoint_manifest() -> Result<EndpointManifest, AppError> {
+    serde_json::from_str(ENDPOINT_MANIFEST_JSON)
+        .map_err(|error| AppError::Message(format!("Endpoint manifest error: {error}")))
+}
+
+fn first_url(urls: &[String]) -> Result<&str, AppError> {
+    urls.first()
+        .map(String::as_str)
+        .filter(|url| !url.trim().is_empty())
+        .ok_or_else(|| AppError::Message("Endpoint manifest does not include a URL".into()))
+}
+
+fn get_text_with_fallback(urls: &[String]) -> Result<String, AppError> {
+    let mut errors = Vec::new();
+
+    for url in urls {
+        match http_agent().get(url).call().map_err(http_error).and_then(|response| {
+            response
+                .into_string()
+                .map_err(|error| AppError::Message(format!("HTTP read error: {error}")))
+        }) {
+            Ok(text) => return Ok(text),
+            Err(error) => errors.push(format!("{url}: {error}")),
+        }
+    }
+
+    Err(AppError::Message(format!(
+        "All endpoint URLs failed: {}",
+        errors.join("; ")
+    )))
+}
+
 fn http_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(120))
@@ -790,7 +877,14 @@ fn internet_agent() -> ureq::Agent {
 }
 
 fn has_internet() -> bool {
-    internet_agent().get(INTERNET_CHECK_URL).call().is_ok()
+    let Ok(manifest) = endpoint_manifest() else {
+        return false;
+    };
+
+    manifest
+        .internet_check_urls
+        .iter()
+        .any(|url| internet_agent().get(url).call().is_ok())
 }
 
 fn http_error(error: ureq::Error) -> AppError {
@@ -830,12 +924,15 @@ fn normalize_preference_version(version: &str) -> Result<String, AppError> {
     }
 }
 
-fn preference_url(version: &str) -> &'static str {
-    if version == "release" {
-        REALTEK_PACKAGE_RELEASE_URL
+fn preference_url(version: &str) -> Result<String, AppError> {
+    let manifest = endpoint_manifest()?;
+    let urls = if version == "release" {
+        &manifest.realtek_packages.release.urls
     } else {
-        REALTEK_PACKAGE_BETA_URL
-    }
+        &manifest.realtek_packages.beta.urls
+    };
+
+    Ok(first_url(urls)?.to_string())
 }
 
 fn compare_version_numbers(local: &str, remote: &str) -> Option<Ordering> {
@@ -1204,10 +1301,13 @@ mod tests {
     #[test]
     fn preference_url_uses_beta_by_default_and_release_when_selected() {
         assert_eq!(
-            preference_url(DEFAULT_PREFERENCE_VERSION),
-            REALTEK_PACKAGE_BETA_URL
+            preference_url(DEFAULT_PREFERENCE_VERSION).unwrap(),
+            "https://github.com/Ameba-AIoT/ameba-arduino-pro2/raw/dev/Arduino_package/package_realtek_amebapro2_early_index.json"
         );
-        assert_eq!(preference_url("release"), REALTEK_PACKAGE_RELEASE_URL);
+        assert_eq!(
+            preference_url("release").unwrap(),
+            "https://github.com/ambiot/ambpro2_arduino/raw/main/Arduino_package/package_realtek_amebapro2_index.json"
+        );
     }
 
     #[test]

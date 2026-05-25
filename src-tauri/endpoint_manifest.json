@@ -1,0 +1,49 @@
+{
+  "repository": "https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin",
+  "version_check": {
+    "urls": [
+      "https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_computer_plugin/main/version.txt",
+      "https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin/raw/main/version.txt"
+    ]
+  },
+  "downloads": {
+    "arduino_ide": {
+      "urls": [
+        "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.exe",
+        "https://github.com/arduino/arduino-ide/releases/download/2.3.8/arduino-ide_2.3.8_Windows_64bit.exe"
+      ]
+    },
+    "arduino_ide_msi": {
+      "urls": [
+        "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.msi",
+        "https://github.com/arduino/arduino-ide/releases/download/2.3.8/arduino-ide_2.3.8_Windows_64bit.msi"
+      ]
+    },
+    "vlc": {
+      "urls": [
+        "https://mirror.twds.com.tw/videolan/vlc/3.0.23/win32/vlc-3.0.23-win32.exe",
+        "https://get.videolan.org/vlc/3.0.23/win32/vlc-3.0.23-win32.exe"
+      ]
+    }
+  },
+  "realtek_packages": {
+    "beta": {
+      "urls": [
+        "https://github.com/Ameba-AIoT/ameba-arduino-pro2/raw/dev/Arduino_package/package_realtek_amebapro2_early_index.json"
+      ]
+    },
+    "release": {
+      "urls": [
+        "https://github.com/ambiot/ambpro2_arduino/raw/main/Arduino_package/package_realtek_amebapro2_index.json"
+      ]
+    }
+  },
+  "model_converter": {
+    "site_url": "https://modelconverter.ntnu-aiot.com/",
+    "api_base": "https://modelconverter.ntnu-aiot.com/api/v1"
+  },
+  "internet_check_urls": [
+    "https://www.cloudflare.com/cdn-cgi/trace",
+    "https://www.google.com/generate_204"
+  ]
+}

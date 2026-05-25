@@ -36,6 +36,8 @@ type Metadata = {
   arduino_ide_url: string;
   vlc_url: string;
   realtek_package_url: string;
+  model_converter_url: string;
+  model_converter_api_base: string;
   supported_languages: Language[];
 };
 
@@ -383,8 +385,6 @@ const installActionLabels: Record<Language, { autoInstall: string }> = {
   },
 };
 
-const MODEL_CONVERTER_URL = "https://modelconverter.ntnu-aiot.com/";
-const MODEL_CONVERTER_API_BASE = "https://modelconverter.ntnu-aiot.com/api/v1";
 const TOAST_DISPLAY_MS = 1500;
 const TOAST_FADE_MS = 240;
 const PREFERENCE_COPY_MESSAGE =
@@ -428,14 +428,14 @@ function savedPhotoText(language: Language, path: string, fallback: string) {
   return translations[language].savedPhoto.replace("{count}", String(count));
 }
 
-function converterApiUrl(path: string) {
+function converterApiUrl(apiBase: string, path: string) {
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
   const normalized = path.startsWith("/api/v1")
     ? path.slice("/api/v1".length)
     : path.startsWith("/")
       ? path
       : `/${path}`;
-  return `${MODEL_CONVERTER_API_BASE}${normalized}`;
+  return `${apiBase}${normalized}`;
 }
 
 function fileMatchesExtensions(file: File, extensions: string[]) {
@@ -518,6 +518,8 @@ function App() {
   const selectedPreferenceVersion = dashboard?.settings.preference_version ?? "beta";
   const selectedConverterModel = converterModels[converterType];
   const converterExtensions = selectedConverterModel.input_extensions.join(", ");
+  const modelConverterUrl = dashboard?.metadata.model_converter_url ?? "";
+  const modelConverterApiBase = dashboard?.metadata.model_converter_api_base ?? "";
 
   useEffect(() => {
     void refreshDashboard();
@@ -561,10 +563,10 @@ function App() {
     if (view === "camera") {
       void scanCameras();
     }
-    if (view === "converter") {
+    if (view === "converter" && modelConverterApiBase) {
       void loadConverterModels();
     }
-  }, [view]);
+  }, [view, modelConverterApiBase]);
 
   async function refreshDashboard() {
     const data = await invoke<Dashboard>("get_dashboard");
@@ -727,8 +729,11 @@ function App() {
 
   async function loadConverterModels() {
     try {
+      if (!modelConverterApiBase) {
+        throw new Error("Model converter endpoint is not configured");
+      }
       setConverterStatus((current) => current || t.loadingModels);
-      const response = await fetch(`${MODEL_CONVERTER_API_BASE}/models`);
+      const response = await fetch(`${modelConverterApiBase}/models`);
       const data = await readApiJson<ConverterModelsResponse>(response);
       const nextModels = data.models.reduce<Record<ModelType, ConverterModel>>(
         (models, model) => {
@@ -801,7 +806,10 @@ function App() {
       const form = new FormData();
       form.append("model_type", model.type);
       form.append("file", converterFile);
-      const createResponse = await fetch(`${MODEL_CONVERTER_API_BASE}/conversions`, {
+      if (!modelConverterApiBase) {
+        throw new Error("Model converter endpoint is not configured");
+      }
+      const createResponse = await fetch(`${modelConverterApiBase}/conversions`, {
         method: "POST",
         body: form,
       });
@@ -810,7 +818,7 @@ function App() {
 
       let statusData: ConversionStatusResponse | null = null;
       for (let attempt = 0; attempt < 180; attempt += 1) {
-        const statusResponse = await fetch(converterApiUrl(task.status_url));
+        const statusResponse = await fetch(converterApiUrl(modelConverterApiBase, task.status_url));
         statusData = await readApiJson<ConversionStatusResponse>(statusResponse);
         setConverterTask(statusData);
 
@@ -828,7 +836,7 @@ function App() {
       }
 
       setConverterStatus(t.conversionSuccess);
-      const downloadUrl = converterApiUrl(statusData.download_url ?? task.download_url);
+      const downloadUrl = converterApiUrl(modelConverterApiBase, statusData.download_url ?? task.download_url);
       setCompletedConversion({
         downloadUrl,
         fileName: statusData.download_name || model.download_name,
@@ -1393,7 +1401,7 @@ function App() {
               <button
                 type="button"
                 className="secondaryBtn converterExternalBtn"
-                onClick={() => void openUrl(MODEL_CONVERTER_URL)}
+                onClick={() => void openUrl(modelConverterUrl)}
               >
                 <ExternalLink size={17} />
                 {t.openExternal}
