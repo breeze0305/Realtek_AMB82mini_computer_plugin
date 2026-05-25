@@ -13,7 +13,6 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager};
 use thiserror::Error;
 
-const VERSION: &str = "3.9.1";
 const AUTHOR: &str = "breeze0305";
 const CONTACT: &str = "breeze0305";
 const DEFAULT_LANGUAGE: &str = "zh_TW";
@@ -25,6 +24,7 @@ const ENDPOINT_MANIFEST_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/endpoint_manifest.json"
 ));
+const VERSION_TEXT: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../version.txt"));
 
 #[derive(Debug, Error)]
 enum AppError {
@@ -591,8 +591,9 @@ fn check_version() -> Result<VersionCheck, AppError> {
         .trim()
         .to_string();
 
-    let ordering = compare_version_numbers(VERSION, &remote).unwrap_or_else(|| {
-        if remote == VERSION {
+    let local = app_version();
+    let ordering = compare_version_numbers(local, &remote).unwrap_or_else(|| {
+        if remote == local {
             Ordering::Equal
         } else {
             Ordering::Less
@@ -600,7 +601,7 @@ fn check_version() -> Result<VersionCheck, AppError> {
     });
 
     Ok(VersionCheck {
-        local: VERSION.to_string(),
+        local: local.to_string(),
         is_latest: ordering == Ordering::Equal,
         is_beta: ordering == Ordering::Greater,
         remote,
@@ -630,7 +631,7 @@ fn metadata(preference_version: &str) -> Result<Metadata, AppError> {
     Ok(Metadata {
         author: AUTHOR,
         contact: CONTACT,
-        version: VERSION,
+        version: app_version(),
         repository: manifest.repository,
         arduino_ide_url: first_url(&manifest.downloads.arduino_ide.urls)?.to_string(),
         vlc_url: first_url(&manifest.downloads.vlc.urls)?.to_string(),
@@ -828,6 +829,14 @@ fn safe_file_name(file_name: &str) -> String {
         .to_string()
 }
 
+fn app_version() -> &'static str {
+    VERSION_TEXT.trim()
+}
+
+fn app_user_agent() -> String {
+    format!("AMB82-Mini-Computer-Plugin/{}", app_version())
+}
+
 fn endpoint_manifest() -> Result<EndpointManifest, AppError> {
     serde_json::from_str(ENDPOINT_MANIFEST_JSON)
         .map_err(|error| AppError::Message(format!("Endpoint manifest error: {error}")))
@@ -861,18 +870,20 @@ fn get_text_with_fallback(urls: &[String]) -> Result<String, AppError> {
 }
 
 fn http_agent() -> ureq::Agent {
+    let user_agent = app_user_agent();
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(120))
         .timeout_connect(Duration::from_secs(20))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.9.1")
+        .user_agent(&user_agent)
         .build()
 }
 
 fn internet_agent() -> ureq::Agent {
+    let user_agent = app_user_agent();
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(3))
         .timeout_connect(Duration::from_secs(2))
-        .user_agent("AMB82-Mini-Computer-Plugin/3.9.1")
+        .user_agent(&user_agent)
         .build()
 }
 

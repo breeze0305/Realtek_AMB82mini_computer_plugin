@@ -4,9 +4,12 @@
   "version": "3.9.1",
   "type": "module",
   "scripts": {
+    "sync-version": "node scripts/sync-version.mjs",
+    "prebuild": "npm run sync-version",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "pretauri": "npm run sync-version",
     "tauri": "tauri"
   },
   "dependencies": {

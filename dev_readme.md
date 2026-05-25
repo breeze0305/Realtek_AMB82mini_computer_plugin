@@ -1,6 +1,6 @@
 # Realtek AMB82-mini Computer Plugin 開發交接文件
 
-這份文件是未來理解與修改本專案的主要入口。讀完後應該能知道：這個程式有哪些功能、前後端怎麼分工、常見功能要改哪裡、版本號要同步改哪些檔案，以及 commit / push 的工作習慣。
+這份文件是未來理解與修改本專案的主要入口。讀完後應該能知道：這個程式有哪些功能、前後端怎麼分工、常見功能要改哪裡、版本號如何由 `version.txt` 統一管理，以及 commit / push 的工作習慣。
 
 目前軟體版本：`3.9.1`
 
@@ -236,8 +236,8 @@ Reset：
 
 版本檢查卡呼叫 Rust `check_version`：
 
-- 本機版本：`src-tauri/src/lib.rs` 的 `VERSION`
-- 遠端版本：`VERSION_URL` 指到 GitHub main branch 的 `version.txt`
+- 本機版本：Rust 以 `include_str!` 讀取 repo 根目錄的 `version.txt`。
+- 遠端版本：`src-tauri/endpoint_manifest.json` 的 `version_check.urls` 指到 GitHub main branch 的 `version.txt`，並可依序嘗試 fallback URL。
 - 版本比較會依序比較 major、minor、patch。
 - 若遠端版本大於本機版本，顯示 `偵測到新版本: <遠端版本>`。
 - 若本機版本大於遠端版本，視為開發者 / beta 版本，顯示 `當前為beta版本`。
@@ -378,44 +378,21 @@ UI 原則：
 
 ## 版本號更新清單
 
-目前版本是 `3.9.1`。未來更新版本時，請同步檢查下列位置。
+目前版本是 `3.9.1`。未來更新版本時，只手動修改 repo 根目錄的 `version.txt`。
 
-必改：
-
-- `version.txt`
-  - 遠端版本檢查會讀這個檔案。
+`npm run sync-version` 會把 `version.txt` 同步到：
 
 - `package.json`
-  - 欄位：`version`
-  - Node / npm 專案版本。
-
 - `package-lock.json`
-  - 頂層 `version`
-  - `packages[""].version`
-  - npm lock 內的本專案版本。
-
 - `src-tauri/Cargo.toml`
-  - 欄位：`[package].version`
-  - Rust crate / Cargo package 版本。
-
-- `src-tauri/tauri.conf.json`
-  - 欄位：`version`
-  - Tauri bundle / NSIS installer 版本。
-
-- `src-tauri/src/lib.rs`
-  - `const VERSION`
-  - `http_agent().user_agent(...)`
-  - `internet_agent().user_agent(...)`
-
-- `readme.md`
-  - 使用者 README 的目前版本文字。
-
-通常不用手改：
-
 - `src-tauri/Cargo.lock`
-  - 若 `Cargo.toml` package version 改了，跑 Cargo / Tauri build 後會更新 package lock 內本專案的版本。
+- `src-tauri/tauri.conf.json`
+- `readme.md`
+- `dev_readme.md`
 
-版本更新建議流程：
+Rust 執行時的本機版本與 HTTP user agent 會直接從 `version.txt` 讀取，不再於 `src-tauri/src/lib.rs` 維護一份版本常數。
+
+`npm run build` 與 `npm run tauri ...` 會先自動執行 `npm run sync-version`。版本更新建議流程：
 
 ```powershell
 npm.cmd run build
