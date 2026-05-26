@@ -687,6 +687,63 @@ button:disabled {
   font-weight: 700;
 }
 
+.settingsSwitch {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid #d8d1c4;
+  border-radius: 7px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.settingsSwitch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settingsSwitchTrack {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: #d8d1c4;
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.settingsSwitchTrack::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 5px rgba(39, 51, 49, 0.24);
+  transition: transform 160ms ease;
+  content: "";
+}
+
+.settingsSwitch input:checked + .settingsSwitchTrack {
+  background: #0f766e;
+  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.18);
+}
+
+.settingsSwitch input:checked + .settingsSwitchTrack::after {
+  transform: translateX(20px);
+}
+
+.settingsSwitch:has(input:focus-visible) {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+}
+
 .settingsRow select {
   width: 100%;
   min-height: 46px;

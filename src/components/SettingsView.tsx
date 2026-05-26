@@ -5,6 +5,8 @@ import { uvcdOptionLabel } from "../converterUtils";
 import type { PreferenceVersion, RunningAction, UvcdFormat } from "../types";
 
 type SettingsViewProps = {
+  autoCheckUpdates: boolean;
+  onChangeAutoCheckUpdates: (enabled: boolean) => void;
   onChangePreferenceVersion: (version: PreferenceVersion) => void;
   onChangeUvcdFormat: (format: UvcdFormat) => void;
   onResetSettings: () => void;
@@ -15,6 +17,8 @@ type SettingsViewProps = {
 };
 
 export function SettingsView({
+  autoCheckUpdates,
+  onChangeAutoCheckUpdates,
   onChangePreferenceVersion,
   onChangeUvcdFormat,
   onResetSettings,
@@ -27,6 +31,17 @@ export function SettingsView({
     <section className="contentSection settingsSection">
       <div className="settingsRow">
         <p className="settingsNotice">{t.settingsNotice}</p>
+        <div className="settingsField">
+          <label className="settingsSwitch">
+            <span className="settingsFieldLabel">{t.autoCheckUpdates}</span>
+            <input
+              type="checkbox"
+              checked={autoCheckUpdates}
+              onChange={(event) => onChangeAutoCheckUpdates(event.target.checked)}
+            />
+            <span className="settingsSwitchTrack" aria-hidden="true" />
+          </label>
+        </div>
         <div className="settingsField">
           <span className="settingsFieldLabel">{t.preferenceVersion}</span>
           <div className="segmentedToggle" role="group" aria-label={t.preferenceVersion}>

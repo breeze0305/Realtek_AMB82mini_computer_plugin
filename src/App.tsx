@@ -3,10 +3,12 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 
 import {
+  AUTO_UPDATE_CHECK_STORAGE_KEY,
   converterModelDefaults,
   RELEASES_URL,
   TOAST_DISPLAY_MS,
   TOAST_FADE_MS,
+  VERSION_CHECK_STORAGE_KEY,
   uvcdFormatOptions,
 } from "./appConfig";
 import { cameraGuideSteps, PREFERENCE_COPY_MESSAGE, translations } from "./i18n";
@@ -48,6 +50,61 @@ import type {
   View,
 } from "./types";
 
+function isStoredVersionCheck(value: unknown): value is VersionCheck {
+  if (!value || typeof value !== "object") return false;
+  const data = value as Partial<VersionCheck>;
+  return (
+    typeof data.local === "string" &&
+    typeof data.remote === "string" &&
+    typeof data.is_latest === "boolean" &&
+    typeof data.is_beta === "boolean" &&
+    typeof data.repository === "string"
+  );
+}
+
+function readStoredVersionCheck(currentVersion: string) {
+  try {
+    const raw = window.localStorage.getItem(VERSION_CHECK_STORAGE_KEY);
+    if (!raw) return null;
+
+    const data = JSON.parse(raw) as unknown;
+    if (isStoredVersionCheck(data) && data.local === currentVersion) {
+      return data;
+    }
+
+    window.localStorage.removeItem(VERSION_CHECK_STORAGE_KEY);
+  } catch {
+    window.localStorage.removeItem(VERSION_CHECK_STORAGE_KEY);
+  }
+
+  return null;
+}
+
+function writeStoredVersionCheck(result: VersionCheck) {
+  try {
+    window.localStorage.setItem(VERSION_CHECK_STORAGE_KEY, JSON.stringify(result));
+  } catch {
+    // The in-memory state still updates if local storage is unavailable.
+  }
+}
+
+function readStoredAutoCheckUpdates() {
+  try {
+    const raw = window.localStorage.getItem(AUTO_UPDATE_CHECK_STORAGE_KEY);
+    return raw === null ? true : raw === "true";
+  } catch {
+    return true;
+  }
+}
+
+function writeStoredAutoCheckUpdates(enabled: boolean) {
+  try {
+    window.localStorage.setItem(AUTO_UPDATE_CHECK_STORAGE_KEY, String(enabled));
+  } catch {
+    // The setting remains active for the current session if local storage is unavailable.
+  }
+}
+
 function App() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [view, setView] = useState<View>("home");
@@ -72,11 +129,13 @@ function App() {
   const [converterStatus, setConverterStatus] = useState("");
   const [isConverterBusy, setIsConverterBusy] = useState(false);
   const [versionCheck, setVersionCheck] = useState<VersionCheck | null>(null);
+  const [autoCheckUpdates, setAutoCheckUpdates] = useState(readStoredAutoCheckUpdates);
   const languageMenuRef = useRef<HTMLDivElement | null>(null);
   const converterInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
+  const autoCheckStartedRef = useRef(false);
 
   const language = dashboard?.settings.language ?? "zh_TW";
   const t = translations[language];
@@ -138,8 +197,12 @@ function App() {
     const data = await invoke<Dashboard>("get_dashboard");
     setDashboard(data);
     setInternetConnected(data.internet_connected);
-    setVersionCheck(null);
+    setVersionCheck(readStoredVersionCheck(data.metadata.version));
     setStatus("");
+    if (autoCheckUpdates && !autoCheckStartedRef.current) {
+      autoCheckStartedRef.current = true;
+      void checkVersionOnStartup(data.settings.language);
+    }
   }
 
   async function refreshInternet() {
@@ -200,6 +263,7 @@ function App() {
       const result = await invoke<SettingsResetResult>("reset_settings");
       setDashboard(result.dashboard);
       setInternetConnected(result.dashboard.internet_connected);
+      changeAutoCheckUpdates(true);
       setStatus(result.uvcd.path ? t.settingsReset : `${t.settingsReset}: ${result.uvcd.message}`);
     } catch (error) {
       setStatus(String(error));
@@ -317,6 +381,29 @@ function App() {
     } catch (error) {
       setConverterModels(converterModelDefaults);
       setConverterStatus(String(error));
+    }
+  }
+
+  function rememberVersionCheck(result: VersionCheck) {
+    writeStoredVersionCheck(result);
+    setVersionCheck(result);
+  }
+
+  function changeAutoCheckUpdates(enabled: boolean) {
+    writeStoredAutoCheckUpdates(enabled);
+    setAutoCheckUpdates(enabled);
+  }
+
+  async function checkVersionOnStartup(language: Language) {
+    try {
+      const result = await invoke<VersionCheck>("check_version");
+      rememberVersionCheck(result);
+      if (!result.is_latest && !result.is_beta) {
+        setStatus(`${translations[language].update}: ${result.remote}`);
+      }
+      await refreshInternet();
+    } catch {
+      // Startup checks should not interrupt users when the network is unavailable.
     }
   }
 
@@ -574,7 +661,7 @@ function App() {
     onOpenCamera: () => void openCameraView(),
     onOpenConverter: () => void openConverterView(),
     onOpenVersionUpdate: () => void openUrl(RELEASES_URL),
-    onVersionChecked: setVersionCheck,
+    onVersionChecked: rememberVersionCheck,
     runAction,
     t,
     versionCheck,
@@ -626,6 +713,8 @@ function App() {
 
       {view === "settings" && (
         <SettingsView
+          autoCheckUpdates={autoCheckUpdates}
+          onChangeAutoCheckUpdates={changeAutoCheckUpdates}
           onChangePreferenceVersion={(version) => void changePreferenceVersion(version)}
           onChangeUvcdFormat={(format) => void changeUvcdFormat(format)}
           onResetSettings={() => void resetSettings()}
