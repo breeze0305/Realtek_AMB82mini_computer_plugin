@@ -2,6 +2,7 @@ import {
   Camera,
   CheckCircle2,
   Download,
+  ExternalLink,
   FileArchive,
   FolderOpen,
   PackageCheck,
@@ -31,8 +32,11 @@ type CreateHomeCardsParams = {
   language: Language;
   onOpenCamera: () => void;
   onOpenConverter: () => void;
+  onOpenVersionUpdate: () => void;
+  onVersionChecked: (result: VersionCheck) => void;
   runAction: RunAction;
   t: Record<string, string>;
+  versionCheck: VersionCheck | null;
 };
 
 export function createHomeCards({
@@ -41,9 +45,13 @@ export function createHomeCards({
   language,
   onOpenCamera,
   onOpenConverter,
+  onOpenVersionUpdate,
+  onVersionChecked,
   runAction,
   t,
+  versionCheck,
 }: CreateHomeCardsParams): HomeCard[] {
+  const hasVersionUpdate = versionCheck !== null && !versionCheck.is_latest && !versionCheck.is_beta;
   const fileCards = [
     {
       title: t.driver,
@@ -167,16 +175,19 @@ export function createHomeCards({
       title: t.version,
       detail: dashboard ? `v${dashboard.metadata.version}` : "",
       icon: RefreshCcw,
-      action: () =>
-        void runAction<VersionCheck>("version", "check_version", (result) => {
-          if (result.is_beta) return t.betaCurrent;
-          if (result.is_latest) return `${t.latest}: ${result.local}`;
-          return `${t.update}: ${result.remote}`;
-        }),
-      label: t.check,
+      action: hasVersionUpdate
+        ? onOpenVersionUpdate
+        : () =>
+            void runAction<VersionCheck>("version", "check_version", (result) => {
+              onVersionChecked(result);
+              if (result.is_beta) return t.betaCurrent;
+              if (result.is_latest) return `${t.latest}: ${result.local}`;
+              return `${t.update}: ${result.remote}`;
+            }),
+      label: hasVersionUpdate ? t.updateButton : t.check,
       disabled: !internetConnected,
       key: "version",
-      actionIcon: CheckCircle2,
+      actionIcon: hasVersionUpdate ? ExternalLink : CheckCircle2,
       menuActions: undefined,
     },
   ];

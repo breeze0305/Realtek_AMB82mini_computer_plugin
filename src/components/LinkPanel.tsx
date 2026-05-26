@@ -17,11 +17,13 @@ export function LinkPanel({
   repository,
   t,
 }: LinkPanelProps) {
+  const repositoryLabel = repository?.replace(/^https:\/\/github\.com\//, "") ?? "";
+
   return (
     <section className="linkPanel">
       <button onClick={() => onOpenUrl(repository)} title={t.github}>
         <span>{t.github}</span>
-        <strong>{repository}</strong>
+        <strong>{repositoryLabel}</strong>
         <ExternalLink size={17} />
       </button>
       <button onClick={() => onCopyText(realtekPackageUrl, preferenceCopyMessage)} title={t.preference}>

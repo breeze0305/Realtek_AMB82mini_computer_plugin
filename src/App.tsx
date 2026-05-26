@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   converterModelDefaults,
+  RELEASES_URL,
   TOAST_DISPLAY_MS,
   TOAST_FADE_MS,
   uvcdFormatOptions,
@@ -70,6 +71,7 @@ function App() {
   const [completedConversion, setCompletedConversion] = useState<CompletedConversion | null>(null);
   const [converterStatus, setConverterStatus] = useState("");
   const [isConverterBusy, setIsConverterBusy] = useState(false);
+  const [versionCheck, setVersionCheck] = useState<VersionCheck | null>(null);
   const languageMenuRef = useRef<HTMLDivElement | null>(null);
   const converterInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -136,6 +138,7 @@ function App() {
     const data = await invoke<Dashboard>("get_dashboard");
     setDashboard(data);
     setInternetConnected(data.internet_connected);
+    setVersionCheck(null);
     setStatus("");
   }
 
@@ -570,8 +573,11 @@ function App() {
     language,
     onOpenCamera: () => void openCameraView(),
     onOpenConverter: () => void openConverterView(),
+    onOpenVersionUpdate: () => void openUrl(RELEASES_URL),
+    onVersionChecked: setVersionCheck,
     runAction,
     t,
+    versionCheck,
   });
   return (
     <main className={`appShell ${view === "settings" ? "settingsShell" : ""} ${view === "converter" ? "converterShell" : ""}`}>

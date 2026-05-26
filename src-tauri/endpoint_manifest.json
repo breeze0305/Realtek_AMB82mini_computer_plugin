@@ -1,9 +1,8 @@
 {
-  "repository": "https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin",
+  "repository": "https://github.com/breeze0305/Realtek_AMB82mini_plugin",
   "version_check": {
     "urls": [
-      "https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_computer_plugin/main/version.txt",
-      "https://github.com/breeze0305/Realtek_AMB82mini_computer_plugin/raw/main/version.txt"
+      "https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_plugin/main/version.txt"
     ]
   },
   "downloads": {

@@ -2,6 +2,7 @@ import type { ConverterModel, ModelType, UvcdFormat } from "./types";
 
 export const TOAST_DISPLAY_MS = 1500;
 export const TOAST_FADE_MS = 240;
+export const RELEASES_URL = "https://github.com/breeze0305/Realtek_AMB82mini_plugin/releases";
 export const uvcdFormatOptions: Array<{ value: UvcdFormat; label: string }> = [
   { value: "YUY2", label: "YUY2" },
   { value: "NV12", label: "NV12" },
