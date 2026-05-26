@@ -20,6 +20,44 @@
 - UI icon：`lucide-react`
 - Windows bundle：Tauri NSIS
 
+## Current frontend architecture (3.9.3)
+
+This section is the authoritative source map for the current frontend. Some older notes below may still mention the pre-refactor shape where most UI lived in `src/App.tsx`; when in doubt, follow this section.
+
+- `src/App.tsx`
+  - App controller only: dashboard/view state, running action state, Tauri `invoke` calls, camera flow, converter flow, version-check state, and wiring child views together.
+- `src/types.ts`
+  - Shared frontend types for dashboard/settings/download/converter/version-check/view/action data.
+- `src/i18n.ts`
+  - `translations`, `languageNames`, `installActionLabels`, `cameraGuideSteps`, and `PREFERENCE_COPY_MESSAGE`.
+- `src/appConfig.ts`
+  - Frontend constants: toast timing, releases URL, localStorage keys, UVC options, and converter model defaults.
+- `src/converterUtils.ts`
+  - Pure helpers: UVC option label, saved-photo text, converter API URL normalization, file-extension checks, `wait`, and API JSON parsing.
+- `src/homeCards.ts`
+  - Home menu card composition. Add or change home cards here, including the version-check card.
+- `src/components/`
+  - `AppHeader.tsx`: app title, back button, language menu, settings entry.
+  - `LinkPanel.tsx`: GitHub repository and AMB Preference link panel.
+  - `HomeView.tsx`: home grid/card/split-action rendering.
+  - `SettingsView.tsx`: settings page UI, including auto update check, Preference version, UVC format, and reset.
+  - `CameraView.tsx`: camera page UI.
+  - `ConverterView.tsx`: model converter page UI.
+  - `NetworkStatus.tsx`: online/offline status indicator.
+- `src/styles.css`
+  - Shared styling for shell, header, home cards, settings, camera, converter, toast, and network status.
+
+Version-check behavior:
+
+- Rust `check_version` still lives in `src-tauri/src/lib.rs`.
+- Remote version URLs live in `src-tauri/endpoint_manifest.json`.
+- The home version card is built in `src/homeCards.ts`.
+- If a newer remote version is found, the card label changes from check to update and opens `RELEASES_URL`.
+- Version-check results persist in browser `localStorage` under `VERSION_CHECK_STORAGE_KEY`.
+- The settings page has an auto update check switch. It defaults to enabled and persists under `AUTO_UPDATE_CHECK_STORAGE_KEY`.
+- When auto update check is enabled, startup automatically calls `check_version`; if a newer version exists, the app shows a toast and keeps the button in update mode.
+
+
 ## 重要檔案
 
 - `src/App.tsx`
