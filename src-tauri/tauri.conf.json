@@ -15,10 +15,10 @@
         "title": "AMB82 Mini Computer Plugin",
         "width": 1180,
         "height": 760,
-        "minWidth": 960,
-        "minHeight": 640,
-        "resizable": false,
-        "maximizable": false,
+        "minWidth": 1180,
+        "minHeight": 760,
+        "resizable": true,
+        "maximizable": true,
         "dragDropEnabled": false
       }
     ],
