@@ -7,6 +7,7 @@ import {
   FolderOpen,
   PackageCheck,
   RefreshCcw,
+  Tags,
 } from "lucide-react";
 
 import { installActionLabels } from "./i18n";
@@ -30,6 +31,7 @@ type CreateHomeCardsParams = {
   dashboard: Dashboard | null;
   internetConnected: boolean;
   language: Language;
+  onOpenAnnotator: () => void;
   onOpenCamera: () => void;
   onOpenConverter: () => void;
   onOpenVersionUpdate: () => void;
@@ -43,6 +45,7 @@ export function createHomeCards({
   dashboard,
   internetConnected,
   language,
+  onOpenAnnotator,
   onOpenCamera,
   onOpenConverter,
   onOpenVersionUpdate,
@@ -167,6 +170,17 @@ export function createHomeCards({
       action: onOpenConverter,
       label: t.open,
       disabled: !internetConnected,
+      key: null,
+      actionIcon: CheckCircle2,
+      menuActions: undefined,
+    },
+    {
+      title: t.objectAnnotator,
+      detail: "",
+      icon: Tags,
+      action: onOpenAnnotator,
+      label: t.open,
+      disabled: false,
       key: null,
       actionIcon: CheckCircle2,
       menuActions: undefined,

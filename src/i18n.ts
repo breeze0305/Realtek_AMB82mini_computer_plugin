@@ -17,6 +17,7 @@ export const translations = {
     folder: "開啟AmebaPro2資料夾",
     camera: "AMB相機畫面擷取",
     modelConverter: "模型量化轉換",
+    objectAnnotator: "物件偵測標記",
     version: "版本檢查",
     github: "GitHub 倉庫",
     preference: "AMB Preference",
@@ -90,6 +91,7 @@ export const translations = {
     folder: "Open AmebaPro2 Folder",
     camera: "AMB Camera Capture",
     modelConverter: "Model Quantization",
+    objectAnnotator: "Object Detection Labeling",
     version: "Version Check",
     github: "GitHub Repository",
     preference: "AMB Preference",
@@ -163,6 +165,7 @@ export const translations = {
     folder: "AmebaPro2 フォルダーを開く",
     camera: "AMB カメラ撮影",
     modelConverter: "Model Quantization",
+    objectAnnotator: "Object Detection Labeling",
     version: "バージョン確認",
     github: "GitHub リポジトリ",
     preference: "AMB Preference",
@@ -268,4 +271,3 @@ export const cameraGuideSteps: Record<Language, string[]> = {
     "このページに戻ると、AMB82 mini を撮影用カメラとして選択できます。",
   ],
 };
-

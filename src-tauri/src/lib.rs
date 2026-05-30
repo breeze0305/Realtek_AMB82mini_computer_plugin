@@ -2,6 +2,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
+    collections::{BTreeSet, HashMap},
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -114,6 +115,44 @@ struct VersionCheck {
     is_latest: bool,
     is_beta: bool,
     repository: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct AnnotationWorkspace {
+    image_folder: String,
+    labels_folder: String,
+    images: Vec<AnnotationImage>,
+    classes: Vec<String>,
+    annotations: HashMap<String, Vec<AnnotationBox>>,
+    invalid_class_ids: Vec<usize>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct AnnotationImage {
+    name: String,
+    path: String,
+    annotation_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct AnnotationBox {
+    class_id: usize,
+    x_center: f64,
+    y_center: f64,
+    width: f64,
+    height: f64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct AnnotationImageData {
+    mime: String,
+    bytes: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct AnnotationSaveResult {
+    path: String,
+    count: usize,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -261,7 +300,13 @@ pub fn run() {
             download_model_conversion_as,
             check_internet,
             check_version,
-            save_capture_image
+            save_capture_image,
+            select_annotation_folder,
+            load_annotation_folder,
+            read_annotation_image,
+            save_annotation_classes,
+            save_annotation_file,
+            save_annotation_workspace
         ])
         .run(tauri::generate_context!())
         .expect("failed to run AMB82 desktop application");
@@ -626,6 +671,102 @@ fn save_capture_image(
     })
 }
 
+#[tauri::command]
+fn select_annotation_folder() -> Result<AnnotationWorkspace, AppError> {
+    let Some(folder) = rfd::FileDialog::new()
+        .set_title("Select image folder")
+        .pick_folder()
+    else {
+        return Err(AppError::Message("Folder selection was canceled".into()));
+    };
+
+    load_annotation_workspace(&folder)
+}
+
+#[tauri::command]
+fn load_annotation_folder(path: String) -> Result<AnnotationWorkspace, AppError> {
+    let path = PathBuf::from(path);
+    let folder = if path.is_file() {
+        path.parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| AppError::Message("Image folder does not exist".into()))?
+    } else {
+        path
+    };
+    load_annotation_workspace(&folder)
+}
+
+#[tauri::command]
+fn read_annotation_image(path: String) -> Result<AnnotationImageData, AppError> {
+    let path = Path::new(&path);
+    if !path.is_file() || !is_supported_image(path) {
+        return Err(AppError::Message("Unsupported image file".into()));
+    }
+
+    Ok(AnnotationImageData {
+        mime: image_mime(path).to_string(),
+        bytes: fs::read(path)?,
+    })
+}
+
+#[tauri::command]
+fn save_annotation_classes(
+    labels_folder: String,
+    classes: Vec<String>,
+) -> Result<AnnotationSaveResult, AppError> {
+    validate_class_names(&classes)?;
+    let labels_folder = PathBuf::from(labels_folder);
+    fs::create_dir_all(&labels_folder)?;
+    let path = labels_folder.join("classes.txt");
+    write_classes_file(&path, &classes)?;
+
+    Ok(AnnotationSaveResult {
+        path: display_path(path),
+        count: classes.len(),
+    })
+}
+
+#[tauri::command]
+fn save_annotation_file(
+    labels_folder: String,
+    image_file_name: String,
+    annotations: Vec<AnnotationBox>,
+) -> Result<AnnotationSaveResult, AppError> {
+    let labels_folder = PathBuf::from(labels_folder);
+    fs::create_dir_all(&labels_folder)?;
+    let path = label_path_for_image(&labels_folder, &image_file_name)?;
+    write_annotation_file(&path, &annotations)?;
+
+    Ok(AnnotationSaveResult {
+        path: display_path(path),
+        count: annotations.len(),
+    })
+}
+
+#[tauri::command]
+fn save_annotation_workspace(
+    labels_folder: String,
+    classes: Vec<String>,
+    annotations: HashMap<String, Vec<AnnotationBox>>,
+) -> Result<AnnotationSaveResult, AppError> {
+    validate_class_names(&classes)?;
+    let labels_folder = PathBuf::from(labels_folder);
+    fs::create_dir_all(&labels_folder)?;
+    write_classes_file(&labels_folder.join("classes.txt"), &classes)?;
+
+    let mut count = 0_usize;
+    for (image_file_name, boxes) in annotations {
+        let path = label_path_for_image(&labels_folder, &image_file_name)?;
+        write_annotation_file(&path, &boxes)?;
+        count += boxes.len();
+    }
+
+    Ok(AnnotationSaveResult {
+        path: display_path(labels_folder),
+        count,
+    })
+}
+
 fn metadata(preference_version: &str) -> Result<Metadata, AppError> {
     let manifest = endpoint_manifest()?;
     Ok(Metadata {
@@ -640,6 +781,227 @@ fn metadata(preference_version: &str) -> Result<Metadata, AppError> {
         model_converter_api_base: manifest.model_converter.api_base,
         supported_languages: vec!["zh_TW", "en_US", "ja_JP"],
     })
+}
+
+fn load_annotation_workspace(folder: &Path) -> Result<AnnotationWorkspace, AppError> {
+    if !folder.is_dir() {
+        return Err(AppError::Message(format!(
+            "Image folder does not exist: {}",
+            display_path(folder)
+        )));
+    }
+
+    let labels_folder = annotation_labels_folder(folder)?;
+    fs::create_dir_all(&labels_folder)?;
+    let classes = read_classes_file(&labels_folder.join("classes.txt"))?;
+
+    let mut annotations = HashMap::new();
+    let mut invalid_class_ids = BTreeSet::new();
+    let mut images = Vec::new();
+
+    let mut image_paths: Vec<PathBuf> = fs::read_dir(folder)?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file() && is_supported_image(path))
+        .collect();
+    image_paths.sort_by_key(|path| {
+        path.file_name()
+            .map(|name| name.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default()
+    });
+
+    for image_path in image_paths {
+        let Some(file_name) = image_path.file_name().map(|name| name.to_string_lossy().into_owned()) else {
+            continue;
+        };
+        let label_path = label_path_for_image(&labels_folder, &file_name)?;
+        let boxes = read_annotation_file(&label_path)?;
+
+        for item in &boxes {
+            if item.class_id >= classes.len() {
+                invalid_class_ids.insert(item.class_id);
+            }
+        }
+
+        images.push(AnnotationImage {
+            name: file_name.clone(),
+            path: display_path(&image_path),
+            annotation_count: boxes.len(),
+        });
+        annotations.insert(file_name, boxes);
+    }
+
+    Ok(AnnotationWorkspace {
+        image_folder: display_path(folder),
+        labels_folder: display_path(labels_folder),
+        images,
+        classes,
+        annotations,
+        invalid_class_ids: invalid_class_ids.into_iter().collect(),
+    })
+}
+
+fn annotation_labels_folder(folder: &Path) -> Result<PathBuf, AppError> {
+    let parent = folder.parent().unwrap_or_else(|| Path::new("."));
+    let folder_name = folder
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or("images");
+    Ok(parent.join(format!("{folder_name}_labels")))
+}
+
+fn is_supported_image(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| matches!(ext.to_ascii_lowercase().as_str(), "jpg" | "jpeg" | "png" | "bmp"))
+        .unwrap_or(false)
+}
+
+fn image_mime(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        Some("bmp") => "image/bmp",
+        _ => "image/jpeg",
+    }
+}
+
+fn read_classes_file(path: &Path) -> Result<Vec<String>, AppError> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    Ok(fs::read_to_string(path)?
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
+fn write_classes_file(path: &Path, classes: &[String]) -> Result<(), AppError> {
+    let content = if classes.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", classes.join("\n"))
+    };
+    fs::write(path, content)?;
+    Ok(())
+}
+
+fn read_annotation_file(path: &Path) -> Result<Vec<AnnotationBox>, AppError> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut boxes = Vec::new();
+    for (line_index, line) in fs::read_to_string(path)?.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() != 5 {
+            return Err(AppError::Message(format!(
+                "Invalid YOLO annotation at {}:{}",
+                display_path(path),
+                line_index + 1
+            )));
+        }
+
+        let class_id = parts[0].parse::<usize>().map_err(|_| {
+            AppError::Message(format!(
+                "Invalid class id at {}:{}",
+                display_path(path),
+                line_index + 1
+            ))
+        })?;
+        let values = [
+            parse_normalized(parts[1], path, line_index + 1)?,
+            parse_normalized(parts[2], path, line_index + 1)?,
+            parse_normalized(parts[3], path, line_index + 1)?,
+            parse_normalized(parts[4], path, line_index + 1)?,
+        ];
+        boxes.push(AnnotationBox {
+            class_id,
+            x_center: values[0],
+            y_center: values[1],
+            width: values[2],
+            height: values[3],
+        });
+    }
+
+    Ok(boxes)
+}
+
+fn parse_normalized(value: &str, path: &Path, line: usize) -> Result<f64, AppError> {
+    let number = value.parse::<f64>().map_err(|_| {
+        AppError::Message(format!(
+            "Invalid annotation number at {}:{}",
+            display_path(path),
+            line
+        ))
+    })?;
+
+    if (0.0..=1.0).contains(&number) {
+        Ok(number)
+    } else {
+        Err(AppError::Message(format!(
+            "Annotation value must be normalized at {}:{}",
+            display_path(path),
+            line
+        )))
+    }
+}
+
+fn write_annotation_file(path: &Path, boxes: &[AnnotationBox]) -> Result<(), AppError> {
+    let mut content = String::new();
+    for item in boxes {
+        content.push_str(&format!(
+            "{} {:.6} {:.6} {:.6} {:.6}\n",
+            item.class_id,
+            clamp_normalized(item.x_center),
+            clamp_normalized(item.y_center),
+            clamp_normalized(item.width),
+            clamp_normalized(item.height)
+        ));
+    }
+    fs::write(path, content)?;
+    Ok(())
+}
+
+fn clamp_normalized(value: f64) -> f64 {
+    value.clamp(0.0, 1.0)
+}
+
+fn label_path_for_image(labels_folder: &Path, image_file_name: &str) -> Result<PathBuf, AppError> {
+    let file_name = Path::new(image_file_name)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| AppError::Message("Invalid image file name".into()))?;
+    let stem = Path::new(file_name)
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| AppError::Message("Invalid image file name".into()))?;
+
+    Ok(labels_folder.join(format!("{stem}.txt")))
+}
+
+fn validate_class_names(classes: &[String]) -> Result<(), AppError> {
+    let re = Regex::new(r"^[A-Za-z0-9]+$").map_err(|error| AppError::Message(error.to_string()))?;
+    for name in classes {
+        if !re.is_match(name) {
+            return Err(AppError::Message(
+                "Class names can only contain English letters and numbers".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn start_uvcd_worker(app: AppHandle) {

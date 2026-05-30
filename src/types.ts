@@ -1,5 +1,5 @@
 export type Language = "zh_TW" | "en_US" | "ja_JP";
-export type View = "home" | "camera" | "settings" | "converter";
+export type View = "home" | "camera" | "settings" | "converter" | "annotator";
 export type UvcdFormat = "YUY2" | "NV12" | "MJPG" | "H264" | "H265";
 export type PreferenceVersion = "release" | "beta";
 export type ModelType = "yolo" | "classification";
@@ -110,6 +110,39 @@ export type ConversionStatusResponse = {
 export type CompletedConversion = {
   downloadUrl: string;
   fileName: string;
+};
+
+export type AnnotationBox = {
+  class_id: number;
+  x_center: number;
+  y_center: number;
+  width: number;
+  height: number;
+};
+
+export type AnnotationImage = {
+  name: string;
+  path: string;
+  annotation_count: number;
+};
+
+export type AnnotationWorkspace = {
+  image_folder: string;
+  labels_folder: string;
+  images: AnnotationImage[];
+  classes: string[];
+  annotations: Record<string, AnnotationBox[]>;
+  invalid_class_ids: number[];
+};
+
+export type AnnotationImageData = {
+  mime: string;
+  bytes: number[];
+};
+
+export type AnnotationSaveResult = {
+  path: string;
+  count: number;
 };
 
 export type RunningAction =

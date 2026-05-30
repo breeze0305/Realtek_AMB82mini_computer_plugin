@@ -939,6 +939,441 @@ dd {
   animation: toastOut 220ms ease-in forwards;
 }
 
+.annotationShell {
+  display: block;
+  min-height: 100vh;
+  padding: 0;
+  overflow: hidden;
+  background: #edf2ec;
+}
+
+.annotationStart {
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 42px;
+  background: #edf2ec;
+}
+
+.annotationStart.isDropActive .annotationDropPanel {
+  border-color: #0f766e;
+  background: #f3faf5;
+  box-shadow: 0 18px 48px rgba(15, 118, 110, 0.16);
+}
+
+.annotationDropPanel {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  width: min(620px, 100%);
+  padding: 52px 42px;
+  border: 2px dashed #bfc8bc;
+  border-radius: 8px;
+  color: #273331;
+  background: #fffdf8;
+  text-align: center;
+}
+
+.annotationDropPanel svg {
+  color: #0f766e;
+}
+
+.annotationDropPanel h2,
+.classPanel h2 {
+  margin: 0;
+  color: #1f2f2d;
+}
+
+.annotationDropPanel p {
+  max-width: 440px;
+  margin: 0;
+  color: #59645f;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.annotationFolderButton {
+  min-width: 156px;
+  min-height: 52px;
+  line-height: 1;
+}
+
+.annotationBackButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid #d8d1c4;
+  border-radius: 7px;
+  color: #273331;
+  background: #fffdf8;
+  font-weight: 700;
+}
+
+.annotationStart .annotationBackButton {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+}
+
+.annotationWorkspace {
+  display: grid;
+  grid-template-columns: 292px minmax(520px, 1fr) 292px;
+  width: 100vw;
+  height: 100vh;
+  min-width: 1180px;
+  overflow: hidden;
+  color: #1f2f2d;
+  background: #edf2ec;
+}
+
+.annotationSidebar,
+.imageListPanel {
+  min-width: 0;
+  overflow: hidden;
+  background: #f6f1e8;
+  border-color: #ded7c9;
+}
+
+.annotationSidebar {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 18px;
+  padding: 20px;
+  border-right: 1px solid #ded7c9;
+}
+
+.classPanel {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-height: 330px;
+  padding: 18px;
+  border: 1px solid #ded7c9;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.classPanel h2 {
+  font-size: 22px;
+  text-align: center;
+}
+
+.classList {
+  display: grid;
+  gap: 8px;
+  max-height: 190px;
+  overflow: auto;
+}
+
+.classItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 9px;
+  border: 1px solid #d8d1c4;
+  border-radius: 7px;
+  color: #273331;
+  background: #ffffff;
+  text-align: left;
+}
+
+.classItem.isSelected {
+  border-color: #0f766e;
+  color: #fffaf0;
+  background: #0f766e;
+}
+
+.classDot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--class-color);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.64);
+}
+
+.classItem strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classItem em {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(15, 118, 110, 0.12);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.classItem.isSelected em {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.classCreator {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+}
+
+.classCreator input {
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px dashed #9ab3aa;
+  border-radius: 7px;
+  color: #273331;
+  background: #ffffff;
+}
+
+.classCreator button {
+  display: grid;
+  place-items: center;
+  border: 1px dashed #0f766e;
+  border-radius: 7px;
+  color: #0f5b52;
+  background: #eef8f3;
+}
+
+.annotationHelp {
+  align-self: end;
+  display: grid;
+  gap: 8px;
+  padding: 14px 6px 0;
+  border-top: 1px solid #ded7c9;
+}
+
+.annotationHelp h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.annotationHelp p {
+  margin: 0;
+  color: #59645f;
+  font-size: 12px;
+  line-height: 1.48;
+}
+
+.annotationCenter {
+  display: grid;
+  grid-template-rows: 50px minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  background: #dceee6;
+}
+
+.annotationTopBar {
+  display: grid;
+  grid-template-columns: 50px 1fr 50px;
+  align-items: center;
+  border-bottom: 1px solid rgba(15, 91, 82, 0.18);
+  color: #fffaf0;
+  background: #0f766e;
+}
+
+.annotationTopBar strong {
+  justify-self: center;
+  font-size: 21px;
+  font-weight: 760;
+}
+
+.annotationTopBar button {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: #fffaf0;
+  background: transparent;
+}
+
+.annotationTopBar button:hover:not(:disabled),
+.annotationTopBar button:focus-visible:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.annotationStage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #dceee6;
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
+}
+
+.annotationStage.isPanningMode {
+  cursor: grab;
+}
+
+.annotationImageLayer {
+  position: absolute;
+  transform-origin: center;
+}
+
+.annotationImageLayer img,
+.annotationOverlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.annotationImageLayer img {
+  object-fit: contain;
+  background: #111817;
+}
+
+.annotationOverlay {
+  overflow: visible;
+}
+
+.annotationOverlay rect {
+  cursor: pointer;
+}
+
+.annotationBox {
+  cursor: move;
+}
+
+.annotationLabelText {
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: rgba(255, 253, 248, 0.72);
+  stroke-width: 3px;
+}
+
+.annotationHandle {
+  cursor: grab;
+}
+
+.annotationHandle-nw,
+.annotationHandle-se {
+  cursor: nwse-resize;
+}
+
+.annotationHandle-ne,
+.annotationHandle-sw {
+  cursor: nesw-resize;
+}
+
+.annotationModePill {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(216, 209, 196, 0.86);
+  border-radius: 999px;
+  color: #273331;
+  background: rgba(255, 253, 248, 0.9);
+  font-size: 13px;
+  font-weight: 700;
+  backdrop-filter: blur(8px);
+}
+
+.annotationEmpty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #59645f;
+  font-size: 18px;
+}
+
+.imageListPanel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 20px 16px;
+  border-left: 1px solid #ded7c9;
+  overflow-y: auto;
+}
+
+.imageListItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 8px 0 12px;
+  border: 1px solid #ded7c9;
+  border-radius: 7px;
+  color: #273331;
+  background: #fffdf8;
+  text-align: left;
+}
+
+.imageListItem.isSelected {
+  border-color: #0f766e;
+  background: #dceee6;
+  box-shadow: inset 3px 0 0 #0f766e;
+}
+
+.imageListItem span {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.imageListItem em {
+  display: grid;
+  width: 34px;
+  height: 30px;
+  place-items: center;
+  border-radius: 6px;
+  color: #fffaf0;
+  background: #0f766e;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.classContextMenu {
+  position: fixed;
+  z-index: 120;
+  display: grid;
+  gap: 4px;
+  width: 150px;
+  padding: 6px;
+  border: 1px solid #d8d1c4;
+  border-radius: 8px;
+  background: #fffdf8;
+  box-shadow: 0 16px 36px rgba(31, 47, 45, 0.16);
+}
+
+.classContextMenu button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: #273331;
+  background: transparent;
+  text-align: left;
+}
+
+.classContextMenu button:hover,
+.classContextMenu button:focus-visible {
+  color: #0f5b52;
+  background: #dceee6;
+}
+
 .networkStatus::before {
   display: block;
   width: 9px;

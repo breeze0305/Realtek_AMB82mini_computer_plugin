@@ -20,6 +20,7 @@ import {
   wait,
 } from "./converterUtils";
 import { AppHeader } from "./components/AppHeader";
+import { AnnotationView } from "./components/AnnotationView";
 import { CameraView } from "./components/CameraView";
 import { ConverterView } from "./components/ConverterView";
 import { HomeView } from "./components/HomeView";
@@ -358,6 +359,11 @@ function App() {
     setView("converter");
   }
 
+  function openAnnotationView() {
+    stopCamera();
+    setView("annotator");
+  }
+
   async function loadConverterModels() {
     try {
       if (!modelConverterApiBase) {
@@ -658,6 +664,7 @@ function App() {
     dashboard,
     internetConnected,
     language,
+    onOpenAnnotator: () => void openAnnotationView(),
     onOpenCamera: () => void openCameraView(),
     onOpenConverter: () => void openConverterView(),
     onOpenVersionUpdate: () => void openUrl(RELEASES_URL),
@@ -667,26 +674,32 @@ function App() {
     versionCheck,
   });
   return (
-    <main className={`appShell ${view === "settings" ? "settingsShell" : ""} ${view === "converter" ? "converterShell" : ""}`}>
-      <AppHeader
-        dashboard={dashboard}
-        isLanguageMenuOpen={isLanguageMenuOpen}
-        language={language}
-        languageMenuRef={languageMenuRef}
-        onBackHome={() => {
-          stopCamera();
-          setView("home");
-        }}
-        onChangeLanguage={(nextLanguage) => void changeLanguage(nextLanguage)}
-        onCloseLanguageMenu={() => setIsLanguageMenuOpen(false)}
-        onOpenSettings={() => void openSettingsView()}
-        onSettingsBack={() => setView("home")}
-        onToggleLanguageMenu={() => setIsLanguageMenuOpen((current) => !current)}
-        t={t}
-        view={view}
-      />
+    <main
+      className={`appShell ${view === "settings" ? "settingsShell" : ""} ${view === "converter" ? "converterShell" : ""} ${
+        view === "annotator" ? "annotationShell" : ""
+      }`}
+    >
+      {view !== "annotator" && (
+        <AppHeader
+          dashboard={dashboard}
+          isLanguageMenuOpen={isLanguageMenuOpen}
+          language={language}
+          languageMenuRef={languageMenuRef}
+          onBackHome={() => {
+            stopCamera();
+            setView("home");
+          }}
+          onChangeLanguage={(nextLanguage) => void changeLanguage(nextLanguage)}
+          onCloseLanguageMenu={() => setIsLanguageMenuOpen(false)}
+          onOpenSettings={() => void openSettingsView()}
+          onSettingsBack={() => setView("home")}
+          onToggleLanguageMenu={() => setIsLanguageMenuOpen((current) => !current)}
+          t={t}
+          view={view}
+        />
+      )}
 
-      {view !== "settings" && view !== "converter" && (
+      {view !== "settings" && view !== "converter" && view !== "annotator" && (
         <LinkPanel
           onCopyText={(text, message) => void copyText(text, message)}
           onOpenUrl={(url) => void openUrl(url)}
@@ -748,6 +761,15 @@ function App() {
         />
       )}
 
+      {view === "annotator" && (
+        <AnnotationView
+          onBackHome={() => {
+            setView("home");
+          }}
+          onStatus={setStatus}
+        />
+      )}
+
       {view === "camera" && (
         <CameraView
           cameraGuideSteps={cameraGuideSteps[language]}
@@ -770,7 +792,9 @@ function App() {
         />
       )}
 
-      {view !== "settings" && view !== "converter" && <NetworkStatus internetConnected={internetConnected} t={t} />}
+      {view !== "settings" && view !== "converter" && view !== "annotator" && (
+        <NetworkStatus internetConnected={internetConnected} t={t} />
+      )}
     </main>
   );
 }
