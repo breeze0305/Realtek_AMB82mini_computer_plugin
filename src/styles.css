@@ -1331,9 +1331,9 @@ dd {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 34px;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   min-height: 42px;
-  padding: 0 8px 0 12px;
+  padding: 0 7px 0 10px;
   border: 1px solid #ded7c9;
   border-radius: 7px;
   color: #273331;
@@ -1350,7 +1350,7 @@ dd {
 .imageListItem span {
   min-width: 0;
   overflow: hidden;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
