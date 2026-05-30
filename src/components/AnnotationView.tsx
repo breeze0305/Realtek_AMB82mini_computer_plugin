@@ -8,6 +8,7 @@ import {
   MousePointer2,
   Move,
   Plus,
+  RotateCcw,
   Tags,
   Trash2,
 } from "lucide-react";
@@ -426,6 +427,14 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
     replaceCurrentBoxes(nextBoxes);
   }
 
+  function resetCurrentImageBoxes() {
+    if (!currentImage || currentBoxes.length === 0) return;
+    setSelectedBox(null);
+    setDrawing(null);
+    setEditing(null);
+    replaceCurrentBoxes([]);
+  }
+
   function stagePoint(event: { clientX: number; clientY: number }) {
     const rect = stageRef.current?.getBoundingClientRect();
     if (!rect) return null;
@@ -596,7 +605,19 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
         </button>
 
         <div className="classPanel">
-          <h2>classes</h2>
+          <div className="classPanelHeader">
+            <h2>類別Classes</h2>
+            <button
+              type="button"
+              className="classResetButton"
+              onClick={resetCurrentImageBoxes}
+              disabled={!currentBoxes.length}
+              title="Reset current image boxes"
+              aria-label="Reset current image boxes"
+            >
+              <RotateCcw size={16} />
+            </button>
+          </div>
           <div className="classList">
             {workspace.classes.map((name, index) => (
               <button

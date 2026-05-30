@@ -980,7 +980,7 @@ dd {
 }
 
 .annotationDropPanel h2,
-.classPanel h2 {
+.classPanelHeader h2 {
   margin: 0;
   color: #1f2f2d;
 }
@@ -1057,9 +1057,33 @@ dd {
   background: #fffdf8;
 }
 
-.classPanel h2 {
+.classPanelHeader {
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  align-items: center;
+}
+
+.classPanelHeader h2 {
+  grid-column: 2;
   font-size: 22px;
   text-align: center;
+}
+
+.classResetButton {
+  grid-column: 3;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid #d8d1c4;
+  border-radius: 7px;
+  color: #0f5b52;
+  background: #ffffff;
+}
+
+.classResetButton:hover:not(:disabled),
+.classResetButton:focus-visible:not(:disabled) {
+  background: #dceee6;
 }
 
 .classList {
@@ -1304,10 +1328,10 @@ dd {
 
 .imageListItem {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 38px;
+  grid-template-columns: minmax(0, 1fr) 34px;
   align-items: center;
   gap: 10px;
-  min-height: 46px;
+  min-height: 42px;
   padding: 0 8px 0 12px;
   border: 1px solid #ded7c9;
   border-radius: 7px;
@@ -1325,6 +1349,7 @@ dd {
 .imageListItem span {
   min-width: 0;
   overflow: hidden;
+  font-size: 14px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1332,12 +1357,13 @@ dd {
 
 .imageListItem em {
   display: grid;
-  width: 34px;
-  height: 30px;
+  width: 30px;
+  height: 28px;
   place-items: center;
   border-radius: 6px;
   color: #fffaf0;
   background: #0f766e;
+  font-size: 14px;
   font-style: normal;
   font-weight: 800;
 }
