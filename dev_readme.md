@@ -43,9 +43,10 @@ This section is the authoritative source map for the current frontend. Some olde
   - `SettingsView.tsx`: settings page UI, including auto update check, Preference version, UVC format, and reset.
   - `CameraView.tsx`: camera page UI.
   - `ConverterView.tsx`: model converter page UI.
+  - `AnnotationView.tsx`: object detection labeling UI, including folder loading, class management, image navigation, box drawing/moving/resizing, and current-image reset.
   - `NetworkStatus.tsx`: online/offline status indicator.
 - `src/styles.css`
-  - Shared styling for shell, header, home cards, settings, camera, converter, toast, and network status.
+  - Shared styling for shell, header, home cards, settings, camera, converter, annotation workspace, toast, and network status.
 
 Version-check behavior:
 
@@ -56,6 +57,17 @@ Version-check behavior:
 - Version-check results persist in browser `localStorage` under `VERSION_CHECK_STORAGE_KEY`.
 - The settings page has an auto update check switch. It defaults to enabled and persists under `AUTO_UPDATE_CHECK_STORAGE_KEY`.
 - When auto update check is enabled, startup automatically calls `check_version`; if a newer version exists, the app shows a toast and keeps the button in update mode.
+
+Object detection annotation behavior:
+
+- The home annotation card is built in `src/homeCards.ts` and opens `view === "annotator"`.
+- `src/components/AnnotationView.tsx` owns the annotation workspace UI and local interaction state.
+- Tauri drag/drop is enabled in `src-tauri/tauri.conf.json` so a folder path can be received by `getCurrentWebview().onDragDropEvent`.
+- Rust annotation commands live in `src-tauri/src/lib.rs`: `select_annotation_folder`, `load_annotation_folder`, `read_annotation_image`, `save_annotation_classes`, `save_annotation_file`, and `save_annotation_workspace`.
+- The backend creates `{image-folder-name}_labels` beside the selected image folder, reads/writes `classes.txt`, and stores one YOLO `.txt` file per image.
+- The frontend reads image bytes through `read_annotation_image`, converts them to a Blob URL, and avoids `assetProtocol` permissions.
+- Label rows use YOLO normalized values: `<class_id> <x_center> <y_center> <width> <height>`.
+- Box edits autosave silently; save errors still surface through the shared toast.
 
 
 ## 重要檔案

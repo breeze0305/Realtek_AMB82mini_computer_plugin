@@ -10,13 +10,20 @@
 
 Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助 AMB82-mini 使用者快速取得開發所需檔案、開啟 AmebaPro2 套件資料夾、進行相機畫面擷取，以及檢查軟體版本。
 
-This is a Windows desktop assistant for Realtek AMB82-mini developers. It helps with driver distribution, camera capture, bundled resource extraction, Realtek environment navigation, and update/download utilities.
+This is a Windows desktop assistant for Realtek AMB82-mini developers. It helps with driver distribution, camera capture, object detection labeling, bundled resource extraction, Realtek environment navigation, and update/download utilities.
 
 本專案由舊版 Python CLI 工具重構而來，保留原本的核心功能，但改以 Tauri + React 桌面介面重新設計。新版不再要求使用者安裝 Python、OpenCV 或其他開發環境，並把原本的文字選單流程改成更直覺、輕量、可直接發佈的 Windows 應用程式。舊版程式碼仍保留在 `legacy/v2` 分支中。
 
 ## 畫面預覽
 
 ![Realtek AMB82-mini Computer Plugin screenshot](resource/screenshot.jpg)
+
+## Object Detection Labeling
+
+- Select or drag in an image folder, then label local `jpg`, `jpeg`, `png`, and `bmp` images.
+- Draw, move, resize, delete, and reset bounding boxes on the current image.
+- Save labels automatically in YOLO normalized format: `<class_id> <x_center> <y_center> <width> <height>`.
+- Create `{image-folder-name}_labels` next to the image folder, with one `.txt` file per image and a shared `classes.txt`.
 
 ## 主要功能
 
@@ -63,6 +70,14 @@ amb82-mini-computer-plugin.exe
 output/
 ```
 
+Object detection labels are written beside the selected image folder:
+
+```text
+<image-folder-name>_labels/
+```
+
+Each image gets a same-stem `.txt` label file, and `classes.txt` stores one class name per line.
+
 也可以在相機頁按「選擇資料夾」指定 `output/` 要建立在哪個位置；例如選擇桌面後，照片會存到桌面底下的 `output/`。
 
 截圖檔名會自動接續最大編號，避免覆蓋既有圖片。
@@ -95,7 +110,7 @@ output/
 版本檢查來源：
 
 ```text
-https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_computer_plugin/main/version.txt
+https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_plugin/main/version.txt
 ```
 
 ## 授權與注意事項
