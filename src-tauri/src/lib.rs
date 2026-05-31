@@ -21,6 +21,14 @@ const DEFAULT_UVCD_FORMAT: &str = "MJPG";
 const DEFAULT_PREFERENCE_VERSION: &str = "beta";
 const SUPPORTED_UVCD_FORMATS: &[&str] = &["YUY2", "NV12", "MJPG", "H264", "H265"];
 const SUPPORTED_PREFERENCE_VERSIONS: &[&str] = &["release", "beta"];
+const ALLOWED_EXTERNAL_URL_HOSTS: &[&str] = &[
+    "github.com",
+    "raw.githubusercontent.com",
+    "downloads.arduino.cc",
+    "get.videolan.org",
+    "mirror.twds.com.tw",
+    "modelconverter.ntnu-aiot.com",
+];
 const ENDPOINT_MANIFEST_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/endpoint_manifest.json"
@@ -465,9 +473,9 @@ fn select_output_folder(state: tauri::State<AppState>) -> Result<ActionResult, A
 
 #[tauri::command]
 fn open_url(url: String) -> Result<ActionResult, AppError> {
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
+    if !is_allowed_external_url(&url) {
         return Err(AppError::Message(
-            "Only http and https URLs can be opened".into(),
+            "Only approved HTTPS URLs can be opened".into(),
         ));
     }
 
@@ -477,6 +485,47 @@ fn open_url(url: String) -> Result<ActionResult, AppError> {
         message: "URL opened".into(),
         path: Some(url),
     })
+}
+
+fn is_allowed_external_url(url: &str) -> bool {
+    let Some(host) = external_url_host(url) else {
+        return false;
+    };
+
+    ALLOWED_EXTERNAL_URL_HOSTS
+        .iter()
+        .any(|allowed_host| host.eq_ignore_ascii_case(allowed_host))
+}
+
+fn external_url_host(url: &str) -> Option<&str> {
+    let (scheme, rest) = url.split_once("://")?;
+    if !scheme.eq_ignore_ascii_case("https") {
+        return None;
+    }
+
+    let authority_end = rest
+        .find(|character| matches!(character, '/' | '?' | '#'))
+        .unwrap_or(rest.len());
+    let authority = &rest[..authority_end];
+    if authority.is_empty() || authority.contains('@') || authority.starts_with('[') {
+        return None;
+    }
+
+    let host = if let Some((host, port)) = authority.rsplit_once(':') {
+        if host.is_empty() || port.is_empty() || !port.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+
+        host
+    } else {
+        authority
+    };
+
+    if host.is_empty() || host.ends_with('.') || host.contains(':') {
+        return None;
+    }
+
+    Some(host)
 }
 
 #[tauri::command]
@@ -1681,6 +1730,58 @@ mod tests {
             preference_url("release").unwrap(),
             "https://github.com/ambiot/ambpro2_arduino/raw/main/Arduino_package/package_realtek_amebapro2_index.json"
         );
+    }
+
+    #[test]
+    fn external_url_allow_list_accepts_expected_https_hosts() {
+        let urls = [
+            "https://github.com/breeze0305/Realtek_AMB82mini_plugin",
+            "https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_plugin/main/version.txt",
+            "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.exe",
+            "https://get.videolan.org/vlc/3.0.23/win32/vlc-3.0.23-win32.exe",
+            "https://mirror.twds.com.tw/videolan/vlc/3.0.23/win32/vlc-3.0.23-win32.exe",
+            "https://modelconverter.ntnu-aiot.com/api/v1/conversions/123/download",
+        ];
+
+        for url in urls {
+            assert!(is_allowed_external_url(url), "{url} should be allowed");
+        }
+    }
+
+    #[test]
+    fn external_url_allow_list_rejects_http() {
+        assert!(!is_allowed_external_url("http://github.com/breeze0305"));
+    }
+
+    #[test]
+    fn external_url_allow_list_rejects_similar_malicious_hosts() {
+        let urls = [
+            "https://github.com.evil.com/breeze0305",
+            "https://raw.githubusercontent.com.evil.com/version.txt",
+            "https://downloads.arduino.cc.evil.com/arduino.exe",
+            "https://github.com@evil.com/breeze0305",
+        ];
+
+        for url in urls {
+            assert!(!is_allowed_external_url(url), "{url} should be rejected");
+        }
+    }
+
+    #[test]
+    fn external_url_allow_list_rejects_invalid_urls() {
+        let urls = [
+            "",
+            "not a url",
+            "https://",
+            "https:///path",
+            "https://github.com.",
+            "https://github.com:bad/path",
+            "https://[::1]/",
+        ];
+
+        for url in urls {
+            assert!(!is_allowed_external_url(url), "{url} should be rejected");
+        }
     }
 
     #[test]
