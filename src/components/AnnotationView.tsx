@@ -69,6 +69,8 @@ type ClassMenuState = {
 
 const CLASS_NAME_RE = /^[A-Za-z0-9]+$/;
 const MIN_BOX_PIXELS = 4;
+const HANDLE_SCREEN_PIXELS = 14;
+const HANDLE_RADIUS_SCREEN_PIXELS = 3;
 const CLASS_COLORS = [
   "#0f766e",
   "#b9473b",
@@ -710,6 +712,9 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
                 {currentBoxes.map((box, index) => {
                   const rect = boxToRect(box, imageSize);
                   const color = classColor(box.class_id);
+                  const handleSize = screenPixelsToImageUnits(HANDLE_SCREEN_PIXELS, geometry, imageSize, zoom);
+                  const handleRadius = screenPixelsToImageUnits(HANDLE_RADIUS_SCREEN_PIXELS, geometry, imageSize, zoom);
+                  const handleOffset = handleSize / 2;
                   return (
                     <g key={`${index}-${box.class_id}`}>
                       <rect
@@ -729,11 +734,11 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
                         boxHandles(rect).map((handle) => (
                           <rect
                             className={`annotationHandle annotationHandle-${handle.key}`}
-                            x={handle.x - 5}
-                            y={handle.y - 5}
-                            width={10}
-                            height={10}
-                            rx={2}
+                            x={handle.x - handleOffset}
+                            y={handle.y - handleOffset}
+                            width={handleSize}
+                            height={handleSize}
+                            rx={handleRadius}
                             fill="#fffdf8"
                             stroke={color}
                             strokeWidth={2}
@@ -810,6 +815,16 @@ function computeGeometry(stage: { width: number; height: number }, image: { widt
     width,
     height,
   };
+}
+
+function screenPixelsToImageUnits(
+  pixels: number,
+  geometry: { width: number; height: number },
+  image: { width: number; height: number },
+  zoom: number,
+) {
+  const imageToScreenScale = (geometry.width / image.width) * zoom;
+  return pixels / imageToScreenScale;
 }
 
 function rectFromPoints(start: Point, current: Point, image: { width: number; height: number }) {
