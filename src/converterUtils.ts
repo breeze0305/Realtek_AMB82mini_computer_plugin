@@ -30,8 +30,26 @@ export function fileMatchesExtensions(file: File, extensions: string[]) {
   return extensions.some((extension) => name.endsWith(extension.toLowerCase()));
 }
 
-export function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+export function wait(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, ms);
+
+    function abort() {
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      reject(new DOMException("Aborted", "AbortError"));
+    }
+
+    signal?.addEventListener("abort", abort, { once: true });
+  });
 }
 
 export async function readApiJson<T>(response: Response): Promise<T> {
@@ -42,4 +60,3 @@ export async function readApiJson<T>(response: Response): Promise<T> {
   }
   return data as T;
 }
-

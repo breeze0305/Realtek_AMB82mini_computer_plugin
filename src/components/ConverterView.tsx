@@ -69,7 +69,6 @@ export function ConverterView({
               aria-selected={converterType === type}
               className={converterType === type ? "isSelected" : ""}
               onClick={() => onSelectType(type)}
-              disabled={isConverterBusy}
               key={type}
             >
               {type === "yolo" ? t.objectDetection : t.classification}
@@ -90,7 +89,6 @@ export function ConverterView({
             type="file"
             accept={selectedConverterModel.input_extensions.join(",")}
             onChange={(event) => onChooseFile(event.target.files?.item(0))}
-            disabled={isConverterBusy}
           />
           <UploadCloud size={32} />
           <strong>{converterFile ? t.selectedFile : t.selectFile}</strong>

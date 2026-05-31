@@ -137,6 +137,8 @@ function App() {
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
   const autoCheckStartedRef = useRef(false);
+  const converterAbortRef = useRef<AbortController | null>(null);
+  const converterRunIdRef = useRef(0);
 
   const language = dashboard?.settings.language ?? "zh_TW";
   const t = translations[language];
@@ -169,6 +171,7 @@ function App() {
       disposed = true;
       unlisten?.();
       window.clearInterval(timer);
+      cancelModelConversionRequest({ resetUi: false });
       stopCamera();
     };
   }, []);
@@ -191,6 +194,9 @@ function App() {
     }
     if (view === "converter" && modelConverterApiBase) {
       void loadConverterModels();
+    }
+    if (view !== "converter") {
+      cancelModelConversionRequest();
     }
   }, [view, modelConverterApiBase]);
 
@@ -340,6 +346,7 @@ function App() {
   }
 
   function openCameraView() {
+    cancelModelConversionRequest();
     stopCamera();
     setCameras([]);
     setSelectedCamera("");
@@ -348,6 +355,7 @@ function App() {
   }
 
   function openSettingsView() {
+    cancelModelConversionRequest();
     stopCamera();
     setView("settings");
   }
@@ -360,6 +368,7 @@ function App() {
   }
 
   function openAnnotationView() {
+    cancelModelConversionRequest();
     stopCamera();
     setView("annotator");
   }
@@ -400,6 +409,31 @@ function App() {
     setAutoCheckUpdates(enabled);
   }
 
+  function clearConverterProgress() {
+    setDownloadProgress((current) => {
+      const nextProgress = { ...current };
+      delete nextProgress.converter;
+      return nextProgress;
+    });
+  }
+
+  function cancelModelConversionRequest({ resetUi = true } = {}) {
+    if (converterAbortRef.current) {
+      converterAbortRef.current.abort();
+      converterAbortRef.current = null;
+      converterRunIdRef.current += 1;
+    }
+
+    if (resetUi) {
+      setIsConverterBusy(false);
+      clearConverterProgress();
+    }
+  }
+
+  function isAbortError(error: unknown) {
+    return error instanceof DOMException && error.name === "AbortError";
+  }
+
   async function checkVersionOnStartup(language: Language) {
     try {
       const result = await invoke<VersionCheck>("check_version");
@@ -414,7 +448,8 @@ function App() {
   }
 
   function selectConverterType(type: ModelType) {
-    if (isConverterBusy) return;
+    if (type === converterType) return;
+    cancelModelConversionRequest();
     setConverterType(type);
     setConverterFile(null);
     setConverterTask(null);
@@ -427,6 +462,9 @@ function App() {
 
   function chooseConverterFile(file?: File | null) {
     if (!file) return;
+    cancelModelConversionRequest();
+    setConverterTask(null);
+    setCompletedConversion(null);
     const model = converterModels[converterType];
     if (!fileMatchesExtensions(file, model.input_extensions)) {
       setConverterFile(null);
@@ -439,8 +477,6 @@ function App() {
       return;
     }
     setConverterFile(file);
-    setConverterTask(null);
-    setCompletedConversion(null);
     setConverterStatus("");
   }
 
@@ -455,6 +491,15 @@ function App() {
       setConverterStatus(t.invalidFileType);
       return;
     }
+
+    cancelModelConversionRequest({ resetUi: false });
+    const controller = new AbortController();
+    const signal = controller.signal;
+    const runId = converterRunIdRef.current + 1;
+    converterRunIdRef.current = runId;
+    converterAbortRef.current = controller;
+    const isCurrentRun = () =>
+      converterAbortRef.current === controller && converterRunIdRef.current === runId && !signal.aborted;
 
     try {
       setIsConverterBusy(true);
@@ -472,14 +517,17 @@ function App() {
       const createResponse = await fetch(`${modelConverterApiBase}/conversions`, {
         method: "POST",
         body: form,
+        signal,
       });
       const task = await readApiJson<ConversionCreateResponse>(createResponse);
+      if (!isCurrentRun()) return;
       setConverterStatus(t.uploadQueued);
 
       let statusData: ConversionStatusResponse | null = null;
       for (let attempt = 0; attempt < 180; attempt += 1) {
-        const statusResponse = await fetch(converterApiUrl(modelConverterApiBase, task.status_url));
+        const statusResponse = await fetch(converterApiUrl(modelConverterApiBase, task.status_url), { signal });
         statusData = await readApiJson<ConversionStatusResponse>(statusResponse);
+        if (!isCurrentRun()) return;
         setConverterTask(statusData);
 
         if (statusData.status === "success") break;
@@ -488,9 +536,11 @@ function App() {
         }
 
         setConverterStatus(statusData.status === "queued" ? t.uploadQueued : t.conversionRunning);
-        await wait(2000);
+        await wait(2000, signal);
+        if (!isCurrentRun()) return;
       }
 
+      if (!isCurrentRun()) return;
       if (!statusData || statusData.status !== "success") {
         throw new Error("Conversion timed out");
       }
@@ -502,15 +552,15 @@ function App() {
         fileName: statusData.download_name || model.download_name,
       });
     } catch (error) {
+      if (signal.aborted || isAbortError(error) || !isCurrentRun()) return;
       setConverterStatus(String(error));
       setStatus(String(error));
     } finally {
-      setIsConverterBusy(false);
-      setDownloadProgress((current) => {
-        const nextProgress = { ...current };
-        delete nextProgress.converter;
-        return nextProgress;
-      });
+      if (converterAbortRef.current === controller && converterRunIdRef.current === runId) {
+        converterAbortRef.current = null;
+        setIsConverterBusy(false);
+        clearConverterProgress();
+      }
     }
   }
 
