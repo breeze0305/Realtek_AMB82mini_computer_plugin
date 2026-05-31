@@ -105,7 +105,7 @@ Each image gets a same-stem `.txt` label file, and `classes.txt` stores one clas
 
 ## 版本
 
-目前版本：`3.10.1`
+目前版本：`3.10.2`
 
 版本檢查來源：
 
