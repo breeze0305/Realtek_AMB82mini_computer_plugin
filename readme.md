@@ -8,41 +8,27 @@
 
 # Realtek AMB82-mini Computer Plugin
 
-Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助 AMB82-mini 使用者快速取得開發所需檔案、開啟 AmebaPro2 套件資料夾、進行相機畫面擷取，以及檢查軟體版本。
+Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助 Realtek AMB82-mini 開發者快速取得開發資源、設定 AMB UVC 格式、擷取相機畫面、進行物件偵測標註、開啟模型轉換工具，並檢查軟體版本。
 
-This is a Windows desktop assistant for Realtek AMB82-mini developers. It helps with driver distribution, camera capture, object detection labeling, bundled resource extraction, Realtek environment navigation, and update/download utilities.
-
-本專案由舊版 Python CLI 工具重構而來，保留原本的核心功能，但改以 Tauri + React 桌面介面重新設計。新版不再要求使用者安裝 Python、OpenCV 或其他開發環境，並把原本的文字選單流程改成更直覺、輕量、可直接發佈的 Windows 應用程式。舊版程式碼仍保留在 `legacy/v2` 分支中。
+本專案由舊版 Python CLI 工具重構而來，保留原本的核心功能，但改以 Tauri + React 桌面介面重新設計。新版不再要求使用者安裝 Python、OpenCV 或其他開發環境，並把文字選單流程改成更直覺、可直接發佈的 Windows 應用程式。舊版程式碼仍保留在 `legacy/v2` 分支中。
 
 ## 畫面預覽
 
 ![Realtek AMB82-mini Computer Plugin screenshot](resource/screenshot.jpg)
 
-## Object Detection Labeling
-
-- Select or drag in an image folder, then label local `jpg`, `jpeg`, `png`, and `bmp` images.
-- Draw, move, resize, delete, and reset bounding boxes on the current image.
-- Save labels automatically in YOLO normalized format: `<class_id> <x_center> <y_center> <width> <height>`.
-- Create `{image-folder-name}_labels` next to the image folder, with one `.txt` file per image and a shared `classes.txt`.
-
 ## 主要功能
 
-- 取得 CH340/CH341 安裝檔。
-- 取得手勢-自走車追蹤程式碼與權重。
-- 取得影像分類權重：
-  - 硬幣 / 滑鼠 / 日本硬幣
-  - 硬幣 / 滑鼠 / 台灣100紙鈔
-- 下載 Arduino IDE 安裝檔；也可選擇自動安裝，下載 MSI 後以 Windows Installer passive 模式啟動安裝。
-- 下載 VLC 安裝檔。
+- 取得 CH340/CH341 驅動安裝檔。
+- 取得手勢辨識、物件偵測、影像分類等範例程式碼與模型權重。
+- 下載 Arduino IDE 與 VLC 安裝檔。
+- 可選擇自動安裝 Arduino IDE / VLC。
 - 開啟本機 Realtek AmebaPro2 Arduino 套件資料夾。
-- 開啟模型轉換網站：`https://modelconverter.ntnu-aiot.com/`
-- AMB 相機畫面擷取：
-  - 進入相機頁時自動掃描本機可用鏡頭
-  - 下拉選單切換鏡頭
-  - 即時預覽畫面
-  - 可在相機頁選擇截圖輸出資料夾
-  - 定時截圖並輸出為 `image_00001.jpg`、`image_00002.jpg` 等檔案
-  - 內建 AMB82 mini UVC 相機設定教學
+- 複製 AMB Preference package URL。
+- 切換 AMB Preference release / beta 版本來源。
+- 設定 AMB UVC device 輸出格式：`YUY2`、`NV12`、`MJPG`、`H264`、`H265`。
+- 使用 AMB82-mini UVC 相機進行即時預覽與定時擷取。
+- 使用物件偵測標註工具建立 YOLO 格式資料集。
+- 開啟模型量化轉換網站。
 - 檢查 GitHub 上的最新版本。
 - 顯示外網連線狀態；無外網時會停用需要網路的功能。
 - 支援繁體中文、英文、日文介面。
@@ -55,42 +41,14 @@ This is a Windows desktop assistant for Realtek AMB82-mini developers. It helps 
 amb82-mini-computer-plugin.exe
 ```
 
-若你的 Windows 10 電腦沒有 WebView2 Runtime，程式可能無法啟動。這種情況可改用安裝版，或先安裝 Microsoft Edge WebView2 Runtime。
+若 Windows 10 電腦沒有 WebView2 Runtime，程式可能無法啟動。這種情況可改用安裝版，或先安裝 Microsoft Edge WebView2 Runtime。
 
-> [!WARNING]  
-> **此插件會依照設定頁選擇修改使用者的 AMB UVC device 格式，預設為 MJPG。每次打開插件時，都會自動覆寫 `UVCD_pram.h`。**
+> [!WARNING]
+> 此工具會依照設定頁選擇修改使用者的 AMB UVC device 格式，預設為 `MJPG`。每次打開工具時，都會嘗試修正 Realtek AmebaPro2 套件中的 `UVCD_pram.h`。
 
-## 檔案輸出
+## 功能說明
 
-檔案取得功能會開啟 Windows 存檔視窗，使用者可自行指定儲存位置。
-
-相機擷取預設會在程式執行位置建立或使用：
-
-```text
-output/
-```
-
-Object detection labels are written beside the selected image folder:
-
-```text
-<image-folder-name>_labels/
-```
-
-Each image gets a same-stem `.txt` label file, and `classes.txt` stores one class name per line.
-
-也可以在相機頁按「選擇資料夾」指定 `output/` 要建立在哪個位置；例如選擇桌面後，照片會存到桌面底下的 `output/`。
-
-截圖檔名會自動接續最大編號，避免覆蓋既有圖片。
-
-## 開發技術
-
-- Tauri 2
-- React 18
-- TypeScript
-- Vite
-- Rust
-
-## 資源內容
+### 開發資源
 
 程式內嵌並提供下列離線資源：
 
@@ -102,6 +60,111 @@ Each image gets a same-stem `.txt` label file, and `classes.txt` stores one clas
 - `image_classification_japan/img_class_cnn.nb`
 - `image_classification_taiwan/img_class_cnn.nb`
 
+檔案取得功能會開啟 Windows 存檔視窗，使用者可自行指定儲存位置。
+
+### Arduino IDE 與 VLC
+
+Arduino IDE 與 VLC 支援兩種方式：
+
+- 下載安裝檔到使用者指定位置。
+- 自動下載並啟動安裝流程。
+
+下載來源與 fallback URL 定義在 `src-tauri/endpoint_manifest.json`。
+
+### AMB Preference 與 UVC 格式
+
+設定頁可切換 AMB Preference 來源：
+
+- `Release version`
+- `Beta version`
+
+設定頁也可切換 UVC device 格式：
+
+- `YUY2`
+- `NV12`
+- `MJPG`
+- `H264`
+- `H265`
+
+設定會儲存在：
+
+```text
+%LOCALAPPDATA%\AMB82 Mini Computer Plugin\settings.json
+```
+
+### AMB 相機擷取
+
+相機頁提供：
+
+- 自動掃描本機可用鏡頭。
+- 下拉選單切換鏡頭。
+- 即時預覽畫面。
+- 定時擷取 JPEG 圖片。
+- 選擇截圖輸出資料夾。
+- AMB82-mini UVC 相機設定教學。
+
+相機擷取預設會在程式執行位置建立或使用：
+
+```text
+output/
+```
+
+也可以在相機頁按「選擇資料夾」指定 `output/` 要建立在哪個位置。截圖檔名會自動接續最大編號，避免覆蓋既有圖片：
+
+```text
+image_00001.jpg
+image_00002.jpg
+image_00003.jpg
+```
+
+### 物件偵測標註
+
+物件偵測標註工具可用來建立 YOLO 格式資料集：
+
+- 選擇或拖曳圖片資料夾。
+- 支援 `jpg`、`jpeg`、`png`、`bmp` 圖片。
+- 建立、重新命名、刪除 class。
+- 在圖片上繪製 bounding box。
+- 移動、縮放、刪除、重設目前圖片的標註框。
+- 使用 `A` / `D` 切換上一張 / 下一張圖片。
+- 自動儲存標註結果。
+
+標註輸出會建立在圖片資料夾旁邊：
+
+```text
+<image-folder-name>_labels/
+```
+
+每張圖片會有一個同名 `.txt` 標註檔，`classes.txt` 則存放 class 名稱。標註列使用 YOLO normalized 格式：
+
+```text
+<class_id> <x_center> <y_center> <width> <height>
+```
+
+### 模型量化轉換
+
+模型量化轉換功能會開啟或呼叫：
+
+```text
+https://modelconverter.ntnu-aiot.com/
+```
+
+目前支援的模型類型會從 model converter API 載入。轉換完成後，可將產生的 `.nb` 模型下載到使用者指定位置。
+
+## 開發技術
+
+- Tauri 2
+- React 18
+- TypeScript
+- Vite
+- Rust
+- lucide-react
+
+## 安全性設定
+
+- Tauri CSP 已限制 WebView 可連線來源。
+- 外部網址開啟功能只允許預期 HTTPS 網域。
+- Model converter 輪詢會在切頁、換檔、重新開始轉換或卸載時取消，避免舊任務覆蓋新狀態。
 
 ## 版本
 
@@ -111,6 +174,41 @@ Each image gets a same-stem `.txt` label file, and `classes.txt` stores one clas
 
 ```text
 https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_plugin/main/version.txt
+```
+
+版本號由 repo 根目錄的 `version.txt` 統一管理。執行 build 前會自動同步到 `package.json`、`Cargo.toml`、`tauri.conf.json` 與相關文件。
+
+## 開發指令
+
+安裝依賴：
+
+```powershell
+npm.cmd install
+```
+
+前端建置：
+
+```powershell
+npm.cmd run build
+```
+
+Rust 測試：
+
+```powershell
+cargo test --manifest-path src-tauri\Cargo.toml
+```
+
+產生 Windows release exe 與 NSIS installer：
+
+```powershell
+npm.cmd run tauri build
+```
+
+輸出位置：
+
+```text
+src-tauri/target/release/amb82-mini-computer-plugin.exe
+src-tauri/target/release/bundle/nsis/AMB82 Mini Computer Plugin_<version>_x64-setup.exe
 ```
 
 ## 授權與注意事項
