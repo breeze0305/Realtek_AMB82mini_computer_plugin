@@ -1634,12 +1634,8 @@ fn open_in_browser(url: &str) -> Result<(), AppError> {
 fn install_msi(path: &Path) -> Result<(), AppError> {
     #[cfg(target_os = "windows")]
     {
-        Command::new("msiexec")
-            .arg("/i")
-            .arg(path)
-            .arg("/passive")
-            .spawn()?;
-        Ok(())
+        let parameters = format!("/i \"{}\" /passive", display_path(path));
+        launch_elevated("msiexec.exe", &parameters)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -1654,8 +1650,7 @@ fn install_msi(path: &Path) -> Result<(), AppError> {
 fn install_exe_silent(path: &Path) -> Result<(), AppError> {
     #[cfg(target_os = "windows")]
     {
-        Command::new(path).arg("/S").spawn()?;
-        Ok(())
+        launch_elevated(path, "/S")
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -1665,6 +1660,40 @@ fn install_exe_silent(path: &Path) -> Result<(), AppError> {
             "EXE installation is only supported on Windows".into(),
         ))
     }
+}
+
+#[cfg(target_os = "windows")]
+fn launch_elevated(file: impl AsRef<std::ffi::OsStr>, parameters: &str) -> Result<(), AppError> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr::{null, null_mut};
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    fn wide(value: impl AsRef<std::ffi::OsStr>) -> Vec<u16> {
+        value.as_ref().encode_wide().chain(Some(0)).collect()
+    }
+
+    let operation = wide("runas");
+    let file = wide(file);
+    let parameters = wide(parameters);
+    let result = unsafe {
+        ShellExecuteW(
+            null_mut(),
+            operation.as_ptr(),
+            file.as_ptr(),
+            parameters.as_ptr(),
+            null(),
+            SW_SHOWNORMAL,
+        )
+    } as isize;
+
+    if result <= 32 {
+        return Err(AppError::Message(format!(
+            "Failed to launch installer with administrator permission (ShellExecuteW code {result})"
+        )));
+    }
+
+    Ok(())
 }
 
 fn display_path(path: impl AsRef<Path>) -> String {

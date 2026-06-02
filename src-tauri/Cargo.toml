@@ -1,6 +1,6 @@
 [package]
 name = "amb82-mini-computer-plugin"
-version = "3.10.3"
+version = "3.10.4"
 description = "Realtek AMB82-mini Windows desktop assistant"
 authors = ["breeze0305"]
 edition = "2021"
@@ -25,3 +25,4 @@ tauri-runtime-wry = "=2.1.2"
 tauri-utils = "=2.2.0"
 thiserror = "1"
 ureq = { version = "=2.10.1", default-features = true }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
