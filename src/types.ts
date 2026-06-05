@@ -151,6 +151,7 @@ export type RunningAction =
   | "box"
   | "japan"
   | "taiwan"
+  | "singapore"
   | "arduino"
   | "vlc"
   | "folder"

@@ -271,6 +271,13 @@ static EMBEDDED_RESOURCES: &[EmbeddedResource] = &[
             "/../resource/image_classification_taiwan/img_class_cnn.nb"
         )),
     },
+    EmbeddedResource {
+        path: "image_classification_singapore/img_class_cnn.nb",
+        bytes: include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../resource/image_classification_singapore/img_class_cnn.nb"
+        )),
+    },
 ];
 
 pub fn run() {
@@ -301,6 +308,7 @@ pub fn run() {
             save_object_detection_box_resources_as,
             save_image_model_japan_as,
             save_image_model_taiwan_as,
+            save_image_model_singapore_as,
             download_arduino_ide_as,
             download_and_install_arduino_ide,
             download_vlc_as,
@@ -591,6 +599,16 @@ fn save_image_model_taiwan_as(app: AppHandle) -> Result<ActionResult, AppError> 
     save_one_resource_as(
         &app,
         "image_classification_taiwan/img_class_cnn.nb",
+        "img_class_cnn.nb",
+        "Save image classification weight",
+    )
+}
+
+#[tauri::command]
+fn save_image_model_singapore_as(app: AppHandle) -> Result<ActionResult, AppError> {
+    save_one_resource_as(
+        &app,
+        "image_classification_singapore/img_class_cnn.nb",
         "img_class_cnn.nb",
         "Save image classification weight",
     )

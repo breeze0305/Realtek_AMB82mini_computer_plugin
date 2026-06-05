@@ -105,6 +105,13 @@ export function createHomeCards({
       key: "taiwan" as const,
       disabled: false,
     },
+    {
+      title: t.singaporeModel,
+      detail: "img_class_cnn.nb(box/money/mouse)",
+      command: "save_image_model_singapore_as",
+      key: "singapore" as const,
+      disabled: false,
+    },
   ];
 
   return [
