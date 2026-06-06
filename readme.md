@@ -46,8 +46,6 @@ Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助
 amb82-mini-computer-plugin.exe
 ```
 
-若 Windows 10 電腦沒有 WebView2 Runtime，程式可能無法啟動。這種情況可改用安裝版，或先安裝 Microsoft Edge WebView2 Runtime。
-
 > [!WARNING]
 > 此工具會依照設定頁選擇修改使用者的 AMB UVC device 格式，預設為 `MJPG`。每次打開工具時，都會嘗試修正 Realtek AmebaPro2 套件中的 `UVCD_pram.h`。
 
