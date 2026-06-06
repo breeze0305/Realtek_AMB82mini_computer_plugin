@@ -35,6 +35,11 @@ Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助
 
 ## 使用方式
 
+> [!IMPORTANT]
+> **下載最新版請到 GitHub Releases：** [Realtek AMB82mini Plugin Releases](https://github.com/breeze0305/Realtek_AMB82mini_plugin/releases)
+>
+> 進入頁面後，請點開最新版本底下的 `Assets`，下載 `amb82-mini-computer-plugin.exe` 或安裝檔。
+
 下載 release 版本後，直接執行：
 
 ```text
