@@ -62,6 +62,7 @@ amb82-mini-computer-plugin.exe
 - `object_detection_box/yolov7_tiny.nb`
 - `image_classification_japan/img_class_cnn.nb`
 - `image_classification_taiwan/img_class_cnn.nb`
+- `image_classification_singapore/img_class_cnn.nb`
 
 檔案取得功能會開啟 Windows 存檔視窗，使用者可自行指定儲存位置。
 
