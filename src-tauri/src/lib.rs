@@ -289,6 +289,7 @@ pub fn run() {
             output_folder: Mutex::new(None),
         })
         .setup(|app| {
+            install_camera_permission_handler(app);
             let handle = app.handle().clone();
             start_uvcd_worker(handle);
             Ok(())
@@ -327,6 +328,87 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("failed to run AMB82 desktop application");
 }
+
+#[cfg(windows)]
+fn install_camera_permission_handler(app: &tauri::App) {
+    let Some(window) = app.get_webview_window("main") else {
+        eprintln!("main webview window not found; camera permission handler not installed");
+        return;
+    };
+
+    if let Err(error) = window.with_webview(|webview| {
+        use webview2_com::Microsoft::Web::WebView2::Win32::{
+            ICoreWebView2Profile4, ICoreWebView2_13, COREWEBVIEW2_PERMISSION_KIND,
+            COREWEBVIEW2_PERMISSION_KIND_CAMERA, COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+        };
+        use webview2_com::{PermissionRequestedEventHandler, SetPermissionStateCompletedHandler};
+        use windows::core::{HSTRING, Interface};
+
+        let result = (|| -> webview2_com::Result<()> {
+            let controller = webview.controller();
+            let webview = unsafe { controller.CoreWebView2()? };
+            allow_camera_permission_for_app_origins(&webview)?;
+            let mut token = Default::default();
+            unsafe {
+                webview.add_PermissionRequested(
+                    &PermissionRequestedEventHandler::create(Box::new(|_, args| {
+                        let Some(args) = args else {
+                            return Ok(());
+                        };
+
+                        let mut kind = COREWEBVIEW2_PERMISSION_KIND::default();
+                        args.PermissionKind(&mut kind)?;
+                        if kind == COREWEBVIEW2_PERMISSION_KIND_CAMERA {
+                            args.SetState(COREWEBVIEW2_PERMISSION_STATE_ALLOW)?;
+                        }
+
+                        Ok(())
+                    })),
+                    &mut token,
+                )?;
+            }
+
+            Ok(())
+        })();
+
+        fn allow_camera_permission_for_app_origins(
+            webview: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2,
+        ) -> webview2_com::Result<()> {
+            const APP_ORIGINS: &[&str] = &[
+                "http://tauri.localhost",
+                "https://tauri.localhost",
+                "http://localhost:1420",
+                "http://127.0.0.1:1420",
+            ];
+
+            let webview = webview.cast::<ICoreWebView2_13>()?;
+            let profile = unsafe { webview.Profile()? };
+            let profile = profile.cast::<ICoreWebView2Profile4>()?;
+            for origin in APP_ORIGINS {
+                let origin = HSTRING::from(*origin);
+                unsafe {
+                    profile.SetPermissionState(
+                        COREWEBVIEW2_PERMISSION_KIND_CAMERA,
+                        &origin,
+                        COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+                        &SetPermissionStateCompletedHandler::create(Box::new(|_| Ok(()))),
+                    )?;
+                }
+            }
+
+            Ok(())
+        }
+
+        if let Err(error) = result {
+            eprintln!("failed to install camera permission handler: {error}");
+        }
+    }) {
+        eprintln!("failed to access webview for camera permission handler: {error}");
+    }
+}
+
+#[cfg(not(windows))]
+fn install_camera_permission_handler(_app: &tauri::App) {}
 
 #[tauri::command]
 fn get_dashboard(state: tauri::State<AppState>) -> Result<Dashboard, AppError> {

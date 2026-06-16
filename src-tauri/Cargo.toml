@@ -25,4 +25,6 @@ tauri-runtime-wry = "=2.1.2"
 tauri-utils = "=2.2.0"
 thiserror = "1"
 ureq = { version = "=2.10.1", default-features = true }
+webview2-com = "=0.33.0"
+windows = "=0.58.0"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
