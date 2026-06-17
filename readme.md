@@ -172,7 +172,7 @@ https://modelconverter.ntnu-aiot.com/
 
 ## 版本
 
-目前版本：`3.11.1`
+目前版本：`3.11.2`
 
 版本檢查來源：
 
