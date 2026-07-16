@@ -9,7 +9,7 @@ use std::{
     process::Command,
     sync::Mutex,
     thread,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter, Manager};
 use thiserror::Error;
@@ -214,6 +214,7 @@ struct UrlSet {
 struct AppState {
     settings: Mutex<Settings>,
     output_folder: Mutex<Option<PathBuf>>,
+    capture_lock: Mutex<()>,
 }
 
 struct EmbeddedResource {
@@ -287,6 +288,7 @@ pub fn run() {
         .manage(AppState {
             settings: Mutex::new(settings),
             output_folder: Mutex::new(None),
+            capture_lock: Mutex::new(()),
         })
         .setup(|app| {
             install_camera_permission_handler(app);
@@ -342,7 +344,7 @@ fn install_camera_permission_handler(app: &tauri::App) {
             COREWEBVIEW2_PERMISSION_KIND_CAMERA, COREWEBVIEW2_PERMISSION_STATE_ALLOW,
         };
         use webview2_com::{PermissionRequestedEventHandler, SetPermissionStateCompletedHandler};
-        use windows::core::{HSTRING, Interface};
+        use windows::core::{Interface, HSTRING};
 
         let result = (|| -> webview2_com::Result<()> {
             let controller = webview.controller();
@@ -593,9 +595,7 @@ fn external_url_host(url: &str) -> Option<&str> {
         return None;
     }
 
-    let authority_end = rest
-        .find(|character| matches!(character, '/' | '?' | '#'))
-        .unwrap_or(rest.len());
+    let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let authority = &rest[..authority_end];
     if authority.is_empty() || authority.contains('@') || authority.starts_with('[') {
         return None;
@@ -727,7 +727,12 @@ fn download_and_install_arduino_ide(app: AppHandle) -> Result<DownloadResult, Ap
 #[tauri::command]
 fn download_vlc_as(app: AppHandle) -> Result<DownloadResult, AppError> {
     let manifest = endpoint_manifest()?;
-    download_url_as(&app, "vlc", &manifest.downloads.vlc.urls, "Save VLC installer")
+    download_url_as(
+        &app,
+        "vlc",
+        &manifest.downloads.vlc.urls,
+        "Save VLC installer",
+    )
 }
 
 #[tauri::command]
@@ -808,10 +813,13 @@ fn save_capture_image(
     bytes: Vec<u8>,
     state: tauri::State<AppState>,
 ) -> Result<ActionResult, AppError> {
+    let _capture_guard = state
+        .capture_lock
+        .lock()
+        .map_err(|_| AppError::Message("Failed to lock camera capture storage".into()))?;
     let folder = output_dir(&state)?;
     fs::create_dir_all(&folder)?;
-    let file_path = next_image_path(&folder)?;
-    fs::write(&file_path, bytes)?;
+    let file_path = write_next_image(&folder, &bytes)?;
 
     Ok(ActionResult {
         ok: true,
@@ -960,7 +968,10 @@ fn load_annotation_workspace(folder: &Path) -> Result<AnnotationWorkspace, AppEr
     });
 
     for image_path in image_paths {
-        let Some(file_name) = image_path.file_name().map(|name| name.to_string_lossy().into_owned()) else {
+        let Some(file_name) = image_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+        else {
             continue;
         };
         let label_path = label_path_for_image(&labels_folder, &file_name)?;
@@ -1003,7 +1014,12 @@ fn annotation_labels_folder(folder: &Path) -> Result<PathBuf, AppError> {
 fn is_supported_image(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| matches!(ext.to_ascii_lowercase().as_str(), "jpg" | "jpeg" | "png" | "bmp"))
+        .map(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "jpg" | "jpeg" | "png" | "bmp"
+            )
+        })
         .unwrap_or(false)
 }
 
@@ -1268,31 +1284,51 @@ fn download_to_path(
     url: &str,
     target: &Path,
 ) -> Result<DownloadResult, AppError> {
-    let response = http_agent().get(url).call().map_err(http_error)?;
+    let response = http_agent()
+        .get(url)
+        .set("Accept-Encoding", "identity")
+        .call()
+        .map_err(http_error)?;
     let total = response
         .header("content-length")
         .and_then(|value| value.parse::<u64>().ok());
-    let mut file = fs::File::create(target)?;
+    let (temporary_path, mut file) = create_download_temp_file(target)?;
     let mut reader = response.into_reader();
     let mut buffer = [0_u8; 64 * 1024];
     let mut bytes = 0_u64;
     let mut last_emit = 0_u64;
 
     emit_download_progress(app, key, bytes, total);
-    loop {
-        let read = reader.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        file.write_all(&buffer[..read])?;
-        bytes += read as u64;
+    let transfer_result = (|| -> Result<(), AppError> {
+        loop {
+            let read = reader.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            file.write_all(&buffer[..read])?;
+            bytes += read as u64;
 
-        if bytes.saturating_sub(last_emit) >= 256 * 1024 || total == Some(bytes) {
-            emit_download_progress(app, key, bytes, total);
-            last_emit = bytes;
+            if bytes.saturating_sub(last_emit) >= 256 * 1024 || total == Some(bytes) {
+                emit_download_progress(app, key, bytes, total);
+                last_emit = bytes;
+            }
         }
+        file.flush()?;
+        file.sync_all()?;
+        validate_download_length(bytes, total)
+    })();
+    drop(file);
+
+    if let Err(error) = transfer_result {
+        let _ = fs::remove_file(&temporary_path);
+        return Err(error);
     }
-    file.flush()?;
+
+    if let Err(error) = replace_downloaded_file(&temporary_path, target) {
+        let _ = fs::remove_file(&temporary_path);
+        return Err(error);
+    }
+
     emit_download_progress(app, key, bytes, total.or(Some(bytes)));
 
     Ok(DownloadResult {
@@ -1304,6 +1340,82 @@ fn download_to_path(
         path: display_path(target),
         bytes,
     })
+}
+
+fn validate_download_length(bytes: u64, total: Option<u64>) -> Result<(), AppError> {
+    if let Some(expected) = total {
+        if bytes != expected {
+            return Err(AppError::Message(format!(
+                "Downloaded file is incomplete: expected {expected} bytes, received {bytes} bytes"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn create_download_temp_file(target: &Path) -> Result<(PathBuf, fs::File), AppError> {
+    let parent = target
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let file_name = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("download");
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+
+    for attempt in 0..100_u32 {
+        let path = parent.join(format!(
+            ".{file_name}.{}.{}.{attempt}.part",
+            std::process::id(),
+            nonce
+        ));
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => return Ok((path, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.into()),
+        }
+    }
+
+    Err(AppError::Message(
+        "Failed to create a unique temporary download file".into(),
+    ))
+}
+
+#[cfg(windows)]
+fn replace_downloaded_file(source: &Path, target: &Path) -> Result<(), AppError> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let source_wide: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
+    let target_wide: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
+    let result = unsafe {
+        MoveFileExW(
+            source_wide.as_ptr(),
+            target_wide.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+
+    if result == 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn replace_downloaded_file(source: &Path, target: &Path) -> Result<(), AppError> {
+    fs::rename(source, target)?;
+    Ok(())
 }
 
 fn emit_download_progress(app: &AppHandle, key: &'static str, downloaded: u64, total: Option<u64>) {
@@ -1364,11 +1476,15 @@ fn get_text_with_fallback(urls: &[String]) -> Result<String, AppError> {
     let mut errors = Vec::new();
 
     for url in urls {
-        match http_agent().get(url).call().map_err(http_error).and_then(|response| {
-            response
-                .into_string()
-                .map_err(|error| AppError::Message(format!("HTTP read error: {error}")))
-        }) {
+        match http_agent()
+            .get(url)
+            .call()
+            .map_err(http_error)
+            .and_then(|response| {
+                response
+                    .into_string()
+                    .map_err(|error| AppError::Message(format!("HTTP read error: {error}")))
+            }) {
             Ok(text) => return Ok(text),
             Err(error) => errors.push(format!("{url}: {error}")),
         }
@@ -1639,6 +1755,32 @@ fn next_image_path(folder: &Path) -> Result<PathBuf, AppError> {
     Ok(folder.join(format!("image_{:05}.jpg", max_id + 1)))
 }
 
+fn write_next_image(folder: &Path, bytes: &[u8]) -> Result<PathBuf, AppError> {
+    for _ in 0..100 {
+        let file_path = next_image_path(folder)?;
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&file_path)
+        {
+            Ok(mut file) => {
+                if let Err(error) = file.write_all(bytes).and_then(|_| file.flush()) {
+                    drop(file);
+                    let _ = fs::remove_file(&file_path);
+                    return Err(error.into());
+                }
+                return Ok(file_path);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.into()),
+        }
+    }
+
+    Err(AppError::Message(
+        "Failed to reserve a unique camera capture file name".into(),
+    ))
+}
+
 fn embedded_resource_bytes(source: &str) -> Option<&'static [u8]> {
     EMBEDDED_RESOURCES
         .iter()
@@ -1804,6 +1946,14 @@ fn display_path(path: impl AsRef<Path>) -> String {
 mod tests {
     use super::*;
 
+    fn test_directory(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        std::env::temp_dir().join(format!("amb82-{name}-{}-{nonce}", std::process::id()))
+    }
+
     #[test]
     fn repair_uvcd_content_enables_mjpg_and_disables_other_uvcd_formats() {
         let original = "\
@@ -1937,5 +2087,44 @@ mod tests {
     fn safe_file_name_strips_parent_paths() {
         assert_eq!(safe_file_name("../model.nb"), "model.nb");
         assert_eq!(safe_file_name(""), "converted_model.nb");
+    }
+
+    #[test]
+    fn download_length_validation_rejects_incomplete_files() {
+        assert!(validate_download_length(512, Some(512)).is_ok());
+        assert!(validate_download_length(512, None).is_ok());
+        assert!(validate_download_length(511, Some(512)).is_err());
+        assert!(validate_download_length(513, Some(512)).is_err());
+    }
+
+    #[test]
+    fn completed_download_replaces_the_target_file() {
+        let folder = test_directory("download-replace");
+        fs::create_dir_all(&folder).unwrap();
+        let source = folder.join("payload.part");
+        let target = folder.join("payload.bin");
+        fs::write(&source, b"new payload").unwrap();
+        fs::write(&target, b"old payload").unwrap();
+
+        replace_downloaded_file(&source, &target).unwrap();
+
+        assert_eq!(fs::read(&target).unwrap(), b"new payload");
+        assert!(!source.exists());
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn camera_capture_uses_the_next_available_file_without_overwriting() {
+        let folder = test_directory("capture-file");
+        fs::create_dir_all(&folder).unwrap();
+        let first = folder.join("image_00001.jpg");
+        fs::write(&first, b"existing image").unwrap();
+
+        let second = write_next_image(&folder, b"new image").unwrap();
+
+        assert_eq!(second.file_name().unwrap(), "image_00002.jpg");
+        assert_eq!(fs::read(first).unwrap(), b"existing image");
+        assert_eq!(fs::read(second).unwrap(), b"new image");
+        fs::remove_dir_all(folder).unwrap();
     }
 }

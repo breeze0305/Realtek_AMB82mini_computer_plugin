@@ -1,9 +1,7 @@
 {
   "repository": "https://github.com/breeze0305/Realtek_AMB82mini_plugin",
   "version_check": {
-    "urls": [
-      "https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_plugin/main/version.txt"
-    ]
+    "urls": ["https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_plugin/main/version.txt"]
   },
   "downloads": {
     "arduino_ide": {
@@ -41,8 +39,5 @@
     "site_url": "https://modelconverter.ntnu-aiot.com/",
     "api_base": "https://modelconverter.ntnu-aiot.com/api/v1"
   },
-  "internet_check_urls": [
-    "https://www.cloudflare.com/cdn-cgi/trace",
-    "https://www.google.com/generate_204"
-  ]
+  "internet_check_urls": ["https://www.cloudflare.com/cdn-cgi/trace", "https://www.google.com/generate_204"]
 }

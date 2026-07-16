@@ -164,6 +164,8 @@ https://modelconverter.ntnu-aiot.com/
 - Rust
 - lucide-react
 
+開發環境需使用 Node.js `^20.19.0` 或 `>=22.12.0`；CI 使用 Node.js 24。
+
 ## 安全性設定
 
 - Tauri CSP 已限制 WebView 可連線來源。
@@ -196,10 +198,16 @@ npm.cmd install
 npm.cmd run build
 ```
 
+前端 lint、格式、測試與 production build：
+
+```powershell
+npm.cmd run check
+```
+
 Rust 測試：
 
 ```powershell
-cargo test --manifest-path src-tauri\Cargo.toml
+cargo test --manifest-path src-tauri\Cargo.toml --locked
 ```
 
 產生 Windows release exe 與 NSIS installer：

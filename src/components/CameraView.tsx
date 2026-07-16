@@ -52,7 +52,11 @@ export function CameraView({
         {!isPreviewing && <span>{t.preview}</span>}
       </div>
       <div className="cameraControls">
-        <select value={selectedCamera} onChange={(event) => onSelectCamera(event.target.value)} aria-label={t.selectCamera}>
+        <select
+          value={selectedCamera}
+          onChange={(event) => onSelectCamera(event.target.value)}
+          aria-label={t.selectCamera}
+        >
           <option value="">{t.noCamera}</option>
           {cameras.map((device, index) => (
             <option value={device.deviceId} key={device.deviceId}>
@@ -60,7 +64,10 @@ export function CameraView({
             </option>
           ))}
         </select>
-        <button className={isCapturing ? "dangerBtn" : "primaryBtn"} onClick={isCapturing ? onStopCaptureTimer : onStartCapture}>
+        <button
+          className={isCapturing ? "dangerBtn" : "primaryBtn"}
+          onClick={isCapturing ? onStopCaptureTimer : onStartCapture}
+        >
           {isCapturing ? <Square size={17} /> : <Play size={17} />}
           {isCapturing ? t.stopCapture : t.startCapture}
         </button>

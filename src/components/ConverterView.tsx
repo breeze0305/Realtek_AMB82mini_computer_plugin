@@ -2,12 +2,7 @@ import { Download, ExternalLink, RefreshCcw, UploadCloud } from "lucide-react";
 import type { CSSProperties, RefObject } from "react";
 
 import { converterModelOrder } from "../appConfig";
-import type {
-  CompletedConversion,
-  ConversionStatusResponse,
-  ConverterModel,
-  ModelType,
-} from "../types";
+import type { CompletedConversion, ConversionStatusResponse, ConverterModel, ModelType } from "../types";
 
 type ConverterViewProps = {
   completedConversion: CompletedConversion | null;
@@ -55,7 +50,11 @@ export function ConverterView({
       <div className="converterCard">
         <div className="converterTop">
           <h2>{t.converterTitle}</h2>
-          <button type="button" className="secondaryBtn converterExternalBtn" onClick={() => onOpenUrl(modelConverterUrl)}>
+          <button
+            type="button"
+            className="secondaryBtn converterExternalBtn"
+            onClick={() => onOpenUrl(modelConverterUrl)}
+          >
             <ExternalLink size={17} />
             {t.openExternal}
           </button>

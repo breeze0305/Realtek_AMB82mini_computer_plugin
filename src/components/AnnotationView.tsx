@@ -14,12 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type WheelEvent } from "react";
 
-import type {
-  AnnotationBox,
-  AnnotationImageData,
-  AnnotationSaveResult,
-  AnnotationWorkspace,
-} from "../types";
+import type { AnnotationBox, AnnotationImageData, AnnotationSaveResult, AnnotationWorkspace } from "../types";
 
 type AnnotationViewProps = {
   onBackHome: () => void;
@@ -104,12 +99,9 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
 
   const currentImage = workspace?.images[currentIndex] ?? null;
-  const currentBoxes = currentImage && workspace ? workspace.annotations[currentImage.name] ?? [] : [];
+  const currentBoxes = currentImage && workspace ? (workspace.annotations[currentImage.name] ?? []) : [];
   const hasWorkspace = workspace !== null;
-  const geometry = useMemo(
-    () => computeGeometry(stageSize, imageSize, pan, zoom),
-    [stageSize, imageSize, pan, zoom],
-  );
+  const geometry = useMemo(() => computeGeometry(stageSize, imageSize, pan, zoom), [stageSize, imageSize, pan, zoom]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -165,6 +157,8 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
       disposed = true;
       if (previousUrl) URL.revokeObjectURL(previousUrl);
     };
+    // An annotation image is uniquely identified by its path; other object fields do not require a reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentImage?.path, onStatus]);
 
   useEffect(() => {
@@ -199,6 +193,8 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
       disposed = true;
       unlisten?.();
     };
+    // The WebView drag/drop subscription is installed once for this mounted editor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -239,6 +235,8 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
+    // These state values cover every changing value read by the local keyboard helpers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, selectedBox, workspace]);
 
   async function selectFolder() {
@@ -305,7 +303,9 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
     if (!CLASS_NAME_RE.test(trimmed)) {
       return "class 名稱只能是英文和數字，且不能為空";
     }
-    const duplicate = existing.some((item, index) => index !== ignoreIndex && item.toLowerCase() === trimmed.toLowerCase());
+    const duplicate = existing.some(
+      (item, index) => index !== ignoreIndex && item.toLowerCase() === trimmed.toLowerCase(),
+    );
     if (duplicate) {
       return "class 名稱不能重複";
     }
@@ -703,11 +703,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
                 transform: `scale(${zoom})`,
               }}
             >
-              <img
-                src={imageUrl}
-                draggable={false}
-                alt={currentImage.name}
-              />
+              <img src={imageUrl} draggable={false} alt={currentImage.name} />
               <svg viewBox={`0 0 ${imageSize.width} ${imageSize.height}`} className="annotationOverlay">
                 {currentBoxes.map((box, index) => {
                   const rect = boxToRect(box, imageSize);
@@ -804,7 +800,12 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   );
 }
 
-function computeGeometry(stage: { width: number; height: number }, image: { width: number; height: number }, pan: Point, zoom: number) {
+function computeGeometry(
+  stage: { width: number; height: number },
+  image: { width: number; height: number },
+  pan: Point,
+  zoom: number,
+) {
   if (!stage.width || !stage.height || !image.width || !image.height || !zoom) return null;
   const fit = Math.min(stage.width / image.width, stage.height / image.height);
   const width = image.width * fit;

@@ -82,7 +82,7 @@ Object detection annotation behavior:
   - Tauri command 呼叫。
 
 - `src/styles.css`
-  - 固定視窗 UI 樣式。
+  - 可調整視窗的 UI 與 responsive 樣式。
   - 主選單卡片、語言 dropdown、設定頁、相機頁、toast、網路狀態燈。
 
 - `src-tauri/src/lib.rs`
@@ -454,7 +454,9 @@ UI 原則：
 
 Rust 執行時的本機版本與 HTTP user agent 會直接從 `version.txt` 讀取，不再於 `src-tauri/src/lib.rs` 維護一份版本常數。
 
-`npm run build` 與 `npm run tauri ...` 會先自動執行 `npm run sync-version`。版本更新建議流程：
+`npm run dev` 與 `npm run build` 會各自透過 `predev` / `prebuild` 自動執行一次 `npm run sync-version`。Tauri 的 `beforeDevCommand` 與 `beforeBuildCommand` 會呼叫這兩個 script，因此不再另外使用 `pretauri` 重複同步。同步腳本只有在內容變更時才寫入檔案；`npm run check:version` 可在不寫檔的情況下檢查版本是否一致。
+
+版本更新建議流程：
 
 ```powershell
 npm.cmd run build
@@ -493,6 +495,22 @@ npm.cmd install
 npm.cmd run build
 ```
 
+前端 lint、格式檢查與測試：
+
+```powershell
+npm.cmd run lint
+npm.cmd run format:check
+npm.cmd run test
+```
+
+一次執行前端完整檢查：
+
+```powershell
+npm.cmd run check
+```
+
+GitHub Actions 會在 push 與 pull request 時於 Windows 執行前端完整檢查、Rust format、Clippy 與 Rust tests。
+
 啟動前端 dev server：
 
 ```powershell
@@ -528,7 +546,7 @@ npm.cmd run tauri build
 基本測試：
 
 1. 啟動 exe，不出現黑色 terminal。
-2. 視窗固定大小，不能最大化。
+2. 視窗可以調整大小與最大化；縮小到最小尺寸時 responsive 版面仍正常。
 3. 語言切換正常。
 4. 右上設定按鈕可進入設定頁。
 5. 設定頁切換 `YUY2`、`NV12`、`MJPG`、`H264`、`H265` 後，`settings.json` 有保存。
@@ -568,8 +586,11 @@ npm.cmd run tauri build
 
 Node 端目前：
 
+- Node.js `^20.19.0` 或 `>=22.12.0`（CI 使用 Node.js 24）
 - `@tauri-apps/api = 2.0.3`
 - `@tauri-apps/cli = 2.0.4`
+- `vite = 8.x`
+- `vitest = 4.x`
 
 如果未來要升級到新版 Tauri，請一次升級整組 Tauri crates / npm packages，並重新跑完整 build。
 
@@ -596,7 +617,7 @@ git diff --stat
 
 建議驗證：
 
-- 純前端 / UI 改動：至少跑 `npm.cmd run build`。
+- 純前端 / UI 改動：跑 `npm.cmd run check`。
 - Rust command / UVCD / 檔案流程改動：跑 `cargo test --manifest-path src-tauri\Cargo.toml`。
 - 要給使用者測 exe：跑 `npm.cmd run tauri build`。
 
@@ -615,9 +636,11 @@ Push 習慣：
 ## 發佈前檢查
 
 1. 版本號清單全部同步。
-2. `npm.cmd run build` 成功。
-3. `cargo test --manifest-path src-tauri\Cargo.toml` 成功。
-4. `npm.cmd run tauri build` 成功。
-5. 確認 release exe 沒被舊 process 鎖住。
-6. 確認 `UVCD_pram.h` 覆寫規則符合目前設定。
-7. 確認 `readme.md` 的版本與警告文字仍正確。
+2. `npm.cmd run check` 成功。
+3. `cargo fmt --manifest-path src-tauri\Cargo.toml --all -- --check` 成功。
+4. `cargo clippy --manifest-path src-tauri\Cargo.toml --all-targets --locked -- -D warnings` 成功。
+5. `cargo test --manifest-path src-tauri\Cargo.toml --locked` 成功。
+6. `npm.cmd run tauri build` 成功。
+7. 確認 release exe 沒被舊 process 鎖住。
+8. 確認 `UVCD_pram.h` 覆寫規則符合目前設定。
+9. 確認 `readme.md` 的版本與警告文字仍正確。

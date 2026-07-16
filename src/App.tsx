@@ -12,13 +12,8 @@ import {
   uvcdFormatOptions,
 } from "./appConfig";
 import { cameraGuideSteps, PREFERENCE_COPY_MESSAGE, translations } from "./i18n";
-import {
-  converterApiUrl,
-  fileMatchesExtensions,
-  readApiJson,
-  savedPhotoText,
-  wait,
-} from "./converterUtils";
+import { createSerialTaskScheduler, type SerialTaskScheduler } from "./serialTaskScheduler";
+import { converterApiUrl, fileMatchesExtensions, readApiJson, savedPhotoText, wait } from "./converterUtils";
 import { AppHeader } from "./components/AppHeader";
 import { AnnotationView } from "./components/AnnotationView";
 import { CameraView } from "./components/CameraView";
@@ -135,7 +130,7 @@ function App() {
   const converterInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const timerRef = useRef<number | null>(null);
+  const captureSchedulerRef = useRef<SerialTaskScheduler | null>(null);
   const autoCheckStartedRef = useRef(false);
   const converterAbortRef = useRef<AbortController | null>(null);
   const converterRunIdRef = useRef(0);
@@ -174,6 +169,8 @@ function App() {
       cancelModelConversionRequest({ resetUi: false });
       stopCamera();
     };
+    // This effect owns process-lifetime subscriptions and teardown and must only run once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -198,6 +195,8 @@ function App() {
     if (view !== "converter") {
       cancelModelConversionRequest();
     }
+    // View and endpoint changes are the only events that should trigger these transitions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, modelConverterApiBase]);
 
   async function refreshDashboard() {
@@ -294,11 +293,7 @@ function App() {
     }
   }
 
-  async function runAction<T>(
-    key: Exclude<RunningAction, null>,
-    command: string,
-    next: (result: T) => string,
-  ) {
+  async function runAction<T>(key: Exclude<RunningAction, null>, command: string, next: (result: T) => string) {
     try {
       setOpenActionMenu(null);
       setRunning(key);
@@ -598,9 +593,7 @@ function App() {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter((device) => device.kind === "videoinput");
       const nextCamera =
-        videoDevices.find((device) => device.deviceId === selectedCamera)?.deviceId ||
-        videoDevices[0]?.deviceId ||
-        "";
+        videoDevices.find((device) => device.deviceId === selectedCamera)?.deviceId || videoDevices[0]?.deviceId || "";
       setCameras(videoDevices);
       setSelectedCamera(nextCamera);
       setStatus(videoDevices.length ? `${videoDevices.length} camera(s)` : t.noCamera);
@@ -642,20 +635,25 @@ function App() {
         const started = await startPreview();
         if (!started) return;
       }
-      await captureFrame();
+      stopCaptureTimer();
       const interval = Math.max(1, dashboard?.settings.capture_interval ?? 1) * 1000;
-      timerRef.current = window.setInterval(() => void captureFrame(), interval);
+      const scheduler = createSerialTaskScheduler(captureFrame, interval, (error) => {
+        if (captureSchedulerRef.current !== scheduler) return;
+        captureSchedulerRef.current = null;
+        setIsCapturing(false);
+        setStatus(String(error));
+      });
+      captureSchedulerRef.current = scheduler;
       setIsCapturing(true);
+      scheduler.start();
     } catch (error) {
       setStatus(String(error));
     }
   }
 
   function stopCaptureTimer() {
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+    captureSchedulerRef.current?.stop();
+    captureSchedulerRef.current = null;
     setIsCapturing(false);
   }
 
@@ -696,9 +694,7 @@ function App() {
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.92),
-    );
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
     if (!blob) return;
 
     const buffer = await blob.arrayBuffer();

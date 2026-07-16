@@ -12,20 +12,9 @@ import {
 
 import { installActionLabels } from "./i18n";
 import type { HomeCard } from "./components/HomeView";
-import type {
-  ActionResult,
-  Dashboard,
-  DownloadResult,
-  Language,
-  RunningAction,
-  VersionCheck,
-} from "./types";
+import type { ActionResult, Dashboard, DownloadResult, Language, RunningAction, VersionCheck } from "./types";
 
-type RunAction = <T>(
-  key: Exclude<RunningAction, null>,
-  command: string,
-  next: (result: T) => string,
-) => Promise<void>;
+type RunAction = <T>(key: Exclude<RunningAction, null>, command: string, next: (result: T) => string) => Promise<void>;
 
 type CreateHomeCardsParams = {
   dashboard: Dashboard | null;
@@ -163,7 +152,8 @@ export function createHomeCards({
       title: t.folder,
       detail: "",
       icon: FolderOpen,
-      action: () => void runAction<ActionResult>("folder", "open_realtek_folder", (result) => result.path ?? result.message),
+      action: () =>
+        void runAction<ActionResult>("folder", "open_realtek_folder", (result) => result.path ?? result.message),
       label: t.open,
       disabled: false,
       key: "folder",

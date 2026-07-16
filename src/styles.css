@@ -1,6 +1,12 @@
 :root {
   font-family:
-    Inter, "Noto Sans TC", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    Inter,
+    "Noto Sans TC",
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   color: #202426;
   background: #f5f3ee;
   font-synthesis: none;
@@ -43,9 +49,7 @@ button:disabled {
   padding: 24px 34px 72px;
   overflow-x: hidden;
   overflow-y: auto;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0)),
-    #f5f3ee;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0)), #f5f3ee;
 }
 
 .settingsShell {
@@ -1024,7 +1028,7 @@ dd {
   grid-template-columns: 292px minmax(520px, 1fr) 292px;
   width: 100vw;
   height: 100vh;
-  min-width: 1180px;
+  min-width: 900px;
   overflow: hidden;
   color: #1f2f2d;
   background: #edf2ec;
@@ -1462,6 +1466,15 @@ dd {
 
   .settingsShell {
     padding-inline: 22px;
+  }
+
+  .annotationWorkspace {
+    grid-template-columns: 220px minmax(420px, 1fr) 220px;
+  }
+
+  .annotationSidebar,
+  .imageListPanel {
+    padding: 14px;
   }
 
   .converterCard {
