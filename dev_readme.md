@@ -576,6 +576,8 @@ npm.cmd run tauri build
 
 目前 Rust 端鎖定：
 
+- Rust toolchain `1.97.0`（根目錄 `rust-toolchain.toml`）
+- `Cargo.toml` 的最低支援版本 `rust-version = 1.97`
 - `tauri = 2.0.6`
 - `tauri-build = 2.0.6`
 - `tauri-codegen = 2.0.5`

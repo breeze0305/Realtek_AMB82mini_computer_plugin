@@ -161,7 +161,7 @@ https://modelconverter.ntnu-aiot.com/
 - React 18
 - TypeScript
 - Vite
-- Rust
+- Rust 1.97.0（由 `rust-toolchain.toml` 固定）
 - lucide-react
 
 開發環境需使用 Node.js `^20.19.0` 或 `>=22.12.0`；CI 使用 Node.js 24。
