@@ -1,6 +1,6 @@
 [package]
 name = "amb82-mini-computer-plugin"
-version = "3.11.3"
+version = "3.12.1"
 description = "Realtek AMB82-mini Windows desktop assistant"
 authors = ["breeze0305"]
 edition = "2021"
