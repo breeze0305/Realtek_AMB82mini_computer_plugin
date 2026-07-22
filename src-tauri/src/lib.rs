@@ -215,6 +215,7 @@ struct AppState {
     settings: Mutex<Settings>,
     output_folder: Mutex<Option<PathBuf>>,
     capture_lock: Mutex<()>,
+    native_dialog_lock: Mutex<()>,
 }
 
 struct EmbeddedResource {
@@ -289,6 +290,7 @@ pub fn run() {
             settings: Mutex::new(settings),
             output_folder: Mutex::new(None),
             capture_lock: Mutex::new(()),
+            native_dialog_lock: Mutex::new(()),
         })
         .setup(|app| {
             install_camera_permission_handler(app);
@@ -540,8 +542,22 @@ fn open_output_folder(state: tauri::State<AppState>) -> Result<ActionResult, App
 }
 
 #[tauri::command]
-fn select_output_folder(state: tauri::State<AppState>) -> Result<ActionResult, AppError> {
+fn select_output_folder(
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<ActionResult, AppError> {
+    let _dialog_guard = match state.native_dialog_lock.try_lock() {
+        Ok(guard) => guard,
+        Err(std::sync::TryLockError::WouldBlock) => {
+            return Err(AppError::Message(
+                "A folder selection dialog is already open".into(),
+            ));
+        }
+        Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+    };
+
     let Some(parent_folder) = rfd::FileDialog::new()
+        .set_parent(&window)
         .set_title("Select output folder location")
         .pick_folder()
     else {

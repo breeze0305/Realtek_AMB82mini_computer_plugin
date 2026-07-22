@@ -1,12 +1,12 @@
 import { FolderOpen, Play, Square } from "lucide-react";
 import type { RefObject } from "react";
 
-import type { RunningAction } from "../types";
-
 type CameraViewProps = {
   cameraGuideSteps: string[];
   cameras: MediaDeviceInfo[];
+  isCameraBusy: boolean;
   isCapturing: boolean;
+  isChoosingOutputFolder: boolean;
   isPreviewing: boolean;
   lastSaved: string;
   onOpenOutputFolder: () => void;
@@ -15,7 +15,6 @@ type CameraViewProps = {
   onStartCapture: () => void;
   onStopCaptureTimer: () => void;
   outputFolder: string;
-  running: RunningAction;
   selectedCamera: string;
   t: Record<string, string>;
   videoRef: RefObject<HTMLVideoElement>;
@@ -24,7 +23,9 @@ type CameraViewProps = {
 export function CameraView({
   cameraGuideSteps,
   cameras,
+  isCameraBusy,
   isCapturing,
+  isChoosingOutputFolder,
   isPreviewing,
   lastSaved,
   onOpenOutputFolder,
@@ -33,7 +34,6 @@ export function CameraView({
   onStartCapture,
   onStopCaptureTimer,
   outputFolder,
-  running,
   selectedCamera,
   t,
   videoRef,
@@ -56,6 +56,7 @@ export function CameraView({
           value={selectedCamera}
           onChange={(event) => onSelectCamera(event.target.value)}
           aria-label={t.selectCamera}
+          disabled={isCameraBusy}
         >
           <option value="">{t.noCamera}</option>
           {cameras.map((device, index) => (
@@ -67,11 +68,16 @@ export function CameraView({
         <button
           className={isCapturing ? "dangerBtn" : "primaryBtn"}
           onClick={isCapturing ? onStopCaptureTimer : onStartCapture}
+          disabled={isCameraBusy && !isCapturing}
         >
           {isCapturing ? <Square size={17} /> : <Play size={17} />}
           {isCapturing ? t.stopCapture : t.startCapture}
         </button>
-        <button className="secondaryBtn" onClick={onSelectOutputFolder} disabled={isCapturing || running === "output"}>
+        <button
+          className="secondaryBtn"
+          onClick={onSelectOutputFolder}
+          disabled={isCapturing || isCameraBusy || isChoosingOutputFolder}
+        >
           <FolderOpen size={17} />
           {t.chooseOutput}
         </button>

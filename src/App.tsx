@@ -12,6 +12,7 @@ import {
   uvcdFormatOptions,
 } from "./appConfig";
 import { cameraGuideSteps, PREFERENCE_COPY_MESSAGE, translations } from "./i18n";
+import { createOperationGate } from "./operationGate";
 import { createSerialTaskScheduler, type SerialTaskScheduler } from "./serialTaskScheduler";
 import { converterApiUrl, fileMatchesExtensions, readApiJson, savedPhotoText, wait } from "./converterUtils";
 import { AppHeader } from "./components/AppHeader";
@@ -105,6 +106,7 @@ function App() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [view, setView] = useState<View>("home");
   const [running, setRunning] = useState<RunningAction>(null);
+  const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [status, setStatus] = useState("");
   const [isFeedbackLeaving, setIsFeedbackLeaving] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<Partial<Record<DownloadKey, number>>>({});
@@ -113,6 +115,8 @@ function App() {
   const [selectedCamera, setSelectedCamera] = useState("");
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isCameraBusy, setIsCameraBusy] = useState(false);
+  const [cameraOperationGate] = useState(() => createOperationGate(setIsCameraBusy));
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [openActionMenu, setOpenActionMenu] = useState<"arduino" | "vlc" | null>(null);
   const [lastSaved, setLastSaved] = useState("");
@@ -131,6 +135,7 @@ function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const captureSchedulerRef = useRef<SerialTaskScheduler | null>(null);
+  const folderDialogOpenRef = useRef(false);
   const autoCheckStartedRef = useRef(false);
   const converterAbortRef = useRef<AbortController | null>(null);
   const converterRunIdRef = useRef(0);
@@ -322,8 +327,14 @@ function App() {
   }
 
   async function selectOutputFolder() {
+    if (folderDialogOpenRef.current || cameraOperationGate.isBusy() || captureSchedulerRef.current?.isActive()) {
+      return;
+    }
+
+    folderDialogOpenRef.current = true;
+    setIsFolderDialogOpen(true);
+
     try {
-      setRunning("output");
       const result = await invoke<ActionResult>("select_output_folder");
       setDashboard((current) =>
         current ? { ...current, output_folder: result.path ?? current.output_folder } : current,
@@ -332,7 +343,8 @@ function App() {
     } catch (error) {
       setStatus(String(error));
     } finally {
-      setRunning(null);
+      folderDialogOpenRef.current = false;
+      setIsFolderDialogOpen(false);
     }
   }
 
@@ -585,11 +597,15 @@ function App() {
   }
 
   async function scanCameras() {
+    if (folderDialogOpenRef.current) return;
+    const finishCameraOperation = cameraOperationGate.begin();
+
     try {
       stopCaptureTimer();
       stopPreviewStream();
       const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true });
       permissionStream.getTracks().forEach((track) => track.stop());
+      if (folderDialogOpenRef.current) return;
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter((device) => device.kind === "videoinput");
       const nextCamera =
@@ -600,10 +616,13 @@ function App() {
       if (nextCamera) await startPreview(nextCamera);
     } catch (error) {
       setStatus(String(error));
+    } finally {
+      finishCameraOperation();
     }
   }
 
   async function startPreview(deviceId = selectedCamera) {
+    if (folderDialogOpenRef.current) return false;
     stopCaptureTimer();
     stopPreviewStream();
     if (!deviceId) {
@@ -611,30 +630,43 @@ function App() {
       return false;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        deviceId: { exact: deviceId },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
-      audio: false,
-    });
-    streamRef.current = stream;
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
+    const finishCameraOperation = cameraOperationGate.begin();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          deviceId: { exact: deviceId },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+      if (folderDialogOpenRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setIsPreviewing(true);
+      setStatus(t.preview);
+      return true;
+    } finally {
+      finishCameraOperation();
     }
-    setIsPreviewing(true);
-    setStatus(t.preview);
-    return true;
   }
 
   async function startCapture() {
+    if (folderDialogOpenRef.current) return;
+    const finishCameraOperation = cameraOperationGate.begin();
+
     try {
       if (!isPreviewing) {
         const started = await startPreview();
         if (!started) return;
       }
+      if (folderDialogOpenRef.current) return;
       stopCaptureTimer();
       const interval = Math.max(1, dashboard?.settings.capture_interval ?? 1) * 1000;
       const scheduler = createSerialTaskScheduler(captureFrame, interval, (error) => {
@@ -648,6 +680,8 @@ function App() {
       scheduler.start();
     } catch (error) {
       setStatus(String(error));
+    } finally {
+      finishCameraOperation();
     }
   }
 
@@ -670,6 +704,7 @@ function App() {
   }
 
   async function selectCamera(deviceId: string) {
+    if (folderDialogOpenRef.current) return;
     setSelectedCamera(deviceId);
     if (!deviceId) {
       stopCamera();
@@ -684,26 +719,33 @@ function App() {
   }
 
   async function captureFrame() {
-    const video = videoRef.current;
-    if (!video || video.videoWidth === 0 || video.videoHeight === 0) return;
+    if (folderDialogOpenRef.current) return;
+    const finishCameraOperation = cameraOperationGate.begin();
 
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    try {
+      const video = videoRef.current;
+      if (!video || video.videoWidth === 0 || video.videoHeight === 0) return;
 
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
-    if (!blob) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const buffer = await blob.arrayBuffer();
-    const bytes = Array.from(new Uint8Array(buffer));
-    const result = await invoke<ActionResult>("save_capture_image", { bytes });
-    const path = result.path ?? "";
-    const savedText = savedPhotoText(language, path, result.message);
-    setLastSaved(savedText);
-    setStatus(savedText);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+      if (!blob) return;
+
+      const buffer = await blob.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buffer));
+      const result = await invoke<ActionResult>("save_capture_image", { bytes });
+      const path = result.path ?? "";
+      const savedText = savedPhotoText(language, path, result.message);
+      setLastSaved(savedText);
+      setStatus(savedText);
+    } finally {
+      finishCameraOperation();
+    }
   }
 
   const mainCards = createHomeCards({
@@ -721,6 +763,8 @@ function App() {
   });
   return (
     <main
+      {...(isFolderDialogOpen ? { inert: "" } : {})}
+      aria-busy={isFolderDialogOpen}
       className={`appShell ${view === "settings" ? "settingsShell" : ""} ${view === "converter" ? "converterShell" : ""} ${
         view === "annotator" ? "annotationShell" : ""
       }`}
@@ -820,7 +864,9 @@ function App() {
         <CameraView
           cameraGuideSteps={cameraGuideSteps[language]}
           cameras={cameras}
+          isCameraBusy={isCameraBusy}
           isCapturing={isCapturing}
+          isChoosingOutputFolder={isFolderDialogOpen}
           isPreviewing={isPreviewing}
           lastSaved={lastSaved}
           onOpenOutputFolder={() =>
@@ -831,7 +877,6 @@ function App() {
           onStartCapture={() => void startCapture()}
           onStopCaptureTimer={stopCaptureTimer}
           outputFolder={dashboard?.output_folder ?? ""}
-          running={running}
           selectedCamera={selectedCamera}
           t={t}
           videoRef={videoRef}

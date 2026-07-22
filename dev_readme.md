@@ -195,6 +195,7 @@ Object detection annotation behavior:
 - 檔名格式：`image_00001.jpg`、`image_00002.jpg`。
 - 若資料夾已有圖片，會接續最大序號。
 - 使用者可在本次執行期間用「選擇資料夾」改 output 位置。
+- 資料夾選擇器以主視窗為 owner-modal；開啟期間固定在 Plugin 上方並鎖住主視窗，取消或完成後恢復操作。
 - output 位置目前只存在 runtime state，重開程式會回到預設。
 
 相機頁底部有 UVC 相機設定教學，文字在 `cameraGuideSteps`。
@@ -556,6 +557,7 @@ npm.cmd run tauri build
 9. 有外網時 Arduino / VLC 下載進度正常。
 10. 相機頁可掃描 camera、預覽、截圖。
 11. 輸出圖片序號會接續既有最大編號。
+12. 相機頁開啟「選擇資料夾」時，對話框保持在主視窗上方，主視窗不可操作；取消或完成後恢復操作。
 
 ## 已知限制
 
