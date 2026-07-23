@@ -108,7 +108,7 @@ function App() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [view, setView] = useState<View>("home");
   const [running, setRunning] = useState<RunningAction>(null);
-  const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
+  const [isNativeDialogOpen, setIsNativeDialogOpen] = useState(false);
   const [status, setStatus] = useState("");
   const [isFeedbackLeaving, setIsFeedbackLeaving] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<Partial<Record<DownloadKey, number>>>({});
@@ -136,8 +136,9 @@ function App() {
   const converterInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const cameraSessionIdRef = useRef(0);
   const captureSchedulerRef = useRef<SerialTaskScheduler | null>(null);
-  const folderDialogOpenRef = useRef(false);
+  const nativeDialogOpenRef = useRef(false);
   const autoCheckStartedRef = useRef(false);
   const converterAbortRef = useRef<AbortController | null>(null);
   const converterRunIdRef = useRef(0);
@@ -155,7 +156,8 @@ function App() {
     void refreshDashboard();
     const timer = window.setInterval(() => void refreshInternet(), 30000);
     let disposed = false;
-    let unlisten: (() => void) | undefined;
+    let unlistenDownloadProgress: (() => void) | undefined;
+    let unlistenNativeDialogState: (() => void) | undefined;
 
     void listen<DownloadProgress>("download-progress", (event) => {
       const { key, downloaded, total } = event.payload;
@@ -165,13 +167,25 @@ function App() {
       if (disposed) {
         nextUnlisten();
       } else {
-        unlisten = nextUnlisten;
+        unlistenDownloadProgress = nextUnlisten;
+      }
+    });
+
+    void listen<boolean>("native-dialog-state", (event) => {
+      nativeDialogOpenRef.current = event.payload;
+      setIsNativeDialogOpen(event.payload);
+    }).then((nextUnlisten) => {
+      if (disposed) {
+        nextUnlisten();
+      } else {
+        unlistenNativeDialogState = nextUnlisten;
       }
     });
 
     return () => {
       disposed = true;
-      unlisten?.();
+      unlistenDownloadProgress?.();
+      unlistenNativeDialogState?.();
       window.clearInterval(timer);
       cancelModelConversionRequest({ resetUi: false });
       stopCamera();
@@ -202,6 +216,11 @@ function App() {
     if (view !== "converter") {
       cancelModelConversionRequest();
     }
+    return () => {
+      if (view === "camera") {
+        stopCamera();
+      }
+    };
     // View and endpoint changes are the only events that should trigger these transitions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, modelConverterApiBase]);
@@ -329,12 +348,9 @@ function App() {
   }
 
   async function selectOutputFolder() {
-    if (folderDialogOpenRef.current || cameraOperationGate.isBusy() || captureSchedulerRef.current?.isActive()) {
+    if (nativeDialogOpenRef.current || cameraOperationGate.isBusy() || captureSchedulerRef.current?.isActive()) {
       return;
     }
-
-    folderDialogOpenRef.current = true;
-    setIsFolderDialogOpen(true);
 
     try {
       const result = await invoke<ActionResult>("select_output_folder");
@@ -344,9 +360,6 @@ function App() {
       setStatus(result.path ?? result.message);
     } catch (error) {
       setStatus(String(error));
-    } finally {
-      folderDialogOpenRef.current = false;
-      setIsFolderDialogOpen(false);
     }
   }
 
@@ -607,32 +620,39 @@ function App() {
   }
 
   async function scanCameras() {
-    if (folderDialogOpenRef.current) return;
+    if (nativeDialogOpenRef.current) return;
+    const cameraSessionId = beginCameraSession();
     const finishCameraOperation = cameraOperationGate.begin();
 
     try {
       stopCaptureTimer();
       stopPreviewStream();
       const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true });
-      permissionStream.getTracks().forEach((track) => track.stop());
-      if (folderDialogOpenRef.current) return;
+      stopMediaStream(permissionStream);
+      if (!isCurrentCameraSession(cameraSessionId) || nativeDialogOpenRef.current) return;
       const devices = await navigator.mediaDevices.enumerateDevices();
+      if (!isCurrentCameraSession(cameraSessionId) || nativeDialogOpenRef.current) return;
       const videoDevices = devices.filter((device) => device.kind === "videoinput");
       const nextCamera =
         videoDevices.find((device) => device.deviceId === selectedCamera)?.deviceId || videoDevices[0]?.deviceId || "";
       setCameras(videoDevices);
       setSelectedCamera(nextCamera);
       setStatus(videoDevices.length ? `${videoDevices.length} camera(s)` : t.noCamera);
-      if (nextCamera) await startPreview(nextCamera);
+      if (nextCamera) await startPreview(nextCamera, cameraSessionId);
     } catch (error) {
-      setStatus(String(error));
+      if (isCurrentCameraSession(cameraSessionId)) {
+        setStatus(String(error));
+      }
     } finally {
       finishCameraOperation();
     }
   }
 
-  async function startPreview(deviceId = selectedCamera) {
-    if (folderDialogOpenRef.current) return false;
+  async function startPreview(deviceId = selectedCamera, existingCameraSessionId?: number) {
+    if (nativeDialogOpenRef.current) return false;
+    const cameraSessionId = existingCameraSessionId ?? beginCameraSession();
+    if (!isCurrentCameraSession(cameraSessionId)) return false;
+
     stopCaptureTimer();
     stopPreviewStream();
     if (!deviceId) {
@@ -641,8 +661,11 @@ function App() {
     }
 
     const finishCameraOperation = cameraOperationGate.begin();
+    let stream: MediaStream | null = null;
+    let video: HTMLVideoElement | null = null;
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         video: {
           deviceId: { exact: deviceId },
           width: { ideal: 1280 },
@@ -650,25 +673,38 @@ function App() {
         },
         audio: false,
       });
-      if (folderDialogOpenRef.current) {
-        stream.getTracks().forEach((track) => track.stop());
+      if (!isCurrentCameraSession(cameraSessionId) || nativeDialogOpenRef.current) {
+        stopMediaStream(stream);
         return false;
       }
+
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+      video = videoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        await video.play();
       }
+      if (!isCurrentCameraSession(cameraSessionId) || nativeDialogOpenRef.current) {
+        discardPreviewStream(stream, video);
+        return false;
+      }
+
       setIsPreviewing(true);
       setStatus(t.preview);
       return true;
+    } catch (error) {
+      if (stream) {
+        discardPreviewStream(stream, video);
+      }
+      if (!isCurrentCameraSession(cameraSessionId)) return false;
+      throw error;
     } finally {
       finishCameraOperation();
     }
   }
 
   async function startCapture() {
-    if (folderDialogOpenRef.current) return;
+    if (nativeDialogOpenRef.current) return;
     const finishCameraOperation = cameraOperationGate.begin();
 
     try {
@@ -676,7 +712,7 @@ function App() {
         const started = await startPreview();
         if (!started) return;
       }
-      if (folderDialogOpenRef.current) return;
+      if (nativeDialogOpenRef.current) return;
       stopCaptureTimer();
       const interval = Math.max(1, dashboard?.settings.capture_interval ?? 1) * 1000;
       const scheduler = createSerialTaskScheduler(captureFrame, interval, (error) => {
@@ -702,19 +738,45 @@ function App() {
   }
 
   function stopPreviewStream() {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
+    if (streamRef.current) {
+      stopMediaStream(streamRef.current);
+    }
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setIsPreviewing(false);
   }
 
   function stopCamera() {
+    cameraSessionIdRef.current += 1;
     stopCaptureTimer();
     stopPreviewStream();
   }
 
+  function beginCameraSession() {
+    cameraSessionIdRef.current += 1;
+    return cameraSessionIdRef.current;
+  }
+
+  function isCurrentCameraSession(cameraSessionId: number) {
+    return cameraSessionIdRef.current === cameraSessionId;
+  }
+
+  function stopMediaStream(stream: MediaStream) {
+    stream.getTracks().forEach((track) => track.stop());
+  }
+
+  function discardPreviewStream(stream: MediaStream, video: HTMLVideoElement | null) {
+    stopMediaStream(stream);
+    if (streamRef.current === stream) {
+      streamRef.current = null;
+    }
+    if (video?.srcObject === stream) {
+      video.srcObject = null;
+    }
+  }
+
   async function selectCamera(deviceId: string) {
-    if (folderDialogOpenRef.current) return;
+    if (nativeDialogOpenRef.current) return;
     setSelectedCamera(deviceId);
     if (!deviceId) {
       stopCamera();
@@ -729,7 +791,7 @@ function App() {
   }
 
   async function captureFrame() {
-    if (folderDialogOpenRef.current) return;
+    if (nativeDialogOpenRef.current) return;
     const finishCameraOperation = cameraOperationGate.begin();
 
     try {
@@ -774,8 +836,8 @@ function App() {
   });
   return (
     <main
-      {...(isFolderDialogOpen ? { inert: "" } : {})}
-      aria-busy={isFolderDialogOpen}
+      {...(isNativeDialogOpen ? { inert: "" } : {})}
+      aria-busy={isNativeDialogOpen}
       className={`appShell ${view === "settings" ? "settingsShell" : ""} ${view === "converter" ? "converterShell" : ""} ${
         view === "annotator" ? "annotationShell" : ""
       }`}
@@ -895,7 +957,7 @@ function App() {
           cameras={cameras}
           isCameraBusy={isCameraBusy}
           isCapturing={isCapturing}
-          isChoosingOutputFolder={isFolderDialogOpen}
+          isChoosingOutputFolder={isNativeDialogOpen}
           isPreviewing={isPreviewing}
           lastSaved={lastSaved}
           onOpenOutputFolder={() =>

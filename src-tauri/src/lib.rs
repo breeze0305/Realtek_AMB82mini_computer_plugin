@@ -7,7 +7,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
-    sync::Mutex,
+    sync::{Mutex, MutexGuard, TryLockError},
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -19,6 +19,7 @@ const CONTACT: &str = "breeze0305";
 const DEFAULT_LANGUAGE: &str = "zh_TW";
 const DEFAULT_UVCD_FORMAT: &str = "MJPG";
 const DEFAULT_PREFERENCE_VERSION: &str = "beta";
+const NATIVE_DIALOG_STATE_EVENT: &str = "native-dialog-state";
 const SUPPORTED_UVCD_FORMATS: &[&str] = &["YUY2", "NV12", "MJPG", "H264", "H265"];
 const SUPPORTED_PREFERENCE_VERSIONS: &[&str] = &["release", "beta"];
 const ALLOWED_EXTERNAL_URL_HOSTS: &[&str] = &[
@@ -216,6 +217,43 @@ struct AppState {
     output_folder: Mutex<Option<PathBuf>>,
     capture_lock: Mutex<()>,
     native_dialog_lock: Mutex<()>,
+}
+
+fn lock_native_dialog(state: &AppState) -> Result<MutexGuard<'_, ()>, AppError> {
+    match state.native_dialog_lock.try_lock() {
+        Ok(guard) => Ok(guard),
+        Err(TryLockError::WouldBlock) => Err(AppError::Message(
+            "A native file dialog is already open".into(),
+        )),
+        Err(TryLockError::Poisoned(error)) => Ok(error.into_inner()),
+    }
+}
+
+struct NativeDialogStateGuard<'a> {
+    window: &'a tauri::WebviewWindow,
+}
+
+impl<'a> NativeDialogStateGuard<'a> {
+    fn new(window: &'a tauri::WebviewWindow) -> Self {
+        let _ = window.emit(NATIVE_DIALOG_STATE_EVENT, true);
+        Self { window }
+    }
+}
+
+impl Drop for NativeDialogStateGuard<'_> {
+    fn drop(&mut self) {
+        let _ = self.window.emit(NATIVE_DIALOG_STATE_EVENT, false);
+    }
+}
+
+fn with_native_dialog<T>(
+    window: &tauri::WebviewWindow,
+    state: &AppState,
+    show: impl FnOnce() -> T,
+) -> Result<T, AppError> {
+    let _dialog_guard = lock_native_dialog(state)?;
+    let _state_guard = NativeDialogStateGuard::new(window);
+    Ok(show())
 }
 
 struct EmbeddedResource {
@@ -546,20 +584,7 @@ fn select_output_folder(
     window: tauri::WebviewWindow,
     state: tauri::State<AppState>,
 ) -> Result<ActionResult, AppError> {
-    let _dialog_guard = match state.native_dialog_lock.try_lock() {
-        Ok(guard) => guard,
-        Err(std::sync::TryLockError::WouldBlock) => {
-            return Err(AppError::Message(
-                "A folder selection dialog is already open".into(),
-            ));
-        }
-        Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
-    };
-
-    let Some(parent_folder) = rfd::FileDialog::new()
-        .set_parent(&window)
-        .set_title("Select output folder location")
-        .pick_folder()
+    let Some(parent_folder) = pick_folder_dialog(&window, &state, "Select output folder location")?
     else {
         return Err(AppError::Message("Folder selection was canceled".into()));
     };
@@ -635,9 +660,15 @@ fn external_url_host(url: &str) -> Option<&str> {
 }
 
 #[tauri::command]
-fn save_driver_as(app: AppHandle) -> Result<ActionResult, AppError> {
+fn save_driver_as(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<ActionResult, AppError> {
     save_one_resource_as(
         &app,
+        &window,
+        &state,
         "CH341SER.EXE",
         "CH341SER.EXE",
         "Save CH340/CH341 installer",
@@ -645,9 +676,15 @@ fn save_driver_as(app: AppHandle) -> Result<ActionResult, AppError> {
 }
 
 #[tauri::command]
-fn save_hand_resources_as(app: AppHandle) -> Result<ActionResult, AppError> {
+fn save_hand_resources_as(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<ActionResult, AppError> {
     save_resource_set_as(
         &app,
+        &window,
+        &state,
         &[
             (
                 "gesture_recognition/hand_code.txt",
@@ -664,9 +701,15 @@ fn save_hand_resources_as(app: AppHandle) -> Result<ActionResult, AppError> {
 }
 
 #[tauri::command]
-fn save_object_detection_box_resources_as(app: AppHandle) -> Result<ActionResult, AppError> {
+fn save_object_detection_box_resources_as(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<ActionResult, AppError> {
     save_resource_set_as(
         &app,
+        &window,
+        &state,
         &[
             (
                 "object_detection_box/code.txt",
@@ -683,9 +726,15 @@ fn save_object_detection_box_resources_as(app: AppHandle) -> Result<ActionResult
 }
 
 #[tauri::command]
-fn save_image_model_japan_as(app: AppHandle) -> Result<ActionResult, AppError> {
+fn save_image_model_japan_as(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<ActionResult, AppError> {
     save_one_resource_as(
         &app,
+        &window,
+        &state,
         "image_classification_japan/img_class_cnn.nb",
         "img_class_cnn.nb",
         "Save image classification weight",
@@ -693,9 +742,15 @@ fn save_image_model_japan_as(app: AppHandle) -> Result<ActionResult, AppError> {
 }
 
 #[tauri::command]
-fn save_image_model_taiwan_as(app: AppHandle) -> Result<ActionResult, AppError> {
+fn save_image_model_taiwan_as(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<ActionResult, AppError> {
     save_one_resource_as(
         &app,
+        &window,
+        &state,
         "image_classification_taiwan/img_class_cnn.nb",
         "img_class_cnn.nb",
         "Save image classification weight",
@@ -703,9 +758,15 @@ fn save_image_model_taiwan_as(app: AppHandle) -> Result<ActionResult, AppError> 
 }
 
 #[tauri::command]
-fn save_image_model_singapore_as(app: AppHandle) -> Result<ActionResult, AppError> {
+fn save_image_model_singapore_as(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<ActionResult, AppError> {
     save_one_resource_as(
         &app,
+        &window,
+        &state,
         "image_classification_singapore/img_class_cnn.nb",
         "img_class_cnn.nb",
         "Save image classification weight",
@@ -713,10 +774,16 @@ fn save_image_model_singapore_as(app: AppHandle) -> Result<ActionResult, AppErro
 }
 
 #[tauri::command]
-fn download_arduino_ide_as(app: AppHandle) -> Result<DownloadResult, AppError> {
+fn download_arduino_ide_as(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<DownloadResult, AppError> {
     let manifest = endpoint_manifest()?;
     download_url_as(
         &app,
+        &window,
+        &state,
         "arduino",
         &manifest.downloads.arduino_ide.urls,
         "Save Arduino IDE installer",
@@ -741,10 +808,16 @@ fn download_and_install_arduino_ide(app: AppHandle) -> Result<DownloadResult, Ap
 }
 
 #[tauri::command]
-fn download_vlc_as(app: AppHandle) -> Result<DownloadResult, AppError> {
+fn download_vlc_as(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<DownloadResult, AppError> {
     let manifest = endpoint_manifest()?;
     download_url_as(
         &app,
+        &window,
+        &state,
         "vlc",
         &manifest.downloads.vlc.urls,
         "Save VLC installer",
@@ -771,6 +844,8 @@ fn download_and_install_vlc(app: AppHandle) -> Result<DownloadResult, AppError> 
 #[tauri::command]
 fn download_model_conversion_as(
     app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
     url: String,
     file_name: String,
 ) -> Result<DownloadResult, AppError> {
@@ -783,7 +858,7 @@ fn download_model_conversion_as(
     }
 
     let default_name = safe_file_name(&file_name);
-    let target = save_dialog(&default_name, "Save converted model")
+    let target = save_dialog(&window, &state, &default_name, "Save converted model")?
         .ok_or_else(|| AppError::Message("Save was canceled".into()))?;
     download_to_path(&app, "converter", &url, &target)
 }
@@ -845,11 +920,11 @@ fn save_capture_image(
 }
 
 #[tauri::command]
-fn select_annotation_folder() -> Result<AnnotationWorkspace, AppError> {
-    let Some(folder) = rfd::FileDialog::new()
-        .set_title("Select image folder")
-        .pick_folder()
-    else {
+fn select_annotation_folder(
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<AnnotationWorkspace, AppError> {
+    let Some(folder) = pick_folder_dialog(&window, &state, "Select image folder")? else {
         return Err(AppError::Message("Folder selection was canceled".into()));
     };
 
@@ -1201,11 +1276,13 @@ fn start_uvcd_worker(app: AppHandle) {
 
 fn save_one_resource_as(
     app: &AppHandle,
+    window: &tauri::WebviewWindow,
+    state: &AppState,
     source: &str,
     default_name: &str,
     title: &str,
 ) -> Result<ActionResult, AppError> {
-    let target = save_dialog(default_name, title)
+    let target = save_dialog(window, state, default_name, title)?
         .ok_or_else(|| AppError::Message("Save was canceled".into()))?;
     copy_resource_to(app, source, &target)?;
     Ok(ActionResult {
@@ -1217,12 +1294,14 @@ fn save_one_resource_as(
 
 fn save_resource_set_as(
     app: &AppHandle,
+    window: &tauri::WebviewWindow,
+    state: &AppState,
     files: &[(&str, &str, &str)],
 ) -> Result<ActionResult, AppError> {
     let mut saved = Vec::new();
 
     for (source, default_name, title) in files {
-        let Some(target) = save_dialog(default_name, title) else {
+        let Some(target) = save_dialog(window, state, default_name, title)? else {
             if saved.is_empty() {
                 return Err(AppError::Message("Save was canceled".into()));
             }
@@ -1257,6 +1336,8 @@ fn copy_resource_to(app: &AppHandle, source: &str, target: &Path) -> Result<(), 
 
 fn download_url_as(
     app: &AppHandle,
+    window: &tauri::WebviewWindow,
+    state: &AppState,
     key: &'static str,
     urls: &[String],
     title: &str,
@@ -1268,7 +1349,7 @@ fn download_url_as(
     }
 
     let file_name = file_name_from_url(first_url(urls)?)?;
-    let target = save_dialog(file_name, title)
+    let target = save_dialog(window, state, file_name, title)?
         .ok_or_else(|| AppError::Message("Save was canceled".into()))?;
     download_to_path_with_fallback(app, key, urls, &target)
 }
@@ -1445,11 +1526,32 @@ fn emit_download_progress(app: &AppHandle, key: &'static str, downloaded: u64, t
     );
 }
 
-fn save_dialog(default_name: &str, title: &str) -> Option<PathBuf> {
-    rfd::FileDialog::new()
-        .set_title(title)
-        .set_file_name(default_name)
-        .save_file()
+fn save_dialog(
+    window: &tauri::WebviewWindow,
+    state: &AppState,
+    default_name: &str,
+    title: &str,
+) -> Result<Option<PathBuf>, AppError> {
+    with_native_dialog(window, state, || {
+        rfd::FileDialog::new()
+            .set_parent(window)
+            .set_title(title)
+            .set_file_name(default_name)
+            .save_file()
+    })
+}
+
+fn pick_folder_dialog(
+    window: &tauri::WebviewWindow,
+    state: &AppState,
+    title: &str,
+) -> Result<Option<PathBuf>, AppError> {
+    with_native_dialog(window, state, || {
+        rfd::FileDialog::new()
+            .set_parent(window)
+            .set_title(title)
+            .pick_folder()
+    })
 }
 
 fn file_name_from_url(url: &str) -> Result<&str, AppError> {
@@ -2103,6 +2205,26 @@ mod tests {
     fn safe_file_name_strips_parent_paths() {
         assert_eq!(safe_file_name("../model.nb"), "model.nb");
         assert_eq!(safe_file_name(""), "converted_model.nb");
+    }
+
+    #[test]
+    fn native_dialog_lock_rejects_overlapping_dialogs() {
+        let state = AppState {
+            settings: Mutex::new(Settings::default()),
+            output_folder: Mutex::new(None),
+            capture_lock: Mutex::new(()),
+            native_dialog_lock: Mutex::new(()),
+        };
+
+        let first_dialog = lock_native_dialog(&state).unwrap();
+        let second_dialog = lock_native_dialog(&state);
+        assert!(matches!(
+            second_dialog,
+            Err(AppError::Message(message)) if message == "A native file dialog is already open"
+        ));
+
+        drop(first_dialog);
+        assert!(lock_native_dialog(&state).is_ok());
     }
 
     #[test]
