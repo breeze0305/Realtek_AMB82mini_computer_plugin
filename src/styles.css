@@ -1017,6 +1017,7 @@ dd {
   position: fixed;
   left: 24px;
   bottom: 20px;
+  pointer-events: none;
 }
 
 .feedbackToast {

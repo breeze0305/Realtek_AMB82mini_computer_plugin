@@ -46,7 +46,7 @@ This section is the authoritative source map for the current frontend. Some olde
   - `CameraView.tsx`: camera page UI.
   - `ConverterView.tsx`: model converter page UI.
   - `AnnotationView.tsx`: object detection labeling UI, including folder loading, class management, image navigation, box drawing/moving/resizing, and current-image reset.
-  - `NetworkStatus.tsx`: online/offline status indicator.
+  - `NetworkStatus.tsx`: global online/offline status indicator fixed to the lower-left corner of every view.
 - `src/styles.css`
   - Shared styling for shell, header, home cards, settings, camera, converter, annotation workspace, toast, and network status.
 
@@ -550,7 +550,7 @@ npm.cmd run tauri build
 基本測試：
 
 1. 啟動 exe，不出現黑色 terminal。
-2. 視窗可以調整大小與最大化；縮小到 `1120 × 640` 後不能再縮小，首頁卡片仍維持雙欄排列。
+2. 視窗可以調整大小與最大化；縮小到 `1120 × 640` 後不能再縮小，首頁卡片仍維持雙欄排列；外網狀態固定浮動在所有頁面的左下角，不會隨內容捲動。
 3. 首頁的 `01` 安裝檔與 `02` 程式碼／權重為兩張可整卡點擊的獨立入口，沒有額外「開啟」按鈕，序號不與圖示方塊重疊，並與一般功能卡之間有分隔線；兩個二級頁分別顯示 3 張與 5 張資源卡，且沒有跨分類頁籤。
 4. 語言切換正常。
 5. 右上設定按鈕可進入設定頁。

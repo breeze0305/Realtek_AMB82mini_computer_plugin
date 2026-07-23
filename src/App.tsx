@@ -912,9 +912,7 @@ function App() {
         />
       )}
 
-      {view !== "settings" && view !== "converter" && view !== "annotator" && (
-        <NetworkStatus floating={view === "camera"} internetConnected={internetConnected} t={t} />
-      )}
+      <NetworkStatus internetConnected={internetConnected} t={t} />
     </main>
   );
 }

@@ -1,14 +1,17 @@
 import { Wifi, WifiOff } from "lucide-react";
 
 type NetworkStatusProps = {
-  floating?: boolean;
   internetConnected: boolean;
   t: Record<string, string>;
 };
 
-export function NetworkStatus({ floating = false, internetConnected, t }: NetworkStatusProps) {
+export function NetworkStatus({ internetConnected, t }: NetworkStatusProps) {
   return (
-    <div className={`networkStatus ${internetConnected ? "online" : "offline"} ${floating ? "isFloating" : ""}`}>
+    <div
+      className={`networkStatus isFloating ${internetConnected ? "online" : "offline"}`}
+      role="status"
+      aria-live="polite"
+    >
       {internetConnected ? <Wifi size={17} /> : <WifiOff size={17} />}
       {internetConnected ? t.online : t.offline}
     </div>
