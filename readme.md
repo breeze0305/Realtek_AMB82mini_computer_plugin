@@ -12,10 +12,6 @@ Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助
 
 本專案由舊版 Python CLI 工具重構而來，保留原本的核心功能，但改以 Tauri + React 桌面介面重新設計。新版不再要求使用者安裝 Python、OpenCV 或其他開發環境，並把文字選單流程改成更直覺、可直接發佈的 Windows 應用程式。舊版程式碼仍保留在 `legacy/v2` 分支中。
 
-## 畫面預覽
-
-![Realtek AMB82-mini Computer Plugin screenshot](resource/screenshot.jpg)
-
 ## 主要功能
 
 - 取得 CH340/CH341 驅動安裝檔。
@@ -65,6 +61,8 @@ amb82-mini-computer-plugin.exe
 - `image_classification_singapore/img_class_cnn.nb`
 
 檔案取得功能會開啟 Windows 存檔視窗，使用者可自行指定儲存位置。
+
+首頁只保留一個「檔案與資源」入口。進入二級頁面後，可在「安裝檔」與「程式碼與權重」兩個頁籤之間切換；未來新增資源也會依類型放入對應頁籤。
 
 ### Arduino IDE 與 VLC
 

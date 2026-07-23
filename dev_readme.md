@@ -35,11 +35,13 @@ This section is the authoritative source map for the current frontend. Some olde
 - `src/converterUtils.ts`
   - Pure helpers: UVC option label, saved-photo text, converter API URL normalization, file-extension checks, `wait`, and API JSON parsing.
 - `src/homeCards.ts`
-  - Home menu card composition. Add or change home cards here, including the version-check card.
+  - Home and resource-library card composition. Resource definitions have an explicit installer/weight category so new files can be added without changing page JSX.
 - `src/components/`
   - `AppHeader.tsx`: app title, back button, language menu, settings entry.
+  - `CardGrid.tsx`: shared numbered card grid, download progress, running state, and split-action rendering.
   - `LinkPanel.tsx`: GitHub repository and AMB Preference link panel.
-  - `HomeView.tsx`: home grid/card/split-action rendering.
+  - `HomeView.tsx`: main-menu heading and the six primary home cards.
+  - `ResourceLibraryView.tsx`: secondary files/resources page with installer and code/weight tabs.
   - `SettingsView.tsx`: settings page UI, including auto update check, Preference version, UVC format, and reset.
   - `CameraView.tsx`: camera page UI.
   - `ConverterView.tsx`: model converter page UI.
@@ -73,10 +75,7 @@ Object detection annotation behavior:
 ## 重要檔案
 
 - `src/App.tsx`
-  - 前端主 UI。
-  - 多語系文字表。
-  - 主選單卡片。
-  - 語言切換。
+  - 前端 controller、頁面狀態、Tauri command 呼叫與各 View wiring。
   - 設定頁。
   - AMB 相機預覽與截圖流程。
   - Tauri command 呼叫。
@@ -129,20 +128,23 @@ Object detection annotation behavior:
 
 ### 主畫面
 
-主畫面由 `src/App.tsx` 的 `mainCards` 與 `fileCards` 組成。
+主畫面與資源分類由 `src/homeCards.ts` 的 `createHomeCardGroups` 組成。
 
-目前功能卡包含：
+首頁優先保留六張主要入口：
 
-- CH340/CH341 安裝檔
-- 手勢-自走車追蹤程式碼/權重
-- 影像分類權重（日本版本）
-- 影像分類權重（台灣版本）
-- Arduino IDE 安裝檔
-- VLC 安裝檔
-- 開啟 AmebaPro2 資料夾
 - AMB 相機畫面擷取
-- 模型轉換網站
+- 模型量化轉換
+- 物件偵測標記
+- 開啟 AmebaPro2 資料夾
+- 檔案與資源
 - 版本檢查
+
+「檔案與資源」會進入二級頁面，並以頁籤分成：
+
+- 安裝檔：CH340/CH341、Arduino IDE、VLC
+- 程式碼與權重：手勢追蹤、AMB 盒子追蹤、日本／台灣／新加坡影像分類權重
+
+首頁不直接展開個別下載卡。新增既有 command 的資源時，在 `src/homeCards.ts` 的 resource definition 加入項目並指定 `installers` 或 `weights`；若是新的 command，仍需同步新增 `RunningAction` 與 Rust 後端實作，網路下載還要補 `DownloadKey` 與進度事件。
 
 設定入口不是主選單卡片。設定按鈕位於右上角語言選單旁邊。
 
@@ -165,6 +167,7 @@ Object detection annotation behavior:
 | AMB盒子-自走車追蹤程式碼/權重 | `save_object_detection_box_resources_as` | `resource/object_detection_box/*` | `code.txt`, `yolov7_tiny.nb` |
 | 日本影像分類權重 | `save_image_model_japan_as` | `resource/image_classification_japan/img_class_cnn.nb` | `img_class_cnn.nb` |
 | 台灣影像分類權重 | `save_image_model_taiwan_as` | `resource/image_classification_taiwan/img_class_cnn.nb` | `img_class_cnn.nb` |
+| 新加坡影像分類權重 | `save_image_model_singapore_as` | `resource/image_classification_singapore/img_class_cnn.nb` | `img_class_cnn.nb` |
 | Arduino IDE | `download_arduino_ide_as` | Arduino 官方下載 URL | URL 檔名 |
 | Arduino IDE 自動安裝 | `download_and_install_arduino_ide` | Arduino MSI URL | temp 目錄 |
 | VLC | `download_vlc_as` | VLC 下載 URL | URL 檔名 |
@@ -172,7 +175,7 @@ Object detection annotation behavior:
 
 注意：
 
-- `01` 到 `04` 使用內嵌資源，不需要外網。
+- CH340/CH341 與「程式碼與權重」頁籤內的資源使用內嵌檔案，不需要外網。
 - Arduino / VLC 需要外網，無外網時 UI 會停用。
 - Arduino / VLC 的卡片都有 split button，主按鈕下載，旁邊選單自動安裝。
 - VLC 自動安裝會下載 `vlc-3.0.23-win32.exe` 到 temp，然後用 `/S` 靜默安裝。
@@ -313,7 +316,7 @@ Reset：
 
 ### 新增主選單卡片
 
-1. 如果是前端純操作，直接在 `src/App.tsx` 的 `mainCards` 新增項目。
+1. 如果是前端純操作，在 `src/homeCards.ts` 的 `createHomeCardGroups` 新增項目；主要入口放進 `mainCards`，檔案資源則加入對應的 `installers` 或 `weights` 分類。
 2. 如果需要 Rust 功能：
    - 在 `src-tauri/src/lib.rs` 新增 `#[tauri::command]` function。
    - 加到 `tauri::generate_handler![...]`。
@@ -549,16 +552,17 @@ npm.cmd run tauri build
 
 1. 啟動 exe，不出現黑色 terminal。
 2. 視窗可以調整大小與最大化；縮小到 `1120 × 640` 後不能再縮小，首頁卡片仍維持雙欄排列。
-3. 語言切換正常。
-4. 右上設定按鈕可進入設定頁。
-5. 設定頁切換 `YUY2`、`NV12`、`MJPG`、`H264`、`H265` 後，`settings.json` 有保存。
-6. 設定頁切換格式後，`UVCD_pram.h` 被覆寫為選定格式 `1`、其他格式 `0`。
-7. 主選單檔案另存功能正常。
-8. 無外網時下載與版本檢查停用。
-9. 有外網時 Arduino / VLC 下載進度正常。
-10. 相機頁可掃描 camera、預覽、截圖。
-11. 輸出圖片序號會接續既有最大編號。
-12. 相機頁開啟「選擇資料夾」時，對話框保持在主視窗上方，主視窗不可操作；取消或完成後恢復操作。
+3. 首頁只有一張「檔案與資源」入口；二級頁能切換 3 張安裝檔與 5 張程式碼／權重卡，返回首頁正常。
+4. 語言切換正常。
+5. 右上設定按鈕可進入設定頁。
+6. 設定頁切換 `YUY2`、`NV12`、`MJPG`、`H264`、`H265` 後，`settings.json` 有保存。
+7. 設定頁切換格式後，`UVCD_pram.h` 被覆寫為選定格式 `1`、其他格式 `0`。
+8. 資源二級頁的檔案另存功能正常。
+9. 無外網時 Arduino、VLC 與版本檢查停用，內嵌資源仍可取得。
+10. 有外網時 Arduino / VLC 下載進度與自動安裝選單正常。
+11. 相機頁可掃描 camera、預覽、截圖。
+12. 輸出圖片序號會接續既有最大編號。
+13. 相機頁開啟「選擇資料夾」時，對話框保持在主視窗上方，主視窗不可操作；取消或完成後恢復操作。
 
 ## 已知限制
 

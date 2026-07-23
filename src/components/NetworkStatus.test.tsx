@@ -17,4 +17,12 @@ describe("NetworkStatus", () => {
 
     expect(screen.getByText("Offline")).toHaveClass("offline");
   });
+
+  it("only uses the floating layout when requested", () => {
+    const { rerender } = render(<NetworkStatus internetConnected t={copy} />);
+
+    expect(screen.getByText("Online")).not.toHaveClass("isFloating");
+    rerender(<NetworkStatus floating internetConnected t={copy} />);
+    expect(screen.getByText("Online")).toHaveClass("isFloating");
+  });
 });

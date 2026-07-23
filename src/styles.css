@@ -285,6 +285,70 @@ button:disabled {
   font-size: 23px;
 }
 
+.resourceLibrarySection {
+  align-content: start;
+}
+
+.resourceTabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 6px;
+  border-radius: 8px;
+  background: #e8e5de;
+}
+
+.resourceTabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #59645f;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.resourceTabs button:hover,
+.resourceTabs button:focus-visible {
+  color: #0f5b52;
+  background: rgba(255, 253, 248, 0.72);
+}
+
+.resourceTabs button.isActive {
+  border-color: #d8d1c4;
+  color: #0f5b52;
+  background: #fffdf8;
+  box-shadow: 0 2px 8px rgba(31, 47, 45, 0.08);
+}
+
+.resourceTabs span {
+  display: inline-grid;
+  min-width: 25px;
+  height: 25px;
+  place-items: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  color: #52615c;
+  background: #d9ddd8;
+  font-size: 12px;
+}
+
+.resourceTabs button.isActive span {
+  color: #fffaf0;
+  background: #0f766e;
+}
+
+.resourceCategoryHint {
+  margin: -4px 2px 0;
+  color: #66716d;
+  font-size: 14px;
+}
+
 .menuGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -905,10 +969,9 @@ dd {
 }
 
 .networkStatus {
-  position: fixed;
-  left: 24px;
-  bottom: 20px;
+  position: static;
   z-index: 40;
+  justify-self: start;
   min-height: 38px;
   padding: 0 13px;
   border: 1px solid #d8d1c4;
@@ -917,6 +980,12 @@ dd {
   box-shadow: 0 8px 24px rgba(35, 48, 47, 0.08);
   font-size: 13px;
   backdrop-filter: blur(8px);
+}
+
+.networkStatus.isFloating {
+  position: fixed;
+  left: 24px;
+  bottom: 20px;
 }
 
 .feedbackToast {

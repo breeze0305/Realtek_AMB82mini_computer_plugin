@@ -22,8 +22,9 @@ import { ConverterView } from "./components/ConverterView";
 import { HomeView } from "./components/HomeView";
 import { LinkPanel } from "./components/LinkPanel";
 import { NetworkStatus } from "./components/NetworkStatus";
+import { ResourceLibraryView } from "./components/ResourceLibraryView";
 import { SettingsView } from "./components/SettingsView";
-import { createHomeCards } from "./homeCards";
+import { createHomeCardGroups } from "./homeCards";
 import type {
   ActionResult,
   AppSettings,
@@ -39,6 +40,7 @@ import type {
   Language,
   ModelType,
   PreferenceVersion,
+  ResourceCategory,
   RunningAction,
   SettingsResetResult,
   UvcdFormat,
@@ -118,7 +120,8 @@ function App() {
   const [isCameraBusy, setIsCameraBusy] = useState(false);
   const [cameraOperationGate] = useState(() => createOperationGate(setIsCameraBusy));
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
-  const [openActionMenu, setOpenActionMenu] = useState<"arduino" | "vlc" | null>(null);
+  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
+  const [resourceCategory, setResourceCategory] = useState<ResourceCategory>("installers");
   const [lastSaved, setLastSaved] = useState("");
   const [converterModels, setConverterModels] = useState<Record<ModelType, ConverterModel>>(converterModelDefaults);
   const [converterMaxFileSizeMb, setConverterMaxFileSizeMb] = useState(120);
@@ -361,9 +364,17 @@ function App() {
     setView("camera");
   }
 
+  function openResourcesView() {
+    cancelModelConversionRequest();
+    stopCamera();
+    setOpenActionMenu(null);
+    setView("resources");
+  }
+
   function openSettingsView() {
     cancelModelConversionRequest();
     stopCamera();
+    setOpenActionMenu(null);
     setView("settings");
   }
 
@@ -748,13 +759,14 @@ function App() {
     }
   }
 
-  const mainCards = createHomeCards({
+  const { installerCards, mainCards, weightCards } = createHomeCardGroups({
     dashboard,
     internetConnected,
     language,
     onOpenAnnotator: () => void openAnnotationView(),
     onOpenCamera: () => void openCameraView(),
     onOpenConverter: () => void openConverterView(),
+    onOpenResources: () => void openResourcesView(),
     onOpenVersionUpdate: () => void openUrl(RELEASES_URL),
     onVersionChecked: rememberVersionCheck,
     runAction,
@@ -777,19 +789,23 @@ function App() {
           languageMenuRef={languageMenuRef}
           onBackHome={() => {
             stopCamera();
+            setOpenActionMenu(null);
             setView("home");
           }}
           onChangeLanguage={(nextLanguage) => void changeLanguage(nextLanguage)}
           onCloseLanguageMenu={() => setIsLanguageMenuOpen(false)}
           onOpenSettings={() => void openSettingsView()}
-          onSettingsBack={() => setView("home")}
+          onSettingsBack={() => {
+            setOpenActionMenu(null);
+            setView("home");
+          }}
           onToggleLanguageMenu={() => setIsLanguageMenuOpen((current) => !current)}
           t={t}
           view={view}
         />
       )}
 
-      {view !== "settings" && view !== "converter" && view !== "annotator" && (
+      {(view === "home" || view === "camera") && (
         <LinkPanel
           onCopyText={(text, message) => void copyText(text, message)}
           onOpenUrl={(url) => void openUrl(url)}
@@ -811,6 +827,21 @@ function App() {
           running={running}
           setOpenActionMenu={setOpenActionMenu}
           t={t}
+        />
+      )}
+
+      {view === "resources" && (
+        <ResourceLibraryView
+          activeCategory={resourceCategory}
+          downloadProgress={downloadProgress}
+          installerCards={installerCards}
+          isDownloadKey={isDownloadKey}
+          onSelectCategory={setResourceCategory}
+          openActionMenu={openActionMenu}
+          running={running}
+          setOpenActionMenu={setOpenActionMenu}
+          t={t}
+          weightCards={weightCards}
         />
       )}
 
@@ -884,7 +915,7 @@ function App() {
       )}
 
       {view !== "settings" && view !== "converter" && view !== "annotator" && (
-        <NetworkStatus internetConnected={internetConnected} t={t} />
+        <NetworkStatus floating={view === "camera"} internetConnected={internetConnected} t={t} />
       )}
     </main>
   );

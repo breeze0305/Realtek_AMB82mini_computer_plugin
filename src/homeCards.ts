@@ -1,4 +1,5 @@
 import {
+  BrainCircuit,
   Camera,
   CheckCircle2,
   Download,
@@ -6,23 +7,42 @@ import {
   FileArchive,
   FolderOpen,
   PackageCheck,
+  PackageOpen,
   RefreshCcw,
   Tags,
 } from "lucide-react";
 
+import type { HomeCard } from "./components/CardGrid";
 import { installActionLabels } from "./i18n";
-import type { HomeCard } from "./components/HomeView";
-import type { ActionResult, Dashboard, DownloadResult, Language, RunningAction, VersionCheck } from "./types";
+import type {
+  ActionResult,
+  Dashboard,
+  DownloadResult,
+  Language,
+  ResourceCategory,
+  RunningAction,
+  VersionCheck,
+} from "./types";
 
 type RunAction = <T>(key: Exclude<RunningAction, null>, command: string, next: (result: T) => string) => Promise<void>;
 
-type CreateHomeCardsParams = {
+type ResourceCardDefinition = {
+  category: ResourceCategory;
+  command: string;
+  detail: string;
+  disabled: boolean;
+  key: Exclude<RunningAction, null>;
+  title: string;
+};
+
+type CreateHomeCardGroupsParams = {
   dashboard: Dashboard | null;
   internetConnected: boolean;
   language: Language;
   onOpenAnnotator: () => void;
   onOpenCamera: () => void;
   onOpenConverter: () => void;
+  onOpenResources: () => void;
   onOpenVersionUpdate: () => void;
   onVersionChecked: (result: VersionCheck) => void;
   runAction: RunAction;
@@ -30,114 +50,135 @@ type CreateHomeCardsParams = {
   versionCheck: VersionCheck | null;
 };
 
-export function createHomeCards({
+export type HomeCardGroups = {
+  installerCards: HomeCard[];
+  mainCards: HomeCard[];
+  weightCards: HomeCard[];
+};
+
+export function createHomeCardGroups({
   dashboard,
   internetConnected,
   language,
   onOpenAnnotator,
   onOpenCamera,
   onOpenConverter,
+  onOpenResources,
   onOpenVersionUpdate,
   onVersionChecked,
   runAction,
   t,
   versionCheck,
-}: CreateHomeCardsParams): HomeCard[] {
+}: CreateHomeCardGroupsParams): HomeCardGroups {
   const hasVersionUpdate = versionCheck !== null && !versionCheck.is_latest && !versionCheck.is_beta;
-  const fileCards = [
+  const resourceDefinitions: ResourceCardDefinition[] = [
     {
+      category: "installers",
       title: t.driver,
       detail: "CH341SER.EXE",
       command: "save_driver_as",
-      key: "driver" as const,
+      key: "driver",
       disabled: false,
     },
     {
+      category: "installers",
       title: t.arduino,
       detail: "arduino-ide_2.3.8_Windows_64bit.exe",
       command: "download_arduino_ide_as",
-      key: "arduino" as const,
+      key: "arduino",
       disabled: !internetConnected,
     },
     {
+      category: "installers",
       title: t.vlc,
       detail: "vlc-3.0.23-win32.exe",
       command: "download_vlc_as",
-      key: "vlc" as const,
+      key: "vlc",
       disabled: !internetConnected,
     },
     {
+      category: "weights",
       title: t.hand,
       detail: "hand_code.txt / yolov7_tiny.nb",
       command: "save_hand_resources_as",
-      key: "hand" as const,
+      key: "hand",
       disabled: false,
     },
     {
+      category: "weights",
       title: t.objectBoxTracking,
       detail: "code.txt / yolov7_tiny.nb",
       command: "save_object_detection_box_resources_as",
-      key: "box" as const,
+      key: "box",
       disabled: false,
     },
     {
+      category: "weights",
       title: t.japanModel,
       detail: "img_class_cnn.nb(box/money/mouse)",
       command: "save_image_model_japan_as",
-      key: "japan" as const,
+      key: "japan",
       disabled: false,
     },
     {
+      category: "weights",
       title: t.taiwanModel,
       detail: "img_class_cnn.nb(box/money/mouse)",
       command: "save_image_model_taiwan_as",
-      key: "taiwan" as const,
+      key: "taiwan",
       disabled: false,
     },
     {
+      category: "weights",
       title: t.singaporeModel,
       detail: "img_class_cnn.nb(box/money/mouse)",
       command: "save_image_model_singapore_as",
-      key: "singapore" as const,
+      key: "singapore",
       disabled: false,
     },
   ];
 
-  return [
-    ...fileCards.map((card) => {
-      const action = () =>
-        void runAction<ActionResult | DownloadResult>(
-          card.key,
-          card.command,
-          (result) => result.path ?? ("message" in result ? result.message : ""),
-        );
+  function createResourceCard(card: ResourceCardDefinition): HomeCard {
+    const action = () =>
+      void runAction<ActionResult | DownloadResult>(
+        card.key,
+        card.command,
+        (result) => result.path ?? ("message" in result ? result.message : ""),
+      );
 
-      return {
-        title: card.title,
-        detail: card.detail,
-        icon: PackageCheck,
-        action,
-        menuActions:
-          card.key === "arduino" || card.key === "vlc"
-            ? [
-                {
-                  label: installActionLabels[language].autoInstall,
-                  action: () =>
-                    void runAction<DownloadResult>(
-                      card.key,
-                      card.key === "arduino" ? "download_and_install_arduino_ide" : "download_and_install_vlc",
-                      (result) => result.path,
-                    ),
-                },
-              ]
-            : undefined,
-        label: t.save,
-        disabled: card.disabled,
-        key: card.key,
-        actionIcon: Download,
-      };
-    }),
+    return {
+      id: `resource-${card.key}`,
+      title: card.title,
+      detail: card.detail,
+      icon: card.category === "installers" ? PackageCheck : BrainCircuit,
+      action,
+      menuActions:
+        card.key === "arduino" || card.key === "vlc"
+          ? [
+              {
+                label: installActionLabels[language].autoInstall,
+                action: () =>
+                  void runAction<DownloadResult>(
+                    card.key,
+                    card.key === "arduino" ? "download_and_install_arduino_ide" : "download_and_install_vlc",
+                    (result) => result.path,
+                  ),
+              },
+            ]
+          : undefined,
+      label: t.save,
+      disabled: card.disabled,
+      key: card.key,
+      actionIcon: Download,
+    };
+  }
+
+  const installerCards = resourceDefinitions.filter((card) => card.category === "installers").map(createResourceCard);
+  const weightCards = resourceDefinitions.filter((card) => card.category === "weights").map(createResourceCard);
+
+  const mainCards: HomeCard[] = [
     {
+      id: "camera",
       title: t.camera,
       detail: "",
       icon: Camera,
@@ -146,9 +187,31 @@ export function createHomeCards({
       disabled: false,
       key: null,
       actionIcon: CheckCircle2,
-      menuActions: undefined,
     },
     {
+      id: "converter",
+      title: t.modelConverter,
+      detail: "",
+      icon: FileArchive,
+      action: onOpenConverter,
+      label: t.open,
+      disabled: !internetConnected,
+      key: null,
+      actionIcon: CheckCircle2,
+    },
+    {
+      id: "annotator",
+      title: t.objectAnnotator,
+      detail: "",
+      icon: Tags,
+      action: onOpenAnnotator,
+      label: t.open,
+      disabled: false,
+      key: null,
+      actionIcon: CheckCircle2,
+    },
+    {
+      id: "realtek-folder",
       title: t.folder,
       detail: "",
       icon: FolderOpen,
@@ -158,31 +221,20 @@ export function createHomeCards({
       disabled: false,
       key: "folder",
       actionIcon: CheckCircle2,
-      menuActions: undefined,
     },
     {
-      title: t.modelConverter,
-      detail: "",
-      icon: FileArchive,
-      action: onOpenConverter,
-      label: t.open,
-      disabled: !internetConnected,
-      key: null,
-      actionIcon: CheckCircle2,
-      menuActions: undefined,
-    },
-    {
-      title: t.objectAnnotator,
-      detail: "",
-      icon: Tags,
-      action: onOpenAnnotator,
+      id: "resources",
+      title: t.resourceLibrary,
+      detail: t.resourceLibraryDetail,
+      icon: PackageOpen,
+      action: onOpenResources,
       label: t.open,
       disabled: false,
       key: null,
       actionIcon: CheckCircle2,
-      menuActions: undefined,
     },
     {
+      id: "version",
       title: t.version,
       detail: dashboard ? `v${dashboard.metadata.version}` : "",
       icon: RefreshCcw,
@@ -199,7 +251,12 @@ export function createHomeCards({
       disabled: !internetConnected,
       key: "version",
       actionIcon: hasVersionUpdate ? ExternalLink : CheckCircle2,
-      menuActions: undefined,
     },
   ];
+
+  return {
+    installerCards,
+    mainCards,
+    weightCards,
+  };
 }
