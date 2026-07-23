@@ -28,6 +28,7 @@ export type CardGridProps = {
   openActionMenu: ActionMenuKey | null;
   running: RunningAction;
   setOpenActionMenu: Dispatch<SetStateAction<ActionMenuKey | null>>;
+  startIndex?: number;
   t: Record<string, string>;
 };
 
@@ -38,6 +39,7 @@ export function CardGrid({
   openActionMenu,
   running,
   setOpenActionMenu,
+  startIndex = 1,
   t,
 }: CardGridProps) {
   return (
@@ -64,7 +66,7 @@ export function CardGrid({
             key={card.id}
             style={progressStyle}
           >
-            <span className="cardIndex">{String(index + 1).padStart(2, "0")}</span>
+            <span className="cardIndex">{String(startIndex + index).padStart(2, "0")}</span>
             <div className="cardIcon">
               <Icon size={24} />
             </div>

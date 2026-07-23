@@ -1,6 +1,6 @@
 export type Language = "zh_TW" | "en_US" | "ja_JP";
-export type View = "home" | "resources" | "camera" | "settings" | "converter" | "annotator";
 export type ResourceCategory = "installers" | "weights";
+export type View = "home" | ResourceCategory | "camera" | "settings" | "converter" | "annotator";
 export type UvcdFormat = "YUY2" | "NV12" | "MJPG" | "H264" | "H265";
 export type PreferenceVersion = "release" | "beta";
 export type ModelType = "yolo" | "classification";

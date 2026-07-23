@@ -42,7 +42,7 @@ type CreateHomeCardGroupsParams = {
   onOpenAnnotator: () => void;
   onOpenCamera: () => void;
   onOpenConverter: () => void;
-  onOpenResources: () => void;
+  onOpenResourceCategory: (category: ResourceCategory) => void;
   onOpenVersionUpdate: () => void;
   onVersionChecked: (result: VersionCheck) => void;
   runAction: RunAction;
@@ -53,6 +53,7 @@ type CreateHomeCardGroupsParams = {
 export type HomeCardGroups = {
   installerCards: HomeCard[];
   mainCards: HomeCard[];
+  resourceEntryCards: HomeCard[];
   weightCards: HomeCard[];
 };
 
@@ -63,7 +64,7 @@ export function createHomeCardGroups({
   onOpenAnnotator,
   onOpenCamera,
   onOpenConverter,
-  onOpenResources,
+  onOpenResourceCategory,
   onOpenVersionUpdate,
   onVersionChecked,
   runAction,
@@ -176,6 +177,31 @@ export function createHomeCardGroups({
   const installerCards = resourceDefinitions.filter((card) => card.category === "installers").map(createResourceCard);
   const weightCards = resourceDefinitions.filter((card) => card.category === "weights").map(createResourceCard);
 
+  const resourceEntryCards: HomeCard[] = [
+    {
+      id: "resource-installers",
+      title: t.installerFiles,
+      detail: t.installerFilesSummary,
+      icon: PackageOpen,
+      action: () => onOpenResourceCategory("installers"),
+      label: t.open,
+      disabled: false,
+      key: null,
+      actionIcon: CheckCircle2,
+    },
+    {
+      id: "resource-weights",
+      title: t.modelResources,
+      detail: t.modelResourcesSummary,
+      icon: BrainCircuit,
+      action: () => onOpenResourceCategory("weights"),
+      label: t.open,
+      disabled: false,
+      key: null,
+      actionIcon: CheckCircle2,
+    },
+  ];
+
   const mainCards: HomeCard[] = [
     {
       id: "camera",
@@ -223,17 +249,6 @@ export function createHomeCardGroups({
       actionIcon: CheckCircle2,
     },
     {
-      id: "resources",
-      title: t.resourceLibrary,
-      detail: t.resourceLibraryDetail,
-      icon: PackageOpen,
-      action: onOpenResources,
-      label: t.open,
-      disabled: false,
-      key: null,
-      actionIcon: CheckCircle2,
-    },
-    {
       id: "version",
       title: t.version,
       detail: dashboard ? `v${dashboard.metadata.version}` : "",
@@ -257,6 +272,7 @@ export function createHomeCardGroups({
   return {
     installerCards,
     mainCards,
+    resourceEntryCards,
     weightCards,
   };
 }

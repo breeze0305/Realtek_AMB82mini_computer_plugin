@@ -289,58 +289,32 @@ button:disabled {
   align-content: start;
 }
 
-.resourceTabs {
+.homeResourceEntries .menuCard {
+  min-height: 92px;
+  padding-block: 12px;
+  border-color: #bfd7cd;
+  background: linear-gradient(135deg, rgba(220, 238, 230, 0.58), rgba(255, 253, 248, 0.3)), #fffdf8;
+}
+
+.homeResourceEntries .cardIcon {
+  background: #cfe8de;
+}
+
+.homeSectionDivider {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 6px;
-  border-radius: 8px;
-  background: #e8e5de;
-}
-
-.resourceTabs button {
-  display: inline-flex;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 46px;
-  padding: 0 16px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  color: #59645f;
-  background: transparent;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.resourceTabs button:hover,
-.resourceTabs button:focus-visible {
-  color: #0f5b52;
-  background: rgba(255, 253, 248, 0.72);
-}
-
-.resourceTabs button.isActive {
-  border-color: #d8d1c4;
-  color: #0f5b52;
-  background: #fffdf8;
-  box-shadow: 0 2px 8px rgba(31, 47, 45, 0.08);
-}
-
-.resourceTabs span {
-  display: inline-grid;
-  min-width: 25px;
-  height: 25px;
-  place-items: center;
-  padding: 0 7px;
-  border-radius: 999px;
-  color: #52615c;
-  background: #d9ddd8;
+  gap: 12px;
+  color: #69736f;
   font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
-.resourceTabs button.isActive span {
-  color: #fffaf0;
-  background: #0f766e;
+.homeSectionDivider::before,
+.homeSectionDivider::after {
+  border-top: 1px solid #d6d0c4;
+  content: "";
 }
 
 .resourceCategoryHint {

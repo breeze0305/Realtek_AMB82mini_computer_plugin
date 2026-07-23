@@ -40,8 +40,8 @@ This section is the authoritative source map for the current frontend. Some olde
   - `AppHeader.tsx`: app title, back button, language menu, settings entry.
   - `CardGrid.tsx`: shared numbered card grid, download progress, running state, and split-action rendering.
   - `LinkPanel.tsx`: GitHub repository and AMB Preference link panel.
-  - `HomeView.tsx`: main-menu heading and the six primary home cards.
-  - `ResourceLibraryView.tsx`: secondary files/resources page with installer and code/weight tabs.
+  - `HomeView.tsx`: main-menu heading, two numbered resource entries, divider, and five primary function cards.
+  - `ResourceLibraryView.tsx`: category-specific secondary page for either installers or code/model weights.
   - `SettingsView.tsx`: settings page UI, including auto update check, Preference version, UVC format, and reset.
   - `CameraView.tsx`: camera page UI.
   - `ConverterView.tsx`: model converter page UI.
@@ -130,27 +130,26 @@ Object detection annotation behavior:
 
 主畫面與資源分類由 `src/homeCards.ts` 的 `createHomeCardGroups` 組成。
 
-首頁優先保留六張主要入口：
+首頁最前方保留兩張獨立的資源入口：
+
+- `01` 安裝檔：CH340/CH341、Arduino IDE、VLC
+- `02` 程式碼與權重：手勢追蹤、AMB 盒子追蹤、日本／台灣／新加坡影像分類權重
+
+兩張資源入口之後以「主要功能」分隔線區隔，再排列五張一般功能卡：
 
 - AMB 相機畫面擷取
 - 模型量化轉換
 - 物件偵測標記
 - 開啟 AmebaPro2 資料夾
-- 檔案與資源
 - 版本檢查
 
-「檔案與資源」會進入二級頁面，並以頁籤分成：
-
-- 安裝檔：CH340/CH341、Arduino IDE、VLC
-- 程式碼與權重：手勢追蹤、AMB 盒子追蹤、日本／台灣／新加坡影像分類權重
-
-首頁不直接展開個別下載卡。新增既有 command 的資源時，在 `src/homeCards.ts` 的 resource definition 加入項目並指定 `installers` 或 `weights`；若是新的 command，仍需同步新增 `RunningAction` 與 Rust 後端實作，網路下載還要補 `DownloadKey` 與進度事件。
+兩張入口分別開啟自己的二級頁面，頁面內不提供跨分類頁籤。首頁不直接展開個別下載卡。新增既有 command 的資源時，在 `src/homeCards.ts` 的 resource definition 加入項目並指定 `installers` 或 `weights`；若是新的 command，仍需同步新增 `RunningAction` 與 Rust 後端實作，網路下載還要補 `DownloadKey` 與進度事件。
 
 設定入口不是主選單卡片。設定按鈕位於右上角語言選單旁邊。
 
 ### 語言切換
 
-- 前端文字在 `src/App.tsx` 的 `translations` 物件。
+- 前端文字在 `src/i18n.ts` 的 `translations` 物件。
 - 支援 `zh_TW`、`en_US`、`ja_JP`。
 - 語言狀態會透過 Rust `set_language` 存進 `%LOCALAPPDATA%\AMB82 Mini Computer Plugin\settings.json`。
 
@@ -175,7 +174,7 @@ Object detection annotation behavior:
 
 注意：
 
-- CH340/CH341 與「程式碼與權重」頁籤內的資源使用內嵌檔案，不需要外網。
+- CH340/CH341 與「程式碼與權重」頁面內的資源使用內嵌檔案，不需要外網。
 - Arduino / VLC 需要外網，無外網時 UI 會停用。
 - Arduino / VLC 的卡片都有 split button，主按鈕下載，旁邊選單自動安裝。
 - VLC 自動安裝會下載 `vlc-3.0.23-win32.exe` 到 temp，然後用 `/S` 靜默安裝。
@@ -316,7 +315,7 @@ Reset：
 
 ### 新增主選單卡片
 
-1. 如果是前端純操作，在 `src/homeCards.ts` 的 `createHomeCardGroups` 新增項目；主要入口放進 `mainCards`，檔案資源則加入對應的 `installers` 或 `weights` 分類。
+1. 如果是前端純操作，在 `src/homeCards.ts` 的 `createHomeCardGroups` 新增項目；一般功能放進 `mainCards`，資源入口放進 `resourceEntryCards`，個別檔案則加入對應的 `installers` 或 `weights` 分類。
 2. 如果需要 Rust 功能：
    - 在 `src-tauri/src/lib.rs` 新增 `#[tauri::command]` function。
    - 加到 `tauri::generate_handler![...]`。
@@ -552,7 +551,7 @@ npm.cmd run tauri build
 
 1. 啟動 exe，不出現黑色 terminal。
 2. 視窗可以調整大小與最大化；縮小到 `1120 × 640` 後不能再縮小，首頁卡片仍維持雙欄排列。
-3. 首頁只有一張「檔案與資源」入口；二級頁能切換 3 張安裝檔與 5 張程式碼／權重卡，返回首頁正常。
+3. 首頁的 `01` 安裝檔與 `02` 程式碼／權重為兩張獨立入口，與一般功能卡之間有分隔線；兩個二級頁分別顯示 3 張與 5 張資源卡，且沒有跨分類頁籤。
 4. 語言切換正常。
 5. 右上設定按鈕可進入設定頁。
 6. 設定頁切換 `YUY2`、`NV12`、`MJPG`、`H264`、`H265` 後，`settings.json` 有保存。

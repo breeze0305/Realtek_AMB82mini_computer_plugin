@@ -4,7 +4,7 @@ import { createHomeCardGroups } from "./homeCards";
 import { translations } from "./i18n";
 
 function createGroups(internetConnected: boolean) {
-  const onOpenResources = vi.fn();
+  const onOpenResourceCategory = vi.fn();
   const groups = createHomeCardGroups({
     dashboard: null,
     internetConnected,
@@ -12,7 +12,7 @@ function createGroups(internetConnected: boolean) {
     onOpenAnnotator: vi.fn(),
     onOpenCamera: vi.fn(),
     onOpenConverter: vi.fn(),
-    onOpenResources,
+    onOpenResourceCategory,
     onOpenVersionUpdate: vi.fn(),
     onVersionChecked: vi.fn(),
     runAction: async () => undefined,
@@ -20,26 +20,27 @@ function createGroups(internetConnected: boolean) {
     versionCheck: null,
   });
 
-  return { groups, onOpenResources };
+  return { groups, onOpenResourceCategory };
 }
 
 describe("createHomeCardGroups", () => {
-  it("keeps one resource entry on the home page and explicitly groups all resource cards", () => {
-    const { groups, onOpenResources } = createGroups(true);
+  it("creates two independent resource entries before the five main functions", () => {
+    const { groups, onOpenResourceCategory } = createGroups(true);
 
+    expect(groups.resourceEntryCards.map((card) => card.id)).toEqual(["resource-installers", "resource-weights"]);
     expect(groups.mainCards.map((card) => card.id)).toEqual([
       "camera",
       "converter",
       "annotator",
       "realtek-folder",
-      "resources",
       "version",
     ]);
     expect(groups.installerCards.map((card) => card.key)).toEqual(["driver", "arduino", "vlc"]);
     expect(groups.weightCards.map((card) => card.key)).toEqual(["hand", "box", "japan", "taiwan", "singapore"]);
 
-    groups.mainCards.find((card) => card.id === "resources")?.action();
-    expect(onOpenResources).toHaveBeenCalledOnce();
+    groups.resourceEntryCards[0].action();
+    groups.resourceEntryCards[1].action();
+    expect(onOpenResourceCategory.mock.calls).toEqual([["installers"], ["weights"]]);
   });
 
   it("keeps embedded resources available offline and disables only network installers", () => {

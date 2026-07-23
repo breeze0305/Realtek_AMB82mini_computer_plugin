@@ -121,7 +121,6 @@ function App() {
   const [cameraOperationGate] = useState(() => createOperationGate(setIsCameraBusy));
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
-  const [resourceCategory, setResourceCategory] = useState<ResourceCategory>("installers");
   const [lastSaved, setLastSaved] = useState("");
   const [converterModels, setConverterModels] = useState<Record<ModelType, ConverterModel>>(converterModelDefaults);
   const [converterMaxFileSizeMb, setConverterMaxFileSizeMb] = useState(120);
@@ -364,11 +363,11 @@ function App() {
     setView("camera");
   }
 
-  function openResourcesView() {
+  function openResourcesView(category: ResourceCategory) {
     cancelModelConversionRequest();
     stopCamera();
     setOpenActionMenu(null);
-    setView("resources");
+    setView(category);
   }
 
   function openSettingsView() {
@@ -759,14 +758,14 @@ function App() {
     }
   }
 
-  const { installerCards, mainCards, weightCards } = createHomeCardGroups({
+  const { installerCards, mainCards, resourceEntryCards, weightCards } = createHomeCardGroups({
     dashboard,
     internetConnected,
     language,
     onOpenAnnotator: () => void openAnnotationView(),
     onOpenCamera: () => void openCameraView(),
     onOpenConverter: () => void openConverterView(),
-    onOpenResources: () => void openResourcesView(),
+    onOpenResourceCategory: (category) => void openResourcesView(category),
     onOpenVersionUpdate: () => void openUrl(RELEASES_URL),
     onVersionChecked: rememberVersionCheck,
     runAction,
@@ -805,6 +804,21 @@ function App() {
         />
       )}
 
+      {status && <div className={`feedbackToast ${isFeedbackLeaving ? "leaving" : ""}`}>{status}</div>}
+
+      {view === "home" && (
+        <HomeView
+          downloadProgress={downloadProgress}
+          isDownloadKey={isDownloadKey}
+          mainCards={mainCards}
+          openActionMenu={openActionMenu}
+          resourceEntryCards={resourceEntryCards}
+          running={running}
+          setOpenActionMenu={setOpenActionMenu}
+          t={t}
+        />
+      )}
+
       {(view === "home" || view === "camera") && (
         <LinkPanel
           onCopyText={(text, message) => void copyText(text, message)}
@@ -816,32 +830,16 @@ function App() {
         />
       )}
 
-      {status && <div className={`feedbackToast ${isFeedbackLeaving ? "leaving" : ""}`}>{status}</div>}
-
-      {view === "home" && (
-        <HomeView
-          downloadProgress={downloadProgress}
-          isDownloadKey={isDownloadKey}
-          mainCards={mainCards}
-          openActionMenu={openActionMenu}
-          running={running}
-          setOpenActionMenu={setOpenActionMenu}
-          t={t}
-        />
-      )}
-
-      {view === "resources" && (
+      {(view === "installers" || view === "weights") && (
         <ResourceLibraryView
-          activeCategory={resourceCategory}
+          cards={view === "installers" ? installerCards : weightCards}
+          category={view}
           downloadProgress={downloadProgress}
-          installerCards={installerCards}
           isDownloadKey={isDownloadKey}
-          onSelectCategory={setResourceCategory}
           openActionMenu={openActionMenu}
           running={running}
           setOpenActionMenu={setOpenActionMenu}
           t={t}
-          weightCards={weightCards}
         />
       )}
 
