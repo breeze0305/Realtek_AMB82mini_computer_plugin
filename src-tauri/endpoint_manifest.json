@@ -5,16 +5,10 @@
   },
   "downloads": {
     "arduino_ide": {
-      "urls": [
-        "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.exe",
-        "https://github.com/arduino/arduino-ide/releases/download/2.3.8/arduino-ide_2.3.8_Windows_64bit.exe"
-      ]
+      "urls": ["https://downloads.arduino.cc/arduino-ide/arduino-ide_latest_Windows_64bit.exe"]
     },
     "arduino_ide_msi": {
-      "urls": [
-        "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.msi",
-        "https://github.com/arduino/arduino-ide/releases/download/2.3.8/arduino-ide_2.3.8_Windows_64bit.msi"
-      ]
+      "urls": ["https://downloads.arduino.cc/arduino-ide/arduino-ide_latest_Windows_64bit.msi"]
     },
     "vlc": {
       "urls": [

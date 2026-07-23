@@ -2130,11 +2130,25 @@ mod tests {
     }
 
     #[test]
+    fn endpoint_manifest_uses_latest_arduino_windows_installers() {
+        let manifest = endpoint_manifest().expect("endpoint manifest should parse");
+
+        assert_eq!(
+            manifest.downloads.arduino_ide.urls,
+            ["https://downloads.arduino.cc/arduino-ide/arduino-ide_latest_Windows_64bit.exe"]
+        );
+        assert_eq!(
+            manifest.downloads.arduino_ide_msi.urls,
+            ["https://downloads.arduino.cc/arduino-ide/arduino-ide_latest_Windows_64bit.msi"]
+        );
+    }
+
+    #[test]
     fn external_url_allow_list_accepts_expected_https_hosts() {
         let urls = [
             "https://github.com/breeze0305/Realtek_AMB82mini_plugin",
             "https://raw.githubusercontent.com/breeze0305/Realtek_AMB82mini_plugin/main/version.txt",
-            "https://downloads.arduino.cc/arduino-ide/arduino-ide_2.3.8_Windows_64bit.exe",
+            "https://downloads.arduino.cc/arduino-ide/arduino-ide_latest_Windows_64bit.exe",
             "https://get.videolan.org/vlc/3.0.23/win32/vlc-3.0.23-win32.exe",
             "https://mirror.twds.com.tw/videolan/vlc/3.0.23/win32/vlc-3.0.23-win32.exe",
             "https://modelconverter.ntnu-aiot.com/api/v1/conversions/123/download",

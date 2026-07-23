@@ -84,7 +84,7 @@ export function createHomeCardGroups({
     {
       category: "installers",
       title: t.arduino,
-      detail: "arduino-ide_2.3.8_Windows_64bit.exe",
+      detail: "arduino-ide_latest_Windows_64bit.exe",
       command: "download_arduino_ide_as",
       key: "arduino",
       disabled: !internetConnected,

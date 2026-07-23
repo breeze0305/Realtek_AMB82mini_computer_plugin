@@ -37,6 +37,9 @@ describe("createHomeCardGroups", () => {
       "version",
     ]);
     expect(groups.installerCards.map((card) => card.key)).toEqual(["driver", "arduino", "vlc"]);
+    expect(groups.installerCards.find((card) => card.key === "arduino")?.detail).toBe(
+      "arduino-ide_latest_Windows_64bit.exe",
+    );
     expect(groups.weightCards.map((card) => card.key)).toEqual(["hand", "box", "japan", "taiwan", "singapore"]);
 
     groups.resourceEntryCards[0].action();
