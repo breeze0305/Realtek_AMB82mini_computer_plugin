@@ -296,8 +296,65 @@ button:disabled {
   background: linear-gradient(135deg, rgba(220, 238, 230, 0.58), rgba(255, 253, 248, 0.3)), #fffdf8;
 }
 
+.homeResourceEntries .wholeCardAction {
+  grid-template-columns: 26px 54px minmax(0, 1fr) 22px;
+  width: 100%;
+  color: inherit;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.homeResourceEntries .wholeCardAction:hover,
+.homeResourceEntries .wholeCardAction:focus-visible {
+  border-color: #7eaf9d;
+  box-shadow: 0 8px 22px rgba(15, 91, 82, 0.12);
+  transform: translateY(-1px);
+}
+
+.homeResourceEntries .wholeCardAction:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, 0.24);
+  outline-offset: 2px;
+}
+
+.homeResourceEntries .wholeCardAction .cardIndex {
+  position: static;
+  align-self: start;
+  justify-self: center;
+  padding-top: 2px;
+}
+
+.wholeCardText,
+.wholeCardTitle,
+.wholeCardDetail {
+  display: block;
+}
+
+.wholeCardTitle {
+  margin: 0 0 7px;
+  color: #111817;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.wholeCardDetail {
+  overflow: hidden;
+  color: #66716d;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .homeResourceEntries .cardIcon {
   background: #cfe8de;
+}
+
+.wholeCardChevron {
+  justify-self: end;
+  color: #66827a;
 }
 
 .homeSectionDivider {

@@ -28,6 +28,7 @@ describe("createHomeCardGroups", () => {
     const { groups, onOpenResourceCategory } = createGroups(true);
 
     expect(groups.resourceEntryCards.map((card) => card.id)).toEqual(["resource-installers", "resource-weights"]);
+    expect(groups.resourceEntryCards.every((card) => card.wholeCardAction)).toBe(true);
     expect(groups.mainCards.map((card) => card.id)).toEqual([
       "camera",
       "converter",

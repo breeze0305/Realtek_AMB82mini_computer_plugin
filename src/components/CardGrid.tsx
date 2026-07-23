@@ -1,4 +1,4 @@
-import { ChevronDown, type LucideIcon, RefreshCcw } from "lucide-react";
+import { ChevronDown, ChevronRight, type LucideIcon, RefreshCcw } from "lucide-react";
 import type { CSSProperties, Dispatch, SetStateAction } from "react";
 
 import type { DownloadKey, RunningAction } from "../types";
@@ -19,6 +19,7 @@ export type HomeCard = {
     label: string;
   }>;
   title: string;
+  wholeCardAction?: boolean;
 };
 
 export type CardGridProps = {
@@ -57,6 +58,30 @@ export function CardGrid({
             : ({
                 "--card-progress": `${Math.max(4, Math.round(progress * 100))}%`,
               } as CSSProperties);
+
+        if (card.wholeCardAction) {
+          return (
+            <button
+              type="button"
+              className="menuCard wholeCardAction"
+              disabled={card.disabled}
+              key={card.id}
+              onClick={card.action}
+            >
+              <span className="cardIndex">{String(startIndex + index).padStart(2, "0")}</span>
+              <span className="cardIcon">
+                <Icon size={24} />
+              </span>
+              <span className="cardText wholeCardText">
+                <span className="wholeCardTitle">{card.title}</span>
+                {(card.disabled || card.detail) && (
+                  <span className="wholeCardDetail">{card.disabled ? t.unavailableOffline : card.detail}</span>
+                )}
+              </span>
+              <ChevronRight className="wholeCardChevron" size={20} aria-hidden="true" />
+            </button>
+          );
+        }
 
         return (
           <article

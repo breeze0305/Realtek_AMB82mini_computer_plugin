@@ -804,6 +804,17 @@ function App() {
         />
       )}
 
+      {(view === "home" || view === "camera") && (
+        <LinkPanel
+          onCopyText={(text, message) => void copyText(text, message)}
+          onOpenUrl={(url) => void openUrl(url)}
+          preferenceCopyMessage={PREFERENCE_COPY_MESSAGE}
+          realtekPackageUrl={dashboard?.metadata.realtek_package_url}
+          repository={dashboard?.metadata.repository}
+          t={t}
+        />
+      )}
+
       {status && <div className={`feedbackToast ${isFeedbackLeaving ? "leaving" : ""}`}>{status}</div>}
 
       {view === "home" && (
@@ -815,17 +826,6 @@ function App() {
           resourceEntryCards={resourceEntryCards}
           running={running}
           setOpenActionMenu={setOpenActionMenu}
-          t={t}
-        />
-      )}
-
-      {(view === "home" || view === "camera") && (
-        <LinkPanel
-          onCopyText={(text, message) => void copyText(text, message)}
-          onOpenUrl={(url) => void openUrl(url)}
-          preferenceCopyMessage={PREFERENCE_COPY_MESSAGE}
-          realtekPackageUrl={dashboard?.metadata.realtek_package_url}
-          repository={dashboard?.metadata.repository}
           t={t}
         />
       )}

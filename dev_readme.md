@@ -143,7 +143,7 @@ Object detection annotation behavior:
 - 開啟 AmebaPro2 資料夾
 - 版本檢查
 
-兩張入口分別開啟自己的二級頁面，頁面內不提供跨分類頁籤。首頁不直接展開個別下載卡。新增既有 command 的資源時，在 `src/homeCards.ts` 的 resource definition 加入項目並指定 `installers` 或 `weights`；若是新的 command，仍需同步新增 `RunningAction` 與 Rust 後端實作，網路下載還要補 `DownloadKey` 與進度事件。
+兩張入口的整張卡片都可點擊，不顯示額外的「開啟」按鈕，並分別開啟自己的二級頁面；頁面內不提供跨分類頁籤。首頁不直接展開個別下載卡。新增既有 command 的資源時，在 `src/homeCards.ts` 的 resource definition 加入項目並指定 `installers` 或 `weights`；若是新的 command，仍需同步新增 `RunningAction` 與 Rust 後端實作，網路下載還要補 `DownloadKey` 與進度事件。
 
 設定入口不是主選單卡片。設定按鈕位於右上角語言選單旁邊。
 
@@ -551,7 +551,7 @@ npm.cmd run tauri build
 
 1. 啟動 exe，不出現黑色 terminal。
 2. 視窗可以調整大小與最大化；縮小到 `1120 × 640` 後不能再縮小，首頁卡片仍維持雙欄排列。
-3. 首頁的 `01` 安裝檔與 `02` 程式碼／權重為兩張獨立入口，與一般功能卡之間有分隔線；兩個二級頁分別顯示 3 張與 5 張資源卡，且沒有跨分類頁籤。
+3. 首頁的 `01` 安裝檔與 `02` 程式碼／權重為兩張可整卡點擊的獨立入口，沒有額外「開啟」按鈕，序號不與圖示方塊重疊，並與一般功能卡之間有分隔線；兩個二級頁分別顯示 3 張與 5 張資源卡，且沒有跨分類頁籤。
 4. 語言切換正常。
 5. 右上設定按鈕可進入設定頁。
 6. 設定頁切換 `YUY2`、`NV12`、`MJPG`、`H264`、`H265` 後，`settings.json` 有保存。

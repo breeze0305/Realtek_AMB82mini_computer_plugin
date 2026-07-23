@@ -188,6 +188,7 @@ export function createHomeCardGroups({
       disabled: false,
       key: null,
       actionIcon: CheckCircle2,
+      wholeCardAction: true,
     },
     {
       id: "resource-weights",
@@ -199,6 +200,7 @@ export function createHomeCardGroups({
       disabled: false,
       key: null,
       actionIcon: CheckCircle2,
+      wholeCardAction: true,
     },
   ];
 
