@@ -102,6 +102,7 @@ Object detection annotation behavior:
 
 - `src-tauri/tauri.conf.json`
   - 視窗大小、bundle 設定、產品名稱、Tauri app version。
+  - 主視窗預設為 `1180 × 760`，最小為 `1120 × 640`；最小寬度會保持首頁卡片雙欄排列，並容納標註工作區的正常三欄版面。
 
 - `src-tauri/endpoint_manifest.json`
   - 外部端點集中設定。
@@ -547,7 +548,7 @@ npm.cmd run tauri build
 基本測試：
 
 1. 啟動 exe，不出現黑色 terminal。
-2. 視窗可以調整大小與最大化；縮小到最小尺寸時 responsive 版面仍正常。
+2. 視窗可以調整大小與最大化；縮小到 `1120 × 640` 後不能再縮小，首頁卡片仍維持雙欄排列。
 3. 語言切換正常。
 4. 右上設定按鈕可進入設定頁。
 5. 設定頁切換 `YUY2`、`NV12`、`MJPG`、`H264`、`H265` 後，`settings.json` 有保存。
