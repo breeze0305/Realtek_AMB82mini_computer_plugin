@@ -19,9 +19,7 @@ export function ResourceLibraryView({
   return (
     <section className="contentSection resourceLibrarySection">
       <h2>{category === "installers" ? t.installerFiles : t.modelResources}</h2>
-      <p className="resourceCategoryHint">
-        {category === "installers" ? t.installerFilesDetail : t.modelResourcesDetail}
-      </p>
+      {category === "installers" && <p className="resourceCategoryHint">{t.installerFilesDetail}</p>}
       <CardGrid
         cards={cards}
         downloadProgress={downloadProgress}

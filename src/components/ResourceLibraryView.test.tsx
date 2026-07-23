@@ -52,12 +52,13 @@ describe("ResourceLibraryView", () => {
   });
 
   it("renders the weight page independently and blocks actions while another resource operation is running", () => {
-    renderResourceLibrary("weights", "arduino");
+    const { container } = renderResourceLibrary("weights", "arduino");
 
     expect(screen.getByRole("heading", { name: "Code & Model Weights" })).toBeInTheDocument();
     const weightCard = screen.getByText("Weight card").closest("article");
     expect(weightCard?.querySelector("button")).toBeDisabled();
     expect(screen.queryByText("Installer card")).not.toBeInTheDocument();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(container.querySelector(".resourceCategoryHint")).not.toBeInTheDocument();
   });
 });
