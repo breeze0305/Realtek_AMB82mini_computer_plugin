@@ -5,16 +5,22 @@
   },
   "downloads": {
     "arduino_ide": {
-      "urls": ["https://downloads.arduino.cc/arduino-ide/arduino-ide_latest_Windows_64bit.exe"]
+      "urls": ["https://github.com/arduino/arduino-ide/releases/download/2.3.10/arduino-ide_2.3.10_Windows_64bit.exe"],
+      "sha256": "a8f3df0ac57c6b74aa1b1d22e5f202dc5ddb46663579d4e5108a69cc99b6f823",
+      "size": 158074632
     },
     "arduino_ide_msi": {
-      "urls": ["https://downloads.arduino.cc/arduino-ide/arduino-ide_latest_Windows_64bit.msi"]
+      "urls": ["https://github.com/arduino/arduino-ide/releases/download/2.3.10/arduino-ide_2.3.10_Windows_64bit.msi"],
+      "sha256": "aebbd1efeac5cfb02a6cad0d93af8221054fc983a5b3c5ce6da8a6bfb9425165",
+      "size": 167145472
     },
     "vlc": {
       "urls": [
         "https://mirror.twds.com.tw/videolan/vlc/3.0.23/win32/vlc-3.0.23-win32.exe",
         "https://get.videolan.org/vlc/3.0.23/win32/vlc-3.0.23-win32.exe"
-      ]
+      ],
+      "sha256": "ecc17f097ee0801f04faabb5ef9992ff00ea4c98c8fa005f6508ee74b41b6a53",
+      "size": 44568024
     }
   },
   "realtek_packages": {

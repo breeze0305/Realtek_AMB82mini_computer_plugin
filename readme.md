@@ -71,7 +71,11 @@ Arduino IDE 與 VLC 支援兩種方式：
 - 下載安裝檔到使用者指定位置。
 - 自動下載並啟動安裝流程。
 
-下載來源與 fallback URL 定義在 `src-tauri/endpoint_manifest.json`。
+Arduino IDE 或 VLC 第一次下載完成後，安裝檔會保留在應用程式的私有快取中。之後再次取得或安裝同一版本時，程式會先驗證快取檔案的 SHA-256；驗證通過便直接重用，不需重複下載，且可在離線時使用。若快取已損壞或遭修改，程式不會使用該檔案，並會在可連線時重新下載。
+
+Arduino IDE 會透過官方 release metadata 解析最新版安裝檔及其 SHA-256；VLC 使用專案設定的固定版本與可信 SHA-256。CH340/CH341 驅動仍隨程式內嵌，不需網路下載。
+
+下載來源、VLC 固定雜湊與 Arduino fallback 資訊定義在 `src-tauri/endpoint_manifest.json`。
 
 ### AMB Preference 與 UVC 格式
 
@@ -172,7 +176,7 @@ https://modelconverter.ntnu-aiot.com/
 
 ## 版本
 
-目前版本：`3.12.3`
+目前版本：`3.12.4`
 
 版本檢查來源：
 

@@ -87,7 +87,7 @@ export function createHomeCardGroups({
       detail: "arduino-ide_latest_Windows_64bit.exe",
       command: "download_arduino_ide_as",
       key: "arduino",
-      disabled: !internetConnected,
+      disabled: false,
     },
     {
       category: "installers",
@@ -95,7 +95,7 @@ export function createHomeCardGroups({
       detail: "vlc-3.0.23-win32.exe",
       command: "download_vlc_as",
       key: "vlc",
-      disabled: !internetConnected,
+      disabled: false,
     },
     {
       category: "weights",

@@ -47,14 +47,21 @@ describe("createHomeCardGroups", () => {
     expect(onOpenResourceCategory.mock.calls).toEqual([["installers"], ["weights"]]);
   });
 
-  it("keeps embedded resources available offline and disables only network installers", () => {
+  it("keeps installer and embedded resource cards available offline", () => {
     const { groups } = createGroups(false);
 
     expect(groups.installerCards.map((card) => [card.key, card.disabled])).toEqual([
       ["driver", false],
-      ["arduino", true],
-      ["vlc", true],
+      ["arduino", false],
+      ["vlc", false],
     ]);
     expect(groups.weightCards.every((card) => !card.disabled)).toBe(true);
+  });
+
+  it("still disables unrelated network-only functions while offline", () => {
+    const { groups } = createGroups(false);
+
+    expect(groups.mainCards.find((card) => card.id === "converter")?.disabled).toBe(true);
+    expect(groups.mainCards.find((card) => card.id === "version")?.disabled).toBe(true);
   });
 });

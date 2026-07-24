@@ -1,5 +1,6 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     cmp::Ordering,
     collections::{BTreeSet, HashMap},
@@ -20,6 +21,11 @@ const DEFAULT_LANGUAGE: &str = "zh_TW";
 const DEFAULT_UVCD_FORMAT: &str = "MJPG";
 const DEFAULT_PREFERENCE_VERSION: &str = "beta";
 const NATIVE_DIALOG_STATE_EVENT: &str = "native-dialog-state";
+const ARDUINO_LATEST_RELEASE_API: &str =
+    "https://api.github.com/repos/arduino/arduino-ide/releases/latest";
+const INSTALLER_CACHE_DIRECTORY: &str = "installer-cache/v1";
+const CACHE_METADATA_MAX_BYTES: u64 = 64 * 1024;
+const GITHUB_METADATA_MAX_BYTES: u64 = 2 * 1024 * 1024;
 const SUPPORTED_UVCD_FORMATS: &[&str] = &["YUY2", "NV12", "MJPG", "H264", "H265"];
 const SUPPORTED_PREFERENCE_VERSIONS: &[&str] = &["release", "beta"];
 const ALLOWED_EXTERNAL_URL_HOSTS: &[&str] = &[
@@ -190,9 +196,9 @@ struct EndpointManifest {
 
 #[derive(Clone, Debug, Deserialize)]
 struct DownloadManifest {
-    arduino_ide: UrlSet,
-    arduino_ide_msi: UrlSet,
-    vlc: UrlSet,
+    arduino_ide: VerifiedUrlSet,
+    arduino_ide_msi: VerifiedUrlSet,
+    vlc: VerifiedUrlSet,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -212,11 +218,109 @@ struct UrlSet {
     urls: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+struct VerifiedUrlSet {
+    urls: Vec<String>,
+    sha256: String,
+    size: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InstallerCacheKey {
+    ArduinoIdeExe,
+    ArduinoIdeMsi,
+    VlcExe,
+}
+
+impl InstallerCacheKey {
+    fn payload_file_name(self, sha256: &str) -> String {
+        match self {
+            Self::ArduinoIdeExe => format!("arduino-ide-windows-64bit-{sha256}.exe"),
+            Self::ArduinoIdeMsi => format!("arduino-ide-windows-64bit-{sha256}.msi"),
+            Self::VlcExe => format!("vlc-windows-32bit-{sha256}.exe"),
+        }
+    }
+
+    fn metadata_file_name(self) -> &'static str {
+        match self {
+            Self::ArduinoIdeExe => "arduino-ide-windows-64bit-exe.json",
+            Self::ArduinoIdeMsi => "arduino-ide-windows-64bit-msi.json",
+            Self::VlcExe => "vlc-windows-32bit.json",
+        }
+    }
+
+    fn progress_key(self) -> &'static str {
+        match self {
+            Self::ArduinoIdeExe | Self::ArduinoIdeMsi => "arduino",
+            Self::VlcExe => "vlc",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct InstallerMetadata {
+    file_name: String,
+    urls: Vec<String>,
+    sha256: String,
+    size: u64,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct GithubRelease {
+    tag_name: String,
+    assets: Vec<GithubReleaseAsset>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct GithubReleaseAsset {
+    name: String,
+    size: u64,
+    digest: Option<String>,
+    browser_download_url: String,
+}
+
+#[derive(Clone, Debug)]
+struct InstallerCachePaths {
+    root: PathBuf,
+    metadata: PathBuf,
+}
+
+impl InstallerCachePaths {
+    fn payload(&self, key: InstallerCacheKey, sha256: &str) -> PathBuf {
+        self.root.join(key.payload_file_name(sha256))
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CachedInstaller {
+    path: PathBuf,
+    metadata: InstallerMetadata,
+    bytes: u64,
+}
+
+enum ArduinoInstallerResolution {
+    Latest(InstallerMetadata),
+    CachedCandidate(InstallerMetadata),
+    Fallback(InstallerMetadata),
+}
+
+impl ArduinoInstallerResolution {
+    fn metadata(&self) -> &InstallerMetadata {
+        match self {
+            Self::Latest(metadata) | Self::CachedCandidate(metadata) | Self::Fallback(metadata) => {
+                metadata
+            }
+        }
+    }
+}
+
 struct AppState {
     settings: Mutex<Settings>,
     output_folder: Mutex<Option<PathBuf>>,
     capture_lock: Mutex<()>,
     native_dialog_lock: Mutex<()>,
+    arduino_installer_lock: Mutex<()>,
+    vlc_installer_lock: Mutex<()>,
 }
 
 fn lock_native_dialog(state: &AppState) -> Result<MutexGuard<'_, ()>, AppError> {
@@ -226,6 +330,20 @@ fn lock_native_dialog(state: &AppState) -> Result<MutexGuard<'_, ()>, AppError> 
             "A native file dialog is already open".into(),
         )),
         Err(TryLockError::Poisoned(error)) => Ok(error.into_inner()),
+    }
+}
+
+fn lock_installer_operation(state: &AppState, key: InstallerCacheKey) -> MutexGuard<'_, ()> {
+    let lock = match key {
+        InstallerCacheKey::ArduinoIdeExe | InstallerCacheKey::ArduinoIdeMsi => {
+            &state.arduino_installer_lock
+        }
+        InstallerCacheKey::VlcExe => &state.vlc_installer_lock,
+    };
+
+    match lock.lock() {
+        Ok(guard) => guard,
+        Err(error) => error.into_inner(),
     }
 }
 
@@ -329,6 +447,8 @@ pub fn run() {
             output_folder: Mutex::new(None),
             capture_lock: Mutex::new(()),
             native_dialog_lock: Mutex::new(()),
+            arduino_installer_lock: Mutex::new(()),
+            vlc_installer_lock: Mutex::new(()),
         })
         .setup(|app| {
             install_camera_permission_handler(app);
@@ -779,32 +899,36 @@ fn download_arduino_ide_as(
     window: tauri::WebviewWindow,
     state: tauri::State<AppState>,
 ) -> Result<DownloadResult, AppError> {
+    let key = InstallerCacheKey::ArduinoIdeExe;
+    let _installer_guard = lock_installer_operation(&state, key);
     let manifest = endpoint_manifest()?;
-    download_url_as(
-        &app,
+    let fallback = installer_metadata(&manifest.downloads.arduino_ide, key)?;
+    let resolution = resolve_arduino_installer(&app, key, &fallback);
+    let target = save_dialog(
         &window,
         &state,
-        "arduino",
-        &manifest.downloads.arduino_ide.urls,
+        &resolution.metadata().file_name,
         "Save Arduino IDE installer",
-    )
+    )?
+    .ok_or_else(|| AppError::Message("Save was canceled".into()))?;
+    let cached = obtain_arduino_installer(&app, key, resolution, &fallback)?;
+    copy_cached_installer_to(&app, key, &cached, &target)
 }
 
 #[tauri::command]
-fn download_and_install_arduino_ide(app: AppHandle) -> Result<DownloadResult, AppError> {
-    if !has_internet() {
-        return Err(AppError::Message(
-            "Internet connection is not available".into(),
-        ));
-    }
-
+fn download_and_install_arduino_ide(
+    app: AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<DownloadResult, AppError> {
+    let key = InstallerCacheKey::ArduinoIdeMsi;
+    let _installer_guard = lock_installer_operation(&state, key);
     let manifest = endpoint_manifest()?;
-    let urls = &manifest.downloads.arduino_ide_msi.urls;
-    let file_name = file_name_from_url(first_url(urls)?)?;
-    let target = std::env::temp_dir().join(file_name);
-    let result = download_to_path_with_fallback(&app, "arduino", urls, &target)?;
-    install_msi(&target)?;
-    Ok(result)
+    let fallback = installer_metadata(&manifest.downloads.arduino_ide_msi, key)?;
+    let resolution = resolve_arduino_installer(&app, key, &fallback);
+    let cached = obtain_arduino_installer(&app, key, resolution, &fallback)?;
+    install_msi(&cached.path)?;
+    emit_download_progress(&app, key.progress_key(), cached.bytes, Some(cached.bytes));
+    Ok(cached_installer_result(&cached))
 }
 
 #[tauri::command]
@@ -813,32 +937,29 @@ fn download_vlc_as(
     window: tauri::WebviewWindow,
     state: tauri::State<AppState>,
 ) -> Result<DownloadResult, AppError> {
+    let key = InstallerCacheKey::VlcExe;
+    let _installer_guard = lock_installer_operation(&state, key);
     let manifest = endpoint_manifest()?;
-    download_url_as(
-        &app,
-        &window,
-        &state,
-        "vlc",
-        &manifest.downloads.vlc.urls,
-        "Save VLC installer",
-    )
+    let metadata = installer_metadata(&manifest.downloads.vlc, key)?;
+    let target = save_dialog(&window, &state, &metadata.file_name, "Save VLC installer")?
+        .ok_or_else(|| AppError::Message("Save was canceled".into()))?;
+    let cached = ensure_cached_installer(&app, key, &metadata)?;
+    copy_cached_installer_to(&app, key, &cached, &target)
 }
 
 #[tauri::command]
-fn download_and_install_vlc(app: AppHandle) -> Result<DownloadResult, AppError> {
-    if !has_internet() {
-        return Err(AppError::Message(
-            "Internet connection is not available".into(),
-        ));
-    }
-
+fn download_and_install_vlc(
+    app: AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<DownloadResult, AppError> {
+    let key = InstallerCacheKey::VlcExe;
+    let _installer_guard = lock_installer_operation(&state, key);
     let manifest = endpoint_manifest()?;
-    let urls = &manifest.downloads.vlc.urls;
-    let file_name = file_name_from_url(first_url(urls)?)?;
-    let target = std::env::temp_dir().join(file_name);
-    let result = download_to_path_with_fallback(&app, "vlc", urls, &target)?;
-    install_exe_silent(&target)?;
-    Ok(result)
+    let metadata = installer_metadata(&manifest.downloads.vlc, key)?;
+    let cached = ensure_cached_installer(&app, key, &metadata)?;
+    install_exe_silent(&cached.path)?;
+    emit_download_progress(&app, key.progress_key(), cached.bytes, Some(cached.bytes));
+    Ok(cached_installer_result(&cached))
 }
 
 #[tauri::command]
@@ -1334,36 +1455,482 @@ fn copy_resource_to(app: &AppHandle, source: &str, target: &Path) -> Result<(), 
     Ok(())
 }
 
-fn download_url_as(
-    app: &AppHandle,
-    window: &tauri::WebviewWindow,
-    state: &AppState,
-    key: &'static str,
-    urls: &[String],
-    title: &str,
-) -> Result<DownloadResult, AppError> {
-    if !has_internet() {
+fn installer_metadata(
+    source: &VerifiedUrlSet,
+    key: InstallerCacheKey,
+) -> Result<InstallerMetadata, AppError> {
+    let metadata = InstallerMetadata {
+        file_name: file_name_from_url(first_url(&source.urls)?)?.to_string(),
+        urls: source.urls.clone(),
+        sha256: source.sha256.clone(),
+        size: source.size,
+    };
+    validate_installer_metadata(key, &metadata)?;
+    Ok(metadata)
+}
+
+fn validate_installer_metadata(
+    key: InstallerCacheKey,
+    metadata: &InstallerMetadata,
+) -> Result<(), AppError> {
+    if metadata.size == 0 {
         return Err(AppError::Message(
-            "Internet connection is not available".into(),
+            "Installer metadata includes an invalid zero-byte size".into(),
+        ));
+    }
+    if !is_valid_sha256(&metadata.sha256) {
+        return Err(AppError::Message(
+            "Installer metadata includes an invalid SHA-256 digest".into(),
+        ));
+    }
+    if metadata.urls.is_empty()
+        || metadata
+            .urls
+            .iter()
+            .any(|url| !is_allowed_external_url(url))
+    {
+        return Err(AppError::Message(
+            "Installer metadata includes an invalid download URL".into(),
         ));
     }
 
-    let file_name = file_name_from_url(first_url(urls)?)?;
-    let target = save_dialog(window, state, file_name, title)?
-        .ok_or_else(|| AppError::Message("Save was canceled".into()))?;
-    download_to_path_with_fallback(app, key, urls, &target)
+    match key {
+        InstallerCacheKey::ArduinoIdeExe | InstallerCacheKey::ArduinoIdeMsi => {
+            validate_arduino_metadata_url(key, metadata)
+        }
+        InstallerCacheKey::VlcExe => {
+            if metadata.file_name != "vlc-3.0.23-win32.exe" {
+                return Err(AppError::Message(
+                    "VLC installer metadata includes an unexpected file name".into(),
+                ));
+            }
+            Ok(())
+        }
+    }
 }
 
-fn download_to_path_with_fallback(
+fn validate_arduino_metadata_url(
+    key: InstallerCacheKey,
+    metadata: &InstallerMetadata,
+) -> Result<(), AppError> {
+    let suffix = match key {
+        InstallerCacheKey::ArduinoIdeExe => "_Windows_64bit.exe",
+        InstallerCacheKey::ArduinoIdeMsi => "_Windows_64bit.msi",
+        InstallerCacheKey::VlcExe => {
+            return Err(AppError::Message(
+                "VLC cannot use Arduino installer metadata".into(),
+            ))
+        }
+    };
+    let Some(tag) = metadata
+        .file_name
+        .strip_prefix("arduino-ide_")
+        .and_then(|name| name.strip_suffix(suffix))
+        .filter(|tag| is_safe_release_tag(tag))
+    else {
+        return Err(AppError::Message(
+            "Arduino installer metadata includes an unexpected file name".into(),
+        ));
+    };
+    let expected_url = format!(
+        "https://github.com/arduino/arduino-ide/releases/download/{tag}/{}",
+        metadata.file_name
+    );
+    if metadata.urls != [expected_url] {
+        return Err(AppError::Message(
+            "Arduino installer metadata includes an unexpected download URL".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn is_safe_release_tag(tag: &str) -> bool {
+    !tag.is_empty()
+        && tag.len() <= 64
+        && tag
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
+}
+
+fn is_valid_sha256(digest: &str) -> bool {
+    digest.len() == 64
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+}
+
+fn github_latest_arduino_metadata(key: InstallerCacheKey) -> Result<InstallerMetadata, AppError> {
+    let response = github_api_agent()
+        .get(ARDUINO_LATEST_RELEASE_API)
+        .set("Accept", "application/vnd.github+json")
+        .set("X-GitHub-Api-Version", "2022-11-28")
+        .call()
+        .map_err(http_error)?;
+    let mut bytes = Vec::new();
+    response
+        .into_reader()
+        .take(GITHUB_METADATA_MAX_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > GITHUB_METADATA_MAX_BYTES {
+        return Err(AppError::Message(
+            "GitHub release metadata response is too large".into(),
+        ));
+    }
+    let release: GithubRelease = serde_json::from_slice(&bytes)
+        .map_err(|error| AppError::Message(format!("GitHub release metadata error: {error}")))?;
+    select_github_arduino_asset(&release, key)
+}
+
+fn select_github_arduino_asset(
+    release: &GithubRelease,
+    key: InstallerCacheKey,
+) -> Result<InstallerMetadata, AppError> {
+    if !is_safe_release_tag(&release.tag_name) {
+        return Err(AppError::Message(
+            "GitHub latest release includes an invalid Arduino tag".into(),
+        ));
+    }
+    let extension = match key {
+        InstallerCacheKey::ArduinoIdeExe => "exe",
+        InstallerCacheKey::ArduinoIdeMsi => "msi",
+        InstallerCacheKey::VlcExe => {
+            return Err(AppError::Message(
+                "VLC cannot use an Arduino GitHub release asset".into(),
+            ))
+        }
+    };
+    let expected_name = format!("arduino-ide_{}_Windows_64bit.{extension}", release.tag_name);
+    let expected_url = format!(
+        "https://github.com/arduino/arduino-ide/releases/download/{}/{}",
+        release.tag_name, expected_name
+    );
+    let mut matching_assets = release
+        .assets
+        .iter()
+        .filter(|asset| asset.name == expected_name);
+    let asset = matching_assets.next().ok_or_else(|| {
+        AppError::Message(format!(
+            "GitHub latest release is missing the exact asset {expected_name}"
+        ))
+    })?;
+    if matching_assets.next().is_some() {
+        return Err(AppError::Message(format!(
+            "GitHub latest release includes duplicate assets named {expected_name}"
+        )));
+    }
+    if asset.browser_download_url != expected_url {
+        return Err(AppError::Message(
+            "GitHub Arduino asset includes an unexpected download URL".into(),
+        ));
+    }
+    let digest = asset
+        .digest
+        .as_deref()
+        .and_then(|digest| digest.strip_prefix("sha256:"))
+        .filter(|digest| is_valid_sha256(digest))
+        .ok_or_else(|| {
+            AppError::Message("GitHub Arduino asset is missing a valid SHA-256 digest".into())
+        })?;
+    let metadata = InstallerMetadata {
+        file_name: expected_name,
+        urls: vec![expected_url],
+        sha256: digest.to_string(),
+        size: asset.size,
+    };
+    validate_installer_metadata(key, &metadata)?;
+    Ok(metadata)
+}
+
+fn github_api_agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .user_agent(&app_user_agent())
+        .timeout_connect(Duration::from_secs(3))
+        .timeout(Duration::from_secs(5))
+        .build()
+}
+
+fn resolve_arduino_installer(
+    app: &AppHandle,
+    key: InstallerCacheKey,
+    fallback: &InstallerMetadata,
+) -> ArduinoInstallerResolution {
+    match github_latest_arduino_metadata(key) {
+        Ok(metadata) => ArduinoInstallerResolution::Latest(metadata),
+        Err(error) => {
+            eprintln!(
+                "Arduino latest release lookup failed; using verified cache or fallback: {error}"
+            );
+            match read_cached_installer_metadata(app, key) {
+                Ok(Some(metadata)) => ArduinoInstallerResolution::CachedCandidate(metadata),
+                Ok(None) => ArduinoInstallerResolution::Fallback(fallback.clone()),
+                Err(cache_error) => {
+                    eprintln!("Arduino cached metadata is unavailable: {cache_error}");
+                    ArduinoInstallerResolution::Fallback(fallback.clone())
+                }
+            }
+        }
+    }
+}
+
+fn obtain_arduino_installer(
+    app: &AppHandle,
+    key: InstallerCacheKey,
+    resolution: ArduinoInstallerResolution,
+    fallback: &InstallerMetadata,
+) -> Result<CachedInstaller, AppError> {
+    match resolution {
+        ArduinoInstallerResolution::Latest(metadata)
+        | ArduinoInstallerResolution::Fallback(metadata) => {
+            ensure_cached_installer(app, key, &metadata)
+        }
+        ArduinoInstallerResolution::CachedCandidate(metadata) => {
+            if let Some(cached) = verified_cached_installer(app, key, &metadata)? {
+                return Ok(cached);
+            }
+            ensure_cached_installer(app, key, fallback)
+        }
+    }
+}
+
+fn installer_cache_paths(
+    app: &AppHandle,
+    key: InstallerCacheKey,
+) -> Result<InstallerCachePaths, AppError> {
+    let cache_root = app
+        .path()
+        .app_cache_dir()
+        .map_err(|error| AppError::Message(format!("Installer cache path error: {error}")))?
+        .join(relative_path(INSTALLER_CACHE_DIRECTORY));
+    fs::create_dir_all(&cache_root)?;
+    Ok(installer_cache_paths_from_root(&cache_root, key))
+}
+
+fn installer_cache_paths_from_root(
+    cache_root: &Path,
+    key: InstallerCacheKey,
+) -> InstallerCachePaths {
+    InstallerCachePaths {
+        root: cache_root.to_path_buf(),
+        metadata: cache_root.join(key.metadata_file_name()),
+    }
+}
+
+fn read_cached_installer_metadata(
+    app: &AppHandle,
+    key: InstallerCacheKey,
+) -> Result<Option<InstallerMetadata>, AppError> {
+    let paths = installer_cache_paths(app, key)?;
+    let file_metadata = match fs::metadata(&paths.metadata) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    if file_metadata.len() > CACHE_METADATA_MAX_BYTES {
+        return Ok(None);
+    }
+    let metadata: InstallerMetadata = match serde_json::from_slice(&fs::read(&paths.metadata)?) {
+        Ok(metadata) => metadata,
+        Err(_) => return Ok(None),
+    };
+    if validate_installer_metadata(key, &metadata).is_err() {
+        return Ok(None);
+    }
+    Ok(Some(metadata))
+}
+
+fn write_cached_installer_metadata(
+    paths: &InstallerCachePaths,
+    metadata: &InstallerMetadata,
+) -> Result<(), AppError> {
+    let bytes = serde_json::to_vec(metadata)
+        .map_err(|error| AppError::Message(format!("Installer cache metadata error: {error}")))?;
+    write_bytes_atomically(&paths.metadata, &bytes)
+}
+
+fn write_bytes_atomically(target: &Path, bytes: &[u8]) -> Result<(), AppError> {
+    let (temporary_path, mut file) = create_download_temp_file(target)?;
+    let write_result = file
+        .write_all(bytes)
+        .and_then(|_| file.flush())
+        .and_then(|_| file.sync_all());
+    drop(file);
+    if let Err(error) = write_result {
+        let _ = fs::remove_file(&temporary_path);
+        return Err(error.into());
+    }
+    if let Err(error) = replace_downloaded_file(&temporary_path, target) {
+        let _ = fs::remove_file(&temporary_path);
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn verified_cached_installer(
+    app: &AppHandle,
+    key: InstallerCacheKey,
+    metadata: &InstallerMetadata,
+) -> Result<Option<CachedInstaller>, AppError> {
+    validate_installer_metadata(key, metadata)?;
+    let paths = installer_cache_paths(app, key)?;
+    let payload = paths.payload(key, &metadata.sha256);
+    let Some(bytes) = verified_file_size(&payload, metadata)? else {
+        return Ok(None);
+    };
+    Ok(Some(CachedInstaller {
+        path: payload,
+        metadata: metadata.clone(),
+        bytes,
+    }))
+}
+
+fn verified_file_size(path: &Path, metadata: &InstallerMetadata) -> Result<Option<u64>, AppError> {
+    let file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let (bytes, digest) = sha256_reader(file)?;
+    if bytes != metadata.size || digest != metadata.sha256 {
+        return Ok(None);
+    }
+    Ok(Some(bytes))
+}
+
+fn sha256_reader(mut reader: impl Read) -> Result<(u64, String), AppError> {
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut bytes = 0_u64;
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+        bytes += read as u64;
+    }
+    Ok((bytes, format!("{:x}", hasher.finalize())))
+}
+
+fn ensure_cached_installer(
+    app: &AppHandle,
+    key: InstallerCacheKey,
+    metadata: &InstallerMetadata,
+) -> Result<CachedInstaller, AppError> {
+    validate_installer_metadata(key, metadata)?;
+    let paths = installer_cache_paths(app, key)?;
+    let previous_metadata = read_cached_installer_metadata(app, key)?;
+    if let Some(cached) = verified_cached_installer(app, key, metadata)? {
+        commit_installer_cache_pointer(&paths, key, previous_metadata.as_ref(), metadata, false)?;
+        return Ok(cached);
+    }
+
+    let payload = paths.payload(key, &metadata.sha256);
+    let result =
+        download_verified_to_path_with_fallback(app, key.progress_key(), metadata, &payload)?;
+    commit_installer_cache_pointer(&paths, key, previous_metadata.as_ref(), metadata, true)?;
+    Ok(CachedInstaller {
+        path: payload,
+        metadata: metadata.clone(),
+        bytes: result.bytes,
+    })
+}
+
+fn commit_installer_cache_pointer(
+    paths: &InstallerCachePaths,
+    key: InstallerCacheKey,
+    previous: Option<&InstallerMetadata>,
+    current: &InstallerMetadata,
+    new_payload_created: bool,
+) -> Result<(), AppError> {
+    if previous == Some(current) {
+        return Ok(());
+    }
+    commit_installer_cache_pointer_with(paths, key, previous, current, new_payload_created, || {
+        write_cached_installer_metadata(paths, current)
+    })
+}
+
+fn commit_installer_cache_pointer_with(
+    paths: &InstallerCachePaths,
+    key: InstallerCacheKey,
+    previous: Option<&InstallerMetadata>,
+    current: &InstallerMetadata,
+    new_payload_created: bool,
+    write_pointer: impl FnOnce() -> Result<(), AppError>,
+) -> Result<(), AppError> {
+    let current_payload = paths.payload(key, &current.sha256);
+    let previous_payload = previous.map(|metadata| paths.payload(key, &metadata.sha256));
+
+    if let Err(error) = write_pointer() {
+        if new_payload_created && previous_payload.as_ref() != Some(&current_payload) {
+            let _ = fs::remove_file(&current_payload);
+        }
+        return Err(error);
+    }
+
+    if let Some(previous_payload) = previous_payload {
+        if previous_payload != current_payload {
+            let _ = fs::remove_file(previous_payload);
+        }
+    }
+    Ok(())
+}
+
+fn copy_cached_installer_to(
+    app: &AppHandle,
+    key: InstallerCacheKey,
+    cached: &CachedInstaller,
+    target: &Path,
+) -> Result<DownloadResult, AppError> {
+    let bytes = copy_verified_file_atomically(&cached.path, target, &cached.metadata)?;
+    emit_download_progress(app, key.progress_key(), bytes, Some(bytes));
+    Ok(download_result(target, bytes))
+}
+
+fn copy_verified_file_atomically(
+    source: &Path,
+    target: &Path,
+    metadata: &InstallerMetadata,
+) -> Result<u64, AppError> {
+    write_stream_atomically(
+        fs::File::open(source)?,
+        target,
+        None,
+        Some(metadata),
+        |_| {},
+    )
+}
+
+fn cached_installer_result(cached: &CachedInstaller) -> DownloadResult {
+    DownloadResult {
+        file_name: cached.metadata.file_name.clone(),
+        path: display_path(&cached.path),
+        bytes: cached.bytes,
+    }
+}
+
+fn download_result(target: &Path, bytes: u64) -> DownloadResult {
+    DownloadResult {
+        file_name: target
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("download")
+            .into(),
+        path: display_path(target),
+        bytes,
+    }
+}
+
+fn download_verified_to_path_with_fallback(
     app: &AppHandle,
     key: &'static str,
-    urls: &[String],
+    metadata: &InstallerMetadata,
     target: &Path,
 ) -> Result<DownloadResult, AppError> {
     let mut errors = Vec::new();
 
-    for url in urls {
-        match download_to_path(app, key, url, target) {
+    for url in &metadata.urls {
+        match download_to_path_checked(app, key, url, target, Some(metadata)) {
             Ok(result) => return Ok(result),
             Err(error) => errors.push(format!("{url}: {error}")),
         }
@@ -1381,38 +1948,75 @@ fn download_to_path(
     url: &str,
     target: &Path,
 ) -> Result<DownloadResult, AppError> {
+    let result = download_to_path_checked(app, key, url, target, None)?;
+    emit_download_progress(app, key, result.bytes, Some(result.bytes));
+    Ok(result)
+}
+
+fn download_to_path_checked(
+    app: &AppHandle,
+    key: &'static str,
+    url: &str,
+    target: &Path,
+    verification: Option<&InstallerMetadata>,
+) -> Result<DownloadResult, AppError> {
     let response = http_agent()
         .get(url)
         .set("Accept-Encoding", "identity")
         .call()
         .map_err(http_error)?;
-    let total = response
-        .header("content-length")
-        .and_then(|value| value.parse::<u64>().ok());
-    let (temporary_path, mut file) = create_download_temp_file(target)?;
-    let mut reader = response.into_reader();
-    let mut buffer = [0_u8; 64 * 1024];
-    let mut bytes = 0_u64;
+    let total = validated_content_length(response.header("content-length"), verification)?;
     let mut last_emit = 0_u64;
 
-    emit_download_progress(app, key, bytes, total);
+    emit_download_progress(app, key, 0, total);
+    let bytes = write_stream_atomically(
+        response.into_reader(),
+        target,
+        total,
+        verification,
+        |bytes| {
+            if bytes.saturating_sub(last_emit) >= 256 * 1024
+                && total.is_none_or(|expected| bytes < expected)
+            {
+                emit_download_progress(app, key, bytes, total);
+                last_emit = bytes;
+            }
+        },
+    )?;
+
+    Ok(download_result(target, bytes))
+}
+
+fn write_stream_atomically(
+    mut reader: impl Read,
+    target: &Path,
+    content_length: Option<u64>,
+    verification: Option<&InstallerMetadata>,
+    mut on_chunk: impl FnMut(u64),
+) -> Result<u64, AppError> {
+    let (temporary_path, mut file) = create_download_temp_file(target)?;
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut bytes = 0_u64;
+    let mut hasher = Sha256::new();
     let transfer_result = (|| -> Result<(), AppError> {
         loop {
             let read = reader.read(&mut buffer)?;
             if read == 0 {
                 break;
             }
+            let next_bytes = checked_download_size(bytes, read, verification)?;
             file.write_all(&buffer[..read])?;
-            bytes += read as u64;
-
-            if bytes.saturating_sub(last_emit) >= 256 * 1024 || total == Some(bytes) {
-                emit_download_progress(app, key, bytes, total);
-                last_emit = bytes;
-            }
+            hasher.update(&buffer[..read]);
+            bytes = next_bytes;
+            on_chunk(bytes);
         }
         file.flush()?;
         file.sync_all()?;
-        validate_download_length(bytes, total)
+        validate_download_length(bytes, content_length)?;
+        if let Some(metadata) = verification {
+            validate_verified_download(bytes, &format!("{:x}", hasher.finalize()), metadata)?;
+        }
+        Ok(())
     })();
     drop(file);
 
@@ -1420,23 +2024,77 @@ fn download_to_path(
         let _ = fs::remove_file(&temporary_path);
         return Err(error);
     }
-
     if let Err(error) = replace_downloaded_file(&temporary_path, target) {
         let _ = fs::remove_file(&temporary_path);
         return Err(error);
     }
+    Ok(bytes)
+}
 
-    emit_download_progress(app, key, bytes, total.or(Some(bytes)));
+fn validated_content_length(
+    content_length: Option<&str>,
+    verification: Option<&InstallerMetadata>,
+) -> Result<Option<u64>, AppError> {
+    let Some(value) = content_length else {
+        return Ok(None);
+    };
+    let total = match value.parse::<u64>() {
+        Ok(total) => total,
+        Err(_) if verification.is_some() => {
+            return Err(AppError::Message(
+                "Verified installer response includes an invalid Content-Length".into(),
+            ))
+        }
+        Err(_) => return Ok(None),
+    };
+    if let Some(metadata) = verification {
+        if total != metadata.size {
+            return Err(AppError::Message(format!(
+                "Verified installer Content-Length mismatch: expected {} bytes, received {total} bytes",
+                metadata.size
+            )));
+        }
+    }
+    Ok(Some(total))
+}
 
-    Ok(DownloadResult {
-        file_name: target
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("download")
-            .into(),
-        path: display_path(target),
-        bytes,
-    })
+fn checked_download_size(
+    bytes: u64,
+    read: usize,
+    verification: Option<&InstallerMetadata>,
+) -> Result<u64, AppError> {
+    let next_bytes = bytes
+        .checked_add(read as u64)
+        .ok_or_else(|| AppError::Message("Downloaded byte count overflowed".into()))?;
+    if let Some(metadata) = verification {
+        if next_bytes > metadata.size {
+            return Err(AppError::Message(format!(
+                "Verified installer exceeded its expected size of {} bytes",
+                metadata.size
+            )));
+        }
+    }
+    Ok(next_bytes)
+}
+
+fn validate_verified_download(
+    bytes: u64,
+    digest: &str,
+    metadata: &InstallerMetadata,
+) -> Result<(), AppError> {
+    if bytes != metadata.size {
+        return Err(AppError::Message(format!(
+            "Downloaded installer size mismatch: expected {} bytes, received {bytes} bytes",
+            metadata.size
+        )));
+    }
+    if digest != metadata.sha256 {
+        return Err(AppError::Message(format!(
+            "Downloaded installer SHA-256 mismatch: expected {}, received {digest}",
+            metadata.sha256
+        )));
+    }
+    Ok(())
 }
 
 fn validate_download_length(bytes: u64, total: Option<u64>) -> Result<(), AppError> {
@@ -1579,8 +2237,18 @@ fn app_user_agent() -> String {
 }
 
 fn endpoint_manifest() -> Result<EndpointManifest, AppError> {
-    serde_json::from_str(ENDPOINT_MANIFEST_JSON)
-        .map_err(|error| AppError::Message(format!("Endpoint manifest error: {error}")))
+    let manifest: EndpointManifest = serde_json::from_str(ENDPOINT_MANIFEST_JSON)
+        .map_err(|error| AppError::Message(format!("Endpoint manifest error: {error}")))?;
+    installer_metadata(
+        &manifest.downloads.arduino_ide,
+        InstallerCacheKey::ArduinoIdeExe,
+    )?;
+    installer_metadata(
+        &manifest.downloads.arduino_ide_msi,
+        InstallerCacheKey::ArduinoIdeMsi,
+    )?;
+    installer_metadata(&manifest.downloads.vlc, InstallerCacheKey::VlcExe)?;
+    Ok(manifest)
 }
 
 fn first_url(urls: &[String]) -> Result<&str, AppError> {
@@ -2072,6 +2740,30 @@ mod tests {
         std::env::temp_dir().join(format!("amb82-{name}-{}-{nonce}", std::process::id()))
     }
 
+    fn metadata_for_bytes(file_name: &str, bytes: &[u8]) -> InstallerMetadata {
+        let (_, sha256) = sha256_reader(std::io::Cursor::new(bytes)).unwrap();
+        InstallerMetadata {
+            file_name: file_name.to_string(),
+            urls: Vec::new(),
+            sha256,
+            size: bytes.len() as u64,
+        }
+    }
+
+    fn github_asset(
+        name: &str,
+        size: u64,
+        digest: &str,
+        browser_download_url: &str,
+    ) -> GithubReleaseAsset {
+        GithubReleaseAsset {
+            name: name.to_string(),
+            size,
+            digest: Some(digest.to_string()),
+            browser_download_url: browser_download_url.to_string(),
+        }
+    }
+
     #[test]
     fn repair_uvcd_content_enables_mjpg_and_disables_other_uvcd_formats() {
         let original = "\
@@ -2130,16 +2822,166 @@ mod tests {
     }
 
     #[test]
-    fn endpoint_manifest_uses_latest_arduino_windows_installers() {
+    fn endpoint_manifest_pins_verified_installer_fallbacks() {
         let manifest = endpoint_manifest().expect("endpoint manifest should parse");
 
         assert_eq!(
             manifest.downloads.arduino_ide.urls,
-            ["https://downloads.arduino.cc/arduino-ide/arduino-ide_latest_Windows_64bit.exe"]
+            ["https://github.com/arduino/arduino-ide/releases/download/2.3.10/arduino-ide_2.3.10_Windows_64bit.exe"]
         );
         assert_eq!(
+            manifest.downloads.arduino_ide.sha256,
+            "a8f3df0ac57c6b74aa1b1d22e5f202dc5ddb46663579d4e5108a69cc99b6f823"
+        );
+        assert_eq!(manifest.downloads.arduino_ide.size, 158_074_632);
+        assert_eq!(
             manifest.downloads.arduino_ide_msi.urls,
-            ["https://downloads.arduino.cc/arduino-ide/arduino-ide_latest_Windows_64bit.msi"]
+            ["https://github.com/arduino/arduino-ide/releases/download/2.3.10/arduino-ide_2.3.10_Windows_64bit.msi"]
+        );
+        assert_eq!(
+            manifest.downloads.arduino_ide_msi.sha256,
+            "aebbd1efeac5cfb02a6cad0d93af8221054fc983a5b3c5ce6da8a6bfb9425165"
+        );
+        assert_eq!(manifest.downloads.arduino_ide_msi.size, 167_145_472);
+        assert_eq!(
+            manifest.downloads.vlc.sha256,
+            "ecc17f097ee0801f04faabb5ef9992ff00ea4c98c8fa005f6508ee74b41b6a53"
+        );
+        assert_eq!(manifest.downloads.vlc.size, 44_568_024);
+    }
+
+    #[test]
+    fn installer_cache_keys_separate_arduino_formats_and_share_vlc() {
+        let root = Path::new("cache");
+        let arduino_exe = installer_cache_paths_from_root(root, InstallerCacheKey::ArduinoIdeExe);
+        let arduino_msi = installer_cache_paths_from_root(root, InstallerCacheKey::ArduinoIdeMsi);
+        let vlc_manual = installer_cache_paths_from_root(root, InstallerCacheKey::VlcExe);
+        let vlc_auto = installer_cache_paths_from_root(root, InstallerCacheKey::VlcExe);
+        let first_sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let second_sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let arduino_exe_payload = arduino_exe.payload(InstallerCacheKey::ArduinoIdeExe, first_sha);
+        let arduino_msi_payload = arduino_msi.payload(InstallerCacheKey::ArduinoIdeMsi, first_sha);
+        let vlc_manual_payload = vlc_manual.payload(InstallerCacheKey::VlcExe, first_sha);
+        let vlc_auto_payload = vlc_auto.payload(InstallerCacheKey::VlcExe, first_sha);
+
+        assert_ne!(arduino_exe_payload, arduino_msi_payload);
+        assert_ne!(arduino_exe.metadata, arduino_msi.metadata);
+        assert_eq!(vlc_manual_payload, vlc_auto_payload);
+        assert_eq!(vlc_manual.metadata, vlc_auto.metadata);
+        assert_ne!(
+            arduino_exe.payload(InstallerCacheKey::ArduinoIdeExe, first_sha),
+            arduino_exe.payload(InstallerCacheKey::ArduinoIdeExe, second_sha)
+        );
+        assert_eq!(
+            arduino_exe.metadata,
+            installer_cache_paths_from_root(root, InstallerCacheKey::ArduinoIdeExe).metadata
+        );
+        assert!(arduino_exe_payload
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .contains(first_sha));
+        assert_eq!(
+            InstallerCacheKey::ArduinoIdeExe.progress_key(),
+            InstallerCacheKey::ArduinoIdeMsi.progress_key()
+        );
+        assert_eq!(InstallerCacheKey::VlcExe.progress_key(), "vlc");
+    }
+
+    #[test]
+    fn sha256_reader_matches_known_vector() {
+        let (bytes, digest) = sha256_reader(std::io::Cursor::new(b"abc")).unwrap();
+
+        assert_eq!(bytes, 3);
+        assert_eq!(
+            digest,
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn github_asset_selection_requires_exact_arduino_name_digest_size_and_url() {
+        let tag = "2.3.10";
+        let exe_name = "arduino-ide_2.3.10_Windows_64bit.exe";
+        let msi_name = "arduino-ide_2.3.10_Windows_64bit.msi";
+        let exe_url =
+            format!("https://github.com/arduino/arduino-ide/releases/download/{tag}/{exe_name}");
+        let msi_url =
+            format!("https://github.com/arduino/arduino-ide/releases/download/{tag}/{msi_name}");
+        let release = GithubRelease {
+            tag_name: tag.to_string(),
+            assets: vec![
+                github_asset(
+                    exe_name,
+                    158_074_632,
+                    "sha256:a8f3df0ac57c6b74aa1b1d22e5f202dc5ddb46663579d4e5108a69cc99b6f823",
+                    &exe_url,
+                ),
+                github_asset(
+                    msi_name,
+                    167_145_472,
+                    "sha256:aebbd1efeac5cfb02a6cad0d93af8221054fc983a5b3c5ce6da8a6bfb9425165",
+                    &msi_url,
+                ),
+            ],
+        };
+
+        let exe = select_github_arduino_asset(&release, InstallerCacheKey::ArduinoIdeExe).unwrap();
+        let msi = select_github_arduino_asset(&release, InstallerCacheKey::ArduinoIdeMsi).unwrap();
+
+        assert_eq!(exe.file_name, exe_name);
+        assert_eq!(exe.urls, [exe_url]);
+        assert_eq!(exe.size, 158_074_632);
+        assert_eq!(
+            exe.sha256,
+            "a8f3df0ac57c6b74aa1b1d22e5f202dc5ddb46663579d4e5108a69cc99b6f823"
+        );
+        assert_eq!(msi.file_name, msi_name);
+        assert_eq!(msi.urls, [msi_url]);
+        assert_eq!(msi.size, 167_145_472);
+    }
+
+    #[test]
+    fn github_asset_selection_rejects_near_matches_and_untrusted_metadata() {
+        let exact_name = "arduino-ide_2.3.10_Windows_64bit.exe";
+        let exact_url =
+            format!("https://github.com/arduino/arduino-ide/releases/download/2.3.10/{exact_name}");
+        let digest = "sha256:a8f3df0ac57c6b74aa1b1d22e5f202dc5ddb46663579d4e5108a69cc99b6f823";
+        let near_match = GithubRelease {
+            tag_name: "2.3.10".into(),
+            assets: vec![github_asset(
+                "arduino-ide_2.3.10_Windows_64bit_portable.exe",
+                158_074_632,
+                digest,
+                &exact_url,
+            )],
+        };
+        assert!(
+            select_github_arduino_asset(&near_match, InstallerCacheKey::ArduinoIdeExe).is_err()
+        );
+
+        let wrong_url = GithubRelease {
+            tag_name: "2.3.10".into(),
+            assets: vec![github_asset(
+                exact_name,
+                158_074_632,
+                digest,
+                "https://example.com/arduino.exe",
+            )],
+        };
+        assert!(select_github_arduino_asset(&wrong_url, InstallerCacheKey::ArduinoIdeExe).is_err());
+
+        let missing_digest = GithubRelease {
+            tag_name: "2.3.10".into(),
+            assets: vec![GithubReleaseAsset {
+                name: exact_name.into(),
+                size: 158_074_632,
+                digest: None,
+                browser_download_url: exact_url,
+            }],
+        };
+        assert!(
+            select_github_arduino_asset(&missing_digest, InstallerCacheKey::ArduinoIdeExe).is_err()
         );
     }
 
@@ -2228,6 +3070,8 @@ mod tests {
             output_folder: Mutex::new(None),
             capture_lock: Mutex::new(()),
             native_dialog_lock: Mutex::new(()),
+            arduino_installer_lock: Mutex::new(()),
+            vlc_installer_lock: Mutex::new(()),
         };
 
         let first_dialog = lock_native_dialog(&state).unwrap();
@@ -2250,6 +3094,52 @@ mod tests {
     }
 
     #[test]
+    fn verified_content_length_is_rejected_before_streaming_when_it_differs() {
+        let metadata = metadata_for_bytes("installer.exe", b"12345");
+
+        assert_eq!(
+            validated_content_length(Some("5"), Some(&metadata)).unwrap(),
+            Some(5)
+        );
+        assert_eq!(
+            validated_content_length(None, Some(&metadata)).unwrap(),
+            None
+        );
+        assert!(validated_content_length(Some("4"), Some(&metadata)).is_err());
+        assert!(validated_content_length(Some("6"), Some(&metadata)).is_err());
+        assert!(validated_content_length(Some("invalid"), Some(&metadata)).is_err());
+    }
+
+    #[test]
+    fn verified_stream_aborts_on_first_excess_bytes_and_removes_part() {
+        let folder = test_directory("installer-stream-limit");
+        fs::create_dir_all(&folder).unwrap();
+        let target = folder.join("installer.exe");
+        let metadata = metadata_for_bytes("installer.exe", b"12345");
+        fs::write(&target, b"preserve old installer").unwrap();
+
+        let result = write_stream_atomically(
+            std::io::Cursor::new(b"123456"),
+            &target,
+            None,
+            Some(&metadata),
+            |_| panic!("oversized chunk must not be committed"),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"preserve old installer");
+        assert_eq!(
+            fs::read_dir(&folder)
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| entry.file_name().to_string_lossy().ends_with(".part"))
+                .count(),
+            0
+        );
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
     fn completed_download_replaces_the_target_file() {
         let folder = test_directory("download-replace");
         fs::create_dir_all(&folder).unwrap();
@@ -2262,6 +3152,115 @@ mod tests {
 
         assert_eq!(fs::read(&target).unwrap(), b"new payload");
         assert!(!source.exists());
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn verified_file_detects_cached_installer_tampering() {
+        let folder = test_directory("installer-tamper");
+        fs::create_dir_all(&folder).unwrap();
+        let path = folder.join("installer.exe");
+        let metadata = metadata_for_bytes("installer.exe", b"trusted installer");
+        fs::write(&path, b"trusted installer").unwrap();
+
+        assert_eq!(
+            verified_file_size(&path, &metadata).unwrap(),
+            Some(metadata.size)
+        );
+
+        fs::write(&path, b"altered installer").unwrap();
+        assert_eq!(verified_file_size(&path, &metadata).unwrap(), None);
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn verified_atomic_copy_replaces_target_only_after_hash_and_size_match() {
+        let folder = test_directory("installer-copy");
+        fs::create_dir_all(&folder).unwrap();
+        let source = folder.join("cache.exe");
+        let target = folder.join("saved.exe");
+        let trusted = b"trusted installer payload";
+        let metadata = metadata_for_bytes("saved.exe", trusted);
+        fs::write(&source, trusted).unwrap();
+        fs::write(&target, b"old target").unwrap();
+
+        let copied = copy_verified_file_atomically(&source, &target, &metadata).unwrap();
+
+        assert_eq!(copied, trusted.len() as u64);
+        assert_eq!(fs::read(&target).unwrap(), trusted);
+
+        fs::write(&source, b"tampered installer payload").unwrap();
+        fs::write(&target, b"preserve this target").unwrap();
+        assert!(copy_verified_file_atomically(&source, &target, &metadata).is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"preserve this target");
+        assert_eq!(
+            fs::read_dir(&folder)
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| entry.file_name().to_string_lossy().ends_with(".part"))
+                .count(),
+            0
+        );
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn failed_cache_pointer_commit_preserves_old_cache_and_removes_new_payload() {
+        let folder = test_directory("installer-pointer-failure");
+        fs::create_dir_all(&folder).unwrap();
+        let key = InstallerCacheKey::ArduinoIdeExe;
+        let paths = installer_cache_paths_from_root(&folder, key);
+        let previous = metadata_for_bytes("installer.exe", b"old trusted payload");
+        let current = metadata_for_bytes("installer.exe", b"new trusted payload");
+        let previous_payload = paths.payload(key, &previous.sha256);
+        let current_payload = paths.payload(key, &current.sha256);
+        let previous_pointer = serde_json::to_vec(&previous).unwrap();
+        fs::write(&previous_payload, b"old trusted payload").unwrap();
+        fs::write(&current_payload, b"new trusted payload").unwrap();
+        fs::write(&paths.metadata, &previous_pointer).unwrap();
+
+        let result = commit_installer_cache_pointer_with(
+            &paths,
+            key,
+            Some(&previous),
+            &current,
+            true,
+            || Err(AppError::Message("simulated pointer failure".into())),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(fs::read(&previous_payload).unwrap(), b"old trusted payload");
+        assert_eq!(fs::read(&paths.metadata).unwrap(), previous_pointer);
+        assert!(!current_payload.exists());
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn successful_cache_pointer_commit_cleans_previous_payload_after_switch() {
+        let folder = test_directory("installer-pointer-success");
+        fs::create_dir_all(&folder).unwrap();
+        let key = InstallerCacheKey::ArduinoIdeExe;
+        let paths = installer_cache_paths_from_root(&folder, key);
+        let previous = metadata_for_bytes("installer.exe", b"old trusted payload");
+        let current = metadata_for_bytes("installer.exe", b"new trusted payload");
+        let previous_payload = paths.payload(key, &previous.sha256);
+        let current_payload = paths.payload(key, &current.sha256);
+        fs::write(&previous_payload, b"old trusted payload").unwrap();
+        fs::write(&current_payload, b"new trusted payload").unwrap();
+        fs::write(&paths.metadata, serde_json::to_vec(&previous).unwrap()).unwrap();
+
+        commit_installer_cache_pointer_with(&paths, key, Some(&previous), &current, true, || {
+            write_cached_installer_metadata(&paths, &current)
+        })
+        .unwrap();
+
+        assert!(!previous_payload.exists());
+        assert_eq!(fs::read(&current_payload).unwrap(), b"new trusted payload");
+        assert_eq!(
+            serde_json::from_slice::<InstallerMetadata>(&fs::read(&paths.metadata).unwrap())
+                .unwrap(),
+            current
+        );
         fs::remove_dir_all(folder).unwrap();
     }
 

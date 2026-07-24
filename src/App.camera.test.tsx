@@ -61,7 +61,7 @@ const dashboard: Dashboard = {
   metadata: {
     author: "",
     contact: "",
-    version: "3.12.3",
+    version: "3.12.4",
     repository: "",
     arduino_ide_url: "",
     vlc_url: "",

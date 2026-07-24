@@ -2,7 +2,7 @@
 
 這份文件是未來理解與修改本專案的主要入口。讀完後應該能知道：這個程式有哪些功能、前後端怎麼分工、常見功能要改哪裡、版本號如何由 `version.txt` 統一管理，以及 commit / push 的工作習慣。
 
-目前軟體版本：`3.12.3`
+目前軟體版本：`3.12.4`
 
 > 注意：`dev_readme.md` 目前會納入 git 追蹤。若交接內容或維護流程有變更，應和相關程式碼一起 commit。
 
@@ -20,7 +20,7 @@
 - UI icon：`lucide-react`
 - Windows bundle：Tauri NSIS
 
-## Current frontend architecture (3.12.3)
+## Current frontend architecture (3.12.4)
 
 This section is the authoritative source map for the current frontend. Some older notes below may still mention the pre-refactor shape where most UI lived in `src/App.tsx`; when in doubt, follow this section.
 
@@ -105,7 +105,7 @@ Object detection annotation behavior:
 
 - `src-tauri/endpoint_manifest.json`
   - 外部端點集中設定。
-  - 包含 GitHub repository、版本檢查 URL、Arduino / VLC 下載 URL 與 fallback、Realtek package URL、模型轉換服務 URL、網路檢查 URL。
+  - 包含 GitHub repository、版本檢查 URL、Arduino 已知版本 fallback、VLC 下載 URL 與固定 SHA-256、Realtek package URL、模型轉換服務 URL、網路檢查 URL。
   - 若外部服務改版、下載來源失效、需要新增 mirror，優先改這裡。
 
 - `src-tauri/Cargo.toml`
@@ -167,17 +167,20 @@ Object detection annotation behavior:
 | 日本影像分類權重 | `save_image_model_japan_as` | `resource/image_classification_japan/img_class_cnn.nb` | `img_class_cnn.nb` |
 | 台灣影像分類權重 | `save_image_model_taiwan_as` | `resource/image_classification_taiwan/img_class_cnn.nb` | `img_class_cnn.nb` |
 | 新加坡影像分類權重 | `save_image_model_singapore_as` | `resource/image_classification_singapore/img_class_cnn.nb` | `img_class_cnn.nb` |
-| Arduino IDE | `download_arduino_ide_as` | Arduino 官方下載 URL | URL 檔名 |
-| Arduino IDE 自動安裝 | `download_and_install_arduino_ide` | Arduino MSI URL | temp 目錄 |
-| VLC | `download_vlc_as` | VLC 下載 URL | URL 檔名 |
-| VLC 自動安裝 | `download_and_install_vlc` | VLC 下載 URL | temp 目錄 |
+| Arduino IDE | `download_arduino_ide_as` | Arduino 官方 release metadata / app 私有快取 | 官方 asset 檔名 |
+| Arduino IDE 自動安裝 | `download_and_install_arduino_ide` | Arduino 官方 release metadata / app 私有快取 | 官方 MSI asset 檔名 |
+| VLC | `download_vlc_as` | VLC 固定版本 URL / app 私有快取 | `vlc-3.0.23-win32.exe` |
+| VLC 自動安裝 | `download_and_install_vlc` | VLC 固定版本 URL / app 私有快取 | `vlc-3.0.23-win32.exe` |
 
 注意：
 
 - CH340/CH341 與「程式碼與權重」頁面內的資源使用內嵌檔案，不需要外網。
-- Arduino / VLC 需要外網，無外網時 UI 會停用。
+- Arduino / VLC 第一次取得時需要外網；已有通過 SHA-256 驗證的快取後，離線仍可另存或安裝。
 - Arduino / VLC 的卡片都有 split button，主按鈕下載，旁邊選單自動安裝。
-- VLC 自動安裝會下載 `vlc-3.0.23-win32.exe` 到 temp，然後用 `/S` 靜默安裝。
+- 安裝檔快取位於 Tauri `app_cache_dir()/installer-cache/v1`。每次使用前都會重新計算 SHA-256；驗證失敗的快取不會被另存或執行，有網路時會重新下載。
+- Arduino 透過官方 GitHub Releases metadata 解析最新版 EXE / MSI 與官方 digest；metadata 暫時無法取得時，可繼續使用已驗證的快取或 manifest 內的已知版本 fallback。
+- VLC 使用 manifest 內固定版本的可信 SHA-256；手動下載與自動安裝共用同一份快取。自動安裝從已驗證的快取執行 `/S` 靜默安裝。
+- SHA-256 驗證用來偵測下載或快取 payload 損壞、遭修改；Arduino 離線時的動態版本信任值保存在同一個使用者可寫的 metadata sidecar，因此無法防範同一使用者程序同時替換 payload 與 sidecar，也不代表能防範程式本身或信任資料遭修改。
 - 下載進度由 Rust emit `download-progress` event，前端顯示卡片覆蓋式進度。
 - 內嵌資源優先邏輯：若 exe 同目錄附近有外部 `resource/` 覆寫檔，會優先使用外部檔；找不到才用 binary 內嵌 bytes。
 
@@ -335,11 +338,13 @@ Reset：
 
 網路下載流程：
 
-1. 在 `src-tauri/endpoint_manifest.json` 新增或更新 URL。
-2. 每個 `urls` 陣列的第一個網址會用來決定預設檔名；後面的網址是 fallback mirror。
-3. Rust 端使用 `download_url_as` / `download_to_path_with_fallback` 依序嘗試 `urls`。
-4. 若要進度條，給固定 download key，並在前端 `DownloadKey` 加上該 key。
-5. 若要自動安裝，新增對應的 `download_and_install_*` command，並在前端 `menuActions` 接 split button。
+1. 在 `src-tauri/endpoint_manifest.json` 新增或更新來源、預期檔名、長度與可信 SHA-256；若使用官方 release API，也要限制可接受的 asset 名稱與來源。
+2. 安裝檔先下載到 Tauri `app_cache_dir()/installer-cache/v1` 的暫存檔，下載時同步計算 SHA-256 並檢查長度；全部驗證完成後才以原子替換方式寫入正式快取。
+3. 每次快取命中都重新計算 SHA-256。快取無效時拒絕另存或執行，並在可連線時下載通過驗證的新檔後原子替換；若下載失敗，原快取仍會保留但不會被使用。
+4. 使用者選擇「取得」時，從已驗證快取複製到目標端暫存檔，完成驗證後再替換目標檔；自動安裝則直接執行已驗證快取。
+5. 有效快取可離線使用；只有 cache miss、版本更新或快取驗證失敗時才需要重新下載大型安裝檔。
+6. 若要進度條，給固定 download key，並在前端 `DownloadKey` 加上該 key。
+7. 若要自動安裝，新增對應的 `download_and_install_*` command，並在前端 `menuActions` 接 split button。
 
 ### 修改相機功能
 
@@ -444,7 +449,7 @@ UI 原則：
 
 ## 版本號更新清單
 
-目前版本是 `3.12.3`。未來更新版本時，只手動修改 repo 根目錄的 `version.txt`。
+目前版本是 `3.12.4`。未來更新版本時，只手動修改 repo 根目錄的 `version.txt`。
 
 `npm run sync-version` 會把 `version.txt` 同步到：
 
@@ -557,11 +562,13 @@ npm.cmd run tauri build
 6. 設定頁切換 `YUY2`、`NV12`、`MJPG`、`H264`、`H265` 後，`settings.json` 有保存。
 7. 設定頁切換格式後，`UVCD_pram.h` 被覆寫為選定格式 `1`、其他格式 `0`。
 8. 資源二級頁的檔案另存功能正常。
-9. 無外網時 Arduino、VLC 與版本檢查停用，內嵌資源仍可取得。
-10. 有外網時 Arduino / VLC 下載進度與自動安裝選單正常。
-11. 相機頁可掃描 camera、預覽、截圖。
-12. 輸出圖片序號會接續既有最大編號。
-13. 相機頁開啟「選擇資料夾」時，對話框保持在主視窗上方，主視窗不可操作；取消或完成後恢復操作。
+9. 無外網且沒有快取時，Arduino / VLC 會清楚回報無法取得；內嵌資源仍可取得。
+10. 有外網時首次取得 Arduino / VLC 會顯示下載進度，完成後可正常另存或自動安裝。
+11. 中斷外網後再次取得或安裝同一版本，會通過 SHA-256 驗證並重用快取，不重新下載。
+12. 修改快取檔案後再次操作，程式會拒用該檔案；恢復網路後可重新下載並修復快取。
+13. 相機頁可掃描 camera、預覽、截圖。
+14. 輸出圖片序號會接續既有最大編號。
+15. 相機頁開啟「選擇資料夾」時，對話框保持在主視窗上方，主視窗不可操作；取消或完成後恢復操作。
 
 ## 已知限制
 
