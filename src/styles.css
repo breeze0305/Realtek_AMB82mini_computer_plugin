@@ -1371,6 +1371,18 @@ dd {
   cursor: pointer;
 }
 
+.annotationCrosshairGuides,
+.annotationGuideLine {
+  pointer-events: none;
+}
+
+.annotationGuideLine {
+  stroke: #ffffff;
+  stroke-linecap: butt;
+  opacity: 0.92;
+  mix-blend-mode: difference;
+}
+
 .annotationBox {
   cursor: move;
 }

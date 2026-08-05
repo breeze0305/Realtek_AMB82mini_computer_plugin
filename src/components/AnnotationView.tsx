@@ -14,16 +14,12 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type WheelEvent } from "react";
 
+import { compensateForCssZoom, stagePointToImage, type AnnotationPoint as Point } from "../annotationGeometry";
 import type { AnnotationBox, AnnotationImageData, AnnotationSaveResult, AnnotationWorkspace } from "../types";
 
 type AnnotationViewProps = {
   onBackHome: () => void;
   onStatus: (message: string) => void;
-};
-
-type Point = {
-  x: number;
-  y: number;
 };
 
 type DrawingState = {
@@ -96,12 +92,20 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   const [spaceDown, setSpaceDown] = useState(false);
   const [dropActive, setDropActive] = useState(false);
   const [classMenu, setClassMenu] = useState<ClassMenuState>(null);
+  const [cursorStagePoint, setCursorStagePoint] = useState<Point | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
 
   const currentImage = workspace?.images[currentIndex] ?? null;
   const currentBoxes = currentImage && workspace ? (workspace.annotations[currentImage.name] ?? []) : [];
   const hasWorkspace = workspace !== null;
   const geometry = useMemo(() => computeGeometry(stageSize, imageSize, pan, zoom), [stageSize, imageSize, pan, zoom]);
+  const guidePoint = useMemo(
+    () =>
+      cursorStagePoint && selectedClass !== null && !spaceDown && !panning && !editing
+        ? stagePointToImage(cursorStagePoint, geometry, imageSize, zoom, false)
+        : null,
+    [cursorStagePoint, editing, geometry, imageSize, panning, selectedClass, spaceDown, zoom],
+  );
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -147,6 +151,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
         setSelectedBox(null);
         setZoom(1);
         setPan({ x: 0, y: 0 });
+        setCursorStagePoint(null);
       } catch (error) {
         onStatus(String(error));
       }
@@ -445,14 +450,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
 
   function imagePoint(event: { clientX: number; clientY: number }) {
     const point = stagePoint(event);
-    if (!point || !geometry || !imageSize.width || !imageSize.height) return null;
-    const centerX = geometry.left + geometry.width / 2;
-    const centerY = geometry.top + geometry.height / 2;
-    const localX = (point.x - centerX) / zoom + geometry.width / 2;
-    const localY = (point.y - centerY) / zoom + geometry.height / 2;
-    const x = clamp((localX / geometry.width) * imageSize.width, 0, imageSize.width);
-    const y = clamp((localY / geometry.height) * imageSize.height, 0, imageSize.height);
-    return { x, y };
+    return point ? stagePointToImage(point, geometry, imageSize, zoom) : null;
   }
 
   function beginBoxEdit(
@@ -495,6 +493,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
     setClassMenu(null);
     const point = stagePoint(event);
     if (!point) return;
+    setCursorStagePoint(point);
 
     if (spaceDown) {
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -516,6 +515,8 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   }
 
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
+    setCursorStagePoint(stagePoint(event));
+
     if (editing?.pointerId === event.pointerId) {
       const current = imagePoint(event);
       if (!current) return;
@@ -572,12 +573,18 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   function handleWheel(event: WheelEvent<HTMLDivElement>) {
     if (!currentImage) return;
     event.preventDefault();
+    setCursorStagePoint(stagePoint(event));
     const direction = event.deltaY > 0 ? -1 : 1;
     setZoom((current) => clamp(Number((current + direction * 0.12).toFixed(2)), 0.35, 6));
   }
 
   const draftRect = drawing ? rectFromPoints(drawing.start, drawing.current, imageSize) : null;
   const topText = workspace?.images.length ? `${currentIndex + 1} / ${workspace.images.length}` : "0 / 0";
+  const normalBoxStrokeWidth = compensateForCssZoom(2, zoom);
+  const selectedBoxStrokeWidth = compensateForCssZoom(4, zoom);
+  const guideStrokeWidth = compensateForCssZoom(1.25, zoom);
+  const guideDashArray = `${compensateForCssZoom(7, zoom)} ${compensateForCssZoom(5, zoom)}`;
+  const draftDashArray = `${compensateForCssZoom(7, zoom)} ${compensateForCssZoom(5, zoom)}`;
 
   if (!workspace) {
     return (
@@ -687,7 +694,9 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
             setDrawing(null);
             setEditing(null);
             setPanning(null);
+            setCursorStagePoint(null);
           }}
+          onPointerLeave={() => setCursorStagePoint(null)}
           onWheel={handleWheel}
           ref={stageRef}
         >
@@ -705,6 +714,30 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
             >
               <img src={imageUrl} draggable={false} alt={currentImage.name} />
               <svg viewBox={`0 0 ${imageSize.width} ${imageSize.height}`} className="annotationOverlay">
+                {guidePoint && (
+                  <g className="annotationCrosshairGuides" aria-hidden="true">
+                    <line
+                      className="annotationGuideLine"
+                      x1={0}
+                      y1={guidePoint.y}
+                      x2={imageSize.width}
+                      y2={guidePoint.y}
+                      strokeWidth={guideStrokeWidth}
+                      strokeDasharray={guideDashArray}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <line
+                      className="annotationGuideLine"
+                      x1={guidePoint.x}
+                      y1={0}
+                      x2={guidePoint.x}
+                      y2={imageSize.height}
+                      strokeWidth={guideStrokeWidth}
+                      strokeDasharray={guideDashArray}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </g>
+                )}
                 {currentBoxes.map((box, index) => {
                   const rect = boxToRect(box, imageSize);
                   const color = classColor(box.class_id);
@@ -722,7 +755,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
                         fill={color}
                         fillOpacity={0.18}
                         stroke={color}
-                        strokeWidth={selectedBox === index ? 4 : 2}
+                        strokeWidth={selectedBox === index ? selectedBoxStrokeWidth : normalBoxStrokeWidth}
                         vectorEffect="non-scaling-stroke"
                         onPointerDown={(event) => beginBoxEdit(event, index, "move")}
                       />
@@ -737,7 +770,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
                             rx={handleRadius}
                             fill="#fffdf8"
                             stroke={color}
-                            strokeWidth={2}
+                            strokeWidth={normalBoxStrokeWidth}
                             vectorEffect="non-scaling-stroke"
                             onPointerDown={(event) => beginBoxEdit(event, index, "resize", handle.key)}
                             key={handle.key}
@@ -755,8 +788,8 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
                     fill={classColor(selectedClass)}
                     fillOpacity={0.16}
                     stroke={classColor(selectedClass)}
-                    strokeDasharray="7 5"
-                    strokeWidth={2}
+                    strokeDasharray={draftDashArray}
+                    strokeWidth={normalBoxStrokeWidth}
                     vectorEffect="non-scaling-stroke"
                   />
                 )}
