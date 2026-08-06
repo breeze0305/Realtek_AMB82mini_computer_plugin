@@ -26,6 +26,7 @@ const ARDUINO_LATEST_RELEASE_API: &str =
 const INSTALLER_CACHE_DIRECTORY: &str = "installer-cache/v1";
 const CACHE_METADATA_MAX_BYTES: u64 = 64 * 1024;
 const GITHUB_METADATA_MAX_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_RECOVERED_ANNOTATION_CLASSES: usize = 10_000;
 const SUPPORTED_UVCD_FORMATS: &[&str] = &["YUY2", "NV12", "MJPG", "H264", "H265"];
 const SUPPORTED_PREFERENCE_VERSIONS: &[&str] = &["release", "beta"];
 const ALLOWED_EXTERNAL_URL_HOSTS: &[&str] = &[
@@ -1162,10 +1163,12 @@ fn load_annotation_workspace(folder: &Path) -> Result<AnnotationWorkspace, AppEr
 
     let labels_folder = annotation_labels_folder(folder)?;
     fs::create_dir_all(&labels_folder)?;
-    let classes = read_classes_file(&labels_folder.join("classes.txt"))?;
+    let classes_path = labels_folder.join("classes.txt");
+    let classes_from_file = read_classes_file(&classes_path)?;
+    let should_recover_classes = classes_from_file.is_none();
+    let mut classes = classes_from_file.unwrap_or_default();
 
     let mut annotations = HashMap::new();
-    let mut invalid_class_ids = BTreeSet::new();
     let mut images = Vec::new();
 
     let mut image_paths: Vec<PathBuf> = fs::read_dir(folder)?
@@ -1189,12 +1192,6 @@ fn load_annotation_workspace(folder: &Path) -> Result<AnnotationWorkspace, AppEr
         let label_path = label_path_for_image(&labels_folder, &file_name)?;
         let boxes = read_annotation_file(&label_path)?;
 
-        for item in &boxes {
-            if item.class_id >= classes.len() {
-                invalid_class_ids.insert(item.class_id);
-            }
-        }
-
         images.push(AnnotationImage {
             name: file_name.clone(),
             path: display_path(&image_path),
@@ -1202,6 +1199,17 @@ fn load_annotation_workspace(folder: &Path) -> Result<AnnotationWorkspace, AppEr
         });
         annotations.insert(file_name, boxes);
     }
+
+    if should_recover_classes {
+        let recovered_classes = recover_annotation_class_names(annotations.values().flatten())?;
+        classes = create_recovered_classes_file(&classes_path, recovered_classes)?;
+    }
+
+    let invalid_class_ids = annotations
+        .values()
+        .flatten()
+        .filter_map(|item| (item.class_id >= classes.len()).then_some(item.class_id))
+        .collect::<BTreeSet<_>>();
 
     Ok(AnnotationWorkspace {
         image_folder: display_path(folder),
@@ -1248,26 +1256,85 @@ fn image_mime(path: &Path) -> &'static str {
     }
 }
 
-fn read_classes_file(path: &Path) -> Result<Vec<String>, AppError> {
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
+fn read_classes_file(path: &Path) -> Result<Option<Vec<String>>, AppError> {
+    let content = match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
 
-    Ok(fs::read_to_string(path)?
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect())
+    Ok(Some(
+        content
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_string)
+            .collect(),
+    ))
 }
 
-fn write_classes_file(path: &Path, classes: &[String]) -> Result<(), AppError> {
-    let content = if classes.is_empty() {
+fn recover_annotation_class_names<'a>(
+    boxes: impl Iterator<Item = &'a AnnotationBox>,
+) -> Result<Vec<String>, AppError> {
+    let Some(max_class_id) = boxes.map(|item| item.class_id).max() else {
+        return Ok(Vec::new());
+    };
+    let class_count = max_class_id.checked_add(1).ok_or_else(|| {
+        AppError::Message("Cannot recover classes.txt: class id is too large".into())
+    })?;
+
+    if class_count > MAX_RECOVERED_ANNOTATION_CLASSES {
+        return Err(AppError::Message(format!(
+            "Cannot recover classes.txt: class id {max_class_id} requires more than {MAX_RECOVERED_ANNOTATION_CLASSES} classes"
+        )));
+    }
+
+    let mut classes = Vec::new();
+    classes
+        .try_reserve_exact(class_count)
+        .map_err(|error| AppError::Message(format!("Cannot recover classes.txt: {error}")))?;
+    classes.extend((1..=class_count).map(|index| format!("object{index}")));
+    Ok(classes)
+}
+
+fn classes_file_content(classes: &[String]) -> String {
+    if classes.is_empty() {
         String::new()
     } else {
         format!("{}\n", classes.join("\n"))
-    };
-    fs::write(path, content)?;
+    }
+}
+
+fn create_recovered_classes_file(
+    path: &Path,
+    recovered_classes: Vec<String>,
+) -> Result<Vec<String>, AppError> {
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+    {
+        Ok(mut file) => {
+            if let Err(error) = file.write_all(classes_file_content(&recovered_classes).as_bytes())
+            {
+                drop(file);
+                let _ = fs::remove_file(path);
+                return Err(error.into());
+            }
+            Ok(recovered_classes)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => read_classes_file(path)?
+            .ok_or_else(|| {
+                AppError::Message(
+                    "classes.txt changed while annotation classes were recovered".into(),
+                )
+            }),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn write_classes_file(path: &Path, classes: &[String]) -> Result<(), AppError> {
+    fs::write(path, classes_file_content(classes))?;
     Ok(())
 }
 
@@ -2762,6 +2829,137 @@ mod tests {
             digest: Some(digest.to_string()),
             browser_download_url: browser_download_url.to_string(),
         }
+    }
+
+    fn annotation_test_folders(name: &str) -> (PathBuf, PathBuf, PathBuf) {
+        let root = test_directory(name);
+        let images = root.join("images");
+        let labels = root.join("images_labels");
+        fs::create_dir_all(&images).unwrap();
+        fs::create_dir_all(&labels).unwrap();
+        (root, images, labels)
+    }
+
+    #[test]
+    fn missing_classes_are_recovered_and_persisted_from_sparse_ids() {
+        let (root, images, labels) = annotation_test_folders("annotation-class-recovery");
+        fs::write(images.join("a.jpg"), b"").unwrap();
+        fs::write(images.join("b.png"), b"").unwrap();
+        fs::write(
+            labels.join("a.txt"),
+            "0 0.5 0.5 0.2 0.2\n3 0.4 0.4 0.1 0.1\n",
+        )
+        .unwrap();
+        fs::write(labels.join("b.txt"), "255 0.5 0.5 0.3 0.3\n").unwrap();
+
+        let workspace = load_annotation_workspace(&images).unwrap();
+        let expected_classes = (1..=256)
+            .map(|index| format!("object{index}"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(workspace.classes, expected_classes);
+        assert!(workspace.invalid_class_ids.is_empty());
+        assert_eq!(workspace.annotations["a.jpg"].len(), 2);
+        assert_eq!(workspace.annotations["b.png"].len(), 1);
+        assert_eq!(
+            fs::read_to_string(labels.join("classes.txt")).unwrap(),
+            format!("{}\n", expected_classes.join("\n"))
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn invalid_annotation_does_not_create_recovered_classes_file() {
+        let (root, images, labels) = annotation_test_folders("annotation-invalid-recovery");
+        fs::write(images.join("a.jpg"), b"").unwrap();
+        fs::write(labels.join("a.txt"), "invalid annotation\n").unwrap();
+
+        let result = load_annotation_workspace(&images);
+
+        assert!(matches!(
+            result,
+            Err(AppError::Message(message)) if message.contains("Invalid YOLO annotation")
+        ));
+        assert!(!labels.join("classes.txt").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn empty_annotation_workspace_creates_empty_classes_file() {
+        let (root, images, labels) = annotation_test_folders("annotation-empty-recovery");
+
+        let workspace = load_annotation_workspace(&images).unwrap();
+
+        assert!(workspace.images.is_empty());
+        assert!(workspace.classes.is_empty());
+        assert!(workspace.annotations.is_empty());
+        assert!(workspace.invalid_class_ids.is_empty());
+        assert_eq!(fs::read_to_string(labels.join("classes.txt")).unwrap(), "");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn existing_classes_file_is_not_overwritten_during_workspace_load() {
+        let (root, images, labels) = annotation_test_folders("annotation-existing-classes");
+        fs::write(images.join("a.jpg"), b"").unwrap();
+        fs::write(labels.join("a.txt"), "2 0.5 0.5 0.2 0.2\n").unwrap();
+        fs::write(labels.join("classes.txt"), "dog\n").unwrap();
+
+        let workspace = load_annotation_workspace(&images).unwrap();
+
+        assert_eq!(workspace.classes, ["dog"]);
+        assert_eq!(workspace.invalid_class_ids, [2]);
+        assert_eq!(
+            fs::read_to_string(labels.join("classes.txt")).unwrap(),
+            "dog\n"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn recovered_classes_do_not_replace_a_concurrently_created_file() {
+        let root = test_directory("annotation-concurrent-classes");
+        fs::create_dir_all(&root).unwrap();
+        let classes_path = root.join("classes.txt");
+        fs::write(&classes_path, "realClass\n").unwrap();
+
+        let classes = create_recovered_classes_file(
+            &classes_path,
+            vec!["object1".to_string(), "object2".to_string()],
+        )
+        .unwrap();
+
+        assert_eq!(classes, ["realClass"]);
+        assert_eq!(fs::read_to_string(&classes_path).unwrap(), "realClass\n");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn excessive_class_id_does_not_create_recovered_classes_file() {
+        let (root, images, labels) = annotation_test_folders("annotation-class-limit");
+        fs::write(images.join("a.jpg"), b"").unwrap();
+        fs::write(
+            labels.join("a.txt"),
+            format!("{MAX_RECOVERED_ANNOTATION_CLASSES} 0.5 0.5 0.2 0.2\n"),
+        )
+        .unwrap();
+
+        let result = load_annotation_workspace(&images);
+        let overflow_box = [AnnotationBox {
+            class_id: usize::MAX,
+            x_center: 0.5,
+            y_center: 0.5,
+            width: 0.2,
+            height: 0.2,
+        }];
+
+        assert!(matches!(
+            result,
+            Err(AppError::Message(message)) if message.contains("requires more than")
+        ));
+        assert!(recover_annotation_class_names(overflow_box.iter()).is_err());
+        assert!(!labels.join("classes.txt").exists());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

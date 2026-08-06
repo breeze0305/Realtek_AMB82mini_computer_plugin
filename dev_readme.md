@@ -67,6 +67,7 @@ Object detection annotation behavior:
 - Tauri drag/drop is enabled in `src-tauri/tauri.conf.json` so a folder path can be received by `getCurrentWebview().onDragDropEvent`.
 - Rust annotation commands live in `src-tauri/src/lib.rs`: `select_annotation_folder`, `load_annotation_folder`, `read_annotation_image`, `save_annotation_classes`, `save_annotation_file`, and `save_annotation_workspace`.
 - The backend creates `{image-folder-name}_labels` beside the selected image folder, reads/writes `classes.txt`, and stores one YOLO `.txt` file per image.
+- If `classes.txt` is missing, the backend derives the required class count from the highest loaded YOLO class ID, creates `object1` through `objectN`, and writes the recovered file before returning the workspace. Existing class files are never replaced by this recovery path.
 - The frontend reads image bytes through `read_annotation_image`, converts them to a Blob URL, and avoids `assetProtocol` permissions.
 - Label rows use YOLO normalized values: `<class_id> <x_center> <y_center> <width> <height>`.
 - Bounding-box, draft, and resize-handle strokes compensate for CSS zoom so their visible thickness stays constant.
