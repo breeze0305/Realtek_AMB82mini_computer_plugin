@@ -136,6 +136,27 @@ export type AnnotationWorkspace = {
   invalid_class_ids: number[];
 };
 
+export type AnnotationLoadProgress = {
+  phase: "discovering" | "normalizing" | "loading" | "complete";
+  processed: number;
+  total: number;
+  corrected: number;
+  failed: number;
+  current_file: string | null;
+};
+
+export type AnnotationLoadSummary = {
+  total: number;
+  corrected: number;
+  failed: number;
+  failed_files: string[];
+};
+
+export type AnnotationLoadResult = {
+  workspace: AnnotationWorkspace;
+  summary: AnnotationLoadSummary;
+};
+
 export type AnnotationImageData = {
   mime: string;
   bytes: number[];

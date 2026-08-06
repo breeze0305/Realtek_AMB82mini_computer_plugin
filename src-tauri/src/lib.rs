@@ -1,3 +1,8 @@
+mod annotation_orientation;
+
+use annotation_orientation::{
+    normalize_annotation_orientations, AnnotationOrientationProgress, AnnotationOrientationSummary,
+};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -8,11 +13,11 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
-    sync::{Mutex, MutexGuard, TryLockError},
+    sync::{Arc, Mutex, MutexGuard, TryLockError},
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{ipc::Channel, AppHandle, Emitter, Manager};
 use thiserror::Error;
 
 const AUTHOR: &str = "breeze0305";
@@ -141,6 +146,41 @@ struct AnnotationWorkspace {
     classes: Vec<String>,
     annotations: HashMap<String, Vec<AnnotationBox>>,
     invalid_class_ids: Vec<usize>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct AnnotationExifProgress {
+    phase: &'static str,
+    processed: usize,
+    total: usize,
+    corrected: usize,
+    failed: usize,
+    current_file: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct AnnotationPreparationSummary {
+    total: usize,
+    corrected: usize,
+    failed: usize,
+    failed_files: Vec<String>,
+}
+
+impl From<AnnotationOrientationSummary> for AnnotationPreparationSummary {
+    fn from(summary: AnnotationOrientationSummary) -> Self {
+        Self {
+            total: summary.total,
+            corrected: summary.corrected,
+            failed: summary.failed,
+            failed_files: summary.failed_files,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct AnnotationLoadResult {
+    workspace: AnnotationWorkspace,
+    summary: AnnotationPreparationSummary,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -320,6 +360,7 @@ struct AppState {
     output_folder: Mutex<Option<PathBuf>>,
     capture_lock: Mutex<()>,
     native_dialog_lock: Mutex<()>,
+    annotation_load_lock: Arc<Mutex<()>>,
     arduino_installer_lock: Mutex<()>,
     vlc_installer_lock: Mutex<()>,
 }
@@ -448,6 +489,7 @@ pub fn run() {
             output_folder: Mutex::new(None),
             capture_lock: Mutex::new(()),
             native_dialog_lock: Mutex::new(()),
+            annotation_load_lock: Arc::new(Mutex::new(())),
             arduino_installer_lock: Mutex::new(()),
             vlc_installer_lock: Mutex::new(()),
         })
@@ -1045,16 +1087,37 @@ fn save_capture_image(
 fn select_annotation_folder(
     window: tauri::WebviewWindow,
     state: tauri::State<AppState>,
-) -> Result<AnnotationWorkspace, AppError> {
+) -> Result<Option<String>, AppError> {
     let Some(folder) = pick_folder_dialog(&window, &state, "Select image folder")? else {
-        return Err(AppError::Message("Folder selection was canceled".into()));
+        return Ok(None);
     };
 
-    load_annotation_workspace(&folder)
+    Ok(Some(display_path(folder)))
 }
 
 #[tauri::command]
-fn load_annotation_folder(path: String) -> Result<AnnotationWorkspace, AppError> {
+async fn load_annotation_folder(
+    path: String,
+    on_progress: Channel<AnnotationExifProgress>,
+    state: tauri::State<'_, AppState>,
+) -> Result<AnnotationLoadResult, AppError> {
+    let annotation_load_lock = Arc::clone(&state.annotation_load_lock);
+    tauri::async_runtime::spawn_blocking(move || {
+        let _load_guard = annotation_load_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        prepare_annotation_folder(&path, |progress| {
+            let _ = on_progress.send(progress);
+        })
+    })
+    .await
+    .map_err(|error| AppError::Message(format!("Annotation preparation task failed: {error}")))?
+}
+
+fn prepare_annotation_folder(
+    path: &str,
+    mut on_progress: impl FnMut(AnnotationExifProgress),
+) -> Result<AnnotationLoadResult, AppError> {
     let path = PathBuf::from(path);
     let folder = if path.is_file() {
         path.parent()
@@ -1063,7 +1126,63 @@ fn load_annotation_folder(path: String) -> Result<AnnotationWorkspace, AppError>
     } else {
         path
     };
-    load_annotation_workspace(&folder)
+
+    on_progress(AnnotationExifProgress {
+        phase: "discovering",
+        processed: 0,
+        total: 0,
+        corrected: 0,
+        failed: 0,
+        current_file: None,
+    });
+
+    let mut last_progress_at = Instant::now()
+        .checked_sub(Duration::from_secs(1))
+        .unwrap_or_else(Instant::now);
+    let summary = normalize_annotation_orientations(&folder, |progress| {
+        let is_boundary = progress.processed == 0 || progress.processed == progress.total;
+        if is_boundary || last_progress_at.elapsed() >= Duration::from_millis(50) {
+            last_progress_at = Instant::now();
+            on_progress(annotation_exif_progress("normalizing", &progress));
+        }
+    })?;
+
+    on_progress(AnnotationExifProgress {
+        phase: "loading",
+        processed: summary.total,
+        total: summary.total,
+        corrected: summary.corrected,
+        failed: summary.failed,
+        current_file: None,
+    });
+    let workspace = load_annotation_workspace(&folder)?;
+    on_progress(AnnotationExifProgress {
+        phase: "complete",
+        processed: summary.total,
+        total: summary.total,
+        corrected: summary.corrected,
+        failed: summary.failed,
+        current_file: None,
+    });
+
+    Ok(AnnotationLoadResult {
+        workspace,
+        summary: summary.into(),
+    })
+}
+
+fn annotation_exif_progress(
+    phase: &'static str,
+    progress: &AnnotationOrientationProgress,
+) -> AnnotationExifProgress {
+    AnnotationExifProgress {
+        phase,
+        processed: progress.processed,
+        total: progress.total,
+        corrected: progress.corrected,
+        failed: progress.failed,
+        current_file: progress.current_file.clone(),
+    }
 }
 
 #[tauri::command]
@@ -1815,7 +1934,7 @@ fn write_cached_installer_metadata(
 }
 
 fn write_bytes_atomically(target: &Path, bytes: &[u8]) -> Result<(), AppError> {
-    let (temporary_path, mut file) = create_download_temp_file(target)?;
+    let (temporary_path, mut file) = create_temporary_part_file(target)?;
     let write_result = file
         .write_all(bytes)
         .and_then(|_| file.flush())
@@ -2061,7 +2180,7 @@ fn write_stream_atomically(
     verification: Option<&InstallerMetadata>,
     mut on_chunk: impl FnMut(u64),
 ) -> Result<u64, AppError> {
-    let (temporary_path, mut file) = create_download_temp_file(target)?;
+    let (temporary_path, mut file) = create_temporary_part_file(target)?;
     let mut buffer = [0_u8; 64 * 1024];
     let mut bytes = 0_u64;
     let mut hasher = Sha256::new();
@@ -2175,7 +2294,7 @@ fn validate_download_length(bytes: u64, total: Option<u64>) -> Result<(), AppErr
     Ok(())
 }
 
-fn create_download_temp_file(target: &Path) -> Result<(PathBuf, fs::File), AppError> {
+fn create_temporary_part_file(target: &Path) -> Result<(PathBuf, fs::File), AppError> {
     let parent = target
         .parent()
         .filter(|path| !path.as_os_str().is_empty())
@@ -2207,7 +2326,7 @@ fn create_download_temp_file(target: &Path) -> Result<(PathBuf, fs::File), AppEr
     }
 
     Err(AppError::Message(
-        "Failed to create a unique temporary download file".into(),
+        "Failed to create a unique temporary part file".into(),
     ))
 }
 
@@ -2841,6 +2960,27 @@ mod tests {
     }
 
     #[test]
+    fn annotation_preparation_reports_every_phase_before_returning_workspace() {
+        let (root, images, _) = annotation_test_folders("annotation-preparation-progress");
+        let mut phases = Vec::new();
+
+        let result = prepare_annotation_folder(&display_path(&images), |progress| {
+            phases.push(progress.phase);
+        })
+        .unwrap();
+
+        assert_eq!(
+            phases,
+            ["discovering", "normalizing", "loading", "complete"]
+        );
+        assert_eq!(result.summary.total, 0);
+        assert_eq!(result.summary.corrected, 0);
+        assert_eq!(result.summary.failed, 0);
+        assert!(result.workspace.images.is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn missing_classes_are_recovered_and_persisted_from_sparse_ids() {
         let (root, images, labels) = annotation_test_folders("annotation-class-recovery");
         fs::write(images.join("a.jpg"), b"").unwrap();
@@ -3268,6 +3408,7 @@ mod tests {
             output_folder: Mutex::new(None),
             capture_lock: Mutex::new(()),
             native_dialog_lock: Mutex::new(()),
+            annotation_load_lock: Arc::new(Mutex::new(())),
             arduino_installer_lock: Mutex::new(()),
             vlc_installer_lock: Mutex::new(()),
         };

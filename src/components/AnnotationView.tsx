@@ -1,10 +1,11 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
   FolderOpen,
+  LoaderCircle,
   MousePointer2,
   Move,
   Plus,
@@ -15,7 +16,15 @@ import {
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type WheelEvent } from "react";
 
 import { compensateForCssZoom, stagePointToImage, type AnnotationPoint as Point } from "../annotationGeometry";
-import type { AnnotationBox, AnnotationImageData, AnnotationSaveResult, AnnotationWorkspace } from "../types";
+import type {
+  AnnotationBox,
+  AnnotationImageData,
+  AnnotationLoadProgress,
+  AnnotationLoadResult,
+  AnnotationLoadSummary,
+  AnnotationSaveResult,
+  AnnotationWorkspace,
+} from "../types";
 
 type AnnotationViewProps = {
   onBackHome: () => void;
@@ -58,6 +67,11 @@ type ClassMenuState = {
   y: number;
 } | null;
 
+type AnnotationPreparationState = {
+  stage: "selecting" | "loading";
+  progress: AnnotationLoadProgress | null;
+};
+
 const CLASS_NAME_RE = /^[A-Za-z0-9]+$/;
 const MIN_BOX_PIXELS = 4;
 const HANDLE_SCREEN_PIXELS = 14;
@@ -93,11 +107,19 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   const [dropActive, setDropActive] = useState(false);
   const [classMenu, setClassMenu] = useState<ClassMenuState>(null);
   const [cursorStagePoint, setCursorStagePoint] = useState<Point | null>(null);
+  const [preparation, setPreparation] = useState<AnnotationPreparationState | null>(null);
+  const [workspaceRevision, setWorkspaceRevision] = useState(0);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const mountedRef = useRef(true);
+  const operationCounterRef = useRef(0);
+  const activeOperationRef = useRef<number | null>(null);
+  const pendingProgressRef = useRef<{ operationId: number; progress: AnnotationLoadProgress } | null>(null);
+  const progressFrameRef = useRef<number | null>(null);
 
   const currentImage = workspace?.images[currentIndex] ?? null;
   const currentBoxes = currentImage && workspace ? (workspace.annotations[currentImage.name] ?? []) : [];
   const hasWorkspace = workspace !== null;
+  const isPreparing = preparation !== null;
   const geometry = useMemo(() => computeGeometry(stageSize, imageSize, pan, zoom), [stageSize, imageSize, pan, zoom]);
   const guidePoint = useMemo(
     () =>
@@ -106,6 +128,19 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
         : null,
     [cursorStagePoint, editing, geometry, imageSize, panning, selectedClass, spaceDown, zoom],
   );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      activeOperationRef.current = null;
+      pendingProgressRef.current = null;
+      if (progressFrameRef.current !== null) {
+        cancelAnimationFrame(progressFrameRef.current);
+        progressFrameRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -118,7 +153,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
     });
     observer.observe(stage);
     return () => observer.disconnect();
-  }, [hasWorkspace]);
+  }, [hasWorkspace, isPreparing]);
 
   useEffect(() => {
     let disposed = false;
@@ -153,7 +188,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
         setPan({ x: 0, y: 0 });
         setCursorStagePoint(null);
       } catch (error) {
-        onStatus(String(error));
+        if (!disposed) onStatus(String(error));
       }
     }
 
@@ -162,9 +197,9 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
       disposed = true;
       if (previousUrl) URL.revokeObjectURL(previousUrl);
     };
-    // An annotation image is uniquely identified by its path; other object fields do not require a reload.
+    // EXIF normalization can rewrite an image without changing its path, so workspaceRevision forces fresh bytes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentImage?.path, onStatus]);
+  }, [currentImage?.path, onStatus, workspaceRevision]);
 
   useEffect(() => {
     let disposed = false;
@@ -172,8 +207,9 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
 
     void getCurrentWebview()
       .onDragDropEvent((event) => {
+        if (disposed) return;
         if (event.payload.type === "enter") {
-          setDropActive(true);
+          if (activeOperationRef.current === null) setDropActive(true);
           return;
         }
         if (event.payload.type === "leave") {
@@ -182,6 +218,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
         }
         if (event.payload.type === "drop") {
           setDropActive(false);
+          if (activeOperationRef.current !== null) return;
           const [path] = event.payload.paths;
           if (path) void loadWorkspaceFromPath(path);
         }
@@ -210,7 +247,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
     }
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(event.target)) return;
+      if (activeOperationRef.current !== null || isTypingTarget(event.target)) return;
 
       if (event.code === "Space") {
         event.preventDefault();
@@ -228,6 +265,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
     }
 
     function handleKeyUp(event: KeyboardEvent) {
+      if (activeOperationRef.current !== null) return;
       if (event.code === "Space") {
         setSpaceDown(false);
         setPanning(null);
@@ -244,35 +282,109 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, selectedBox, workspace]);
 
+  function beginPreparation(stage: AnnotationPreparationState["stage"]) {
+    if (activeOperationRef.current !== null) return null;
+
+    const operationId = ++operationCounterRef.current;
+    activeOperationRef.current = operationId;
+    setDropActive(false);
+    setPreparation({ stage, progress: null });
+    setDrawing(null);
+    setEditing(null);
+    setPanning(null);
+    setSpaceDown(false);
+    setClassMenu(null);
+    setCursorStagePoint(null);
+    return operationId;
+  }
+
+  function operationIsActive(operationId: number) {
+    return mountedRef.current && activeOperationRef.current === operationId;
+  }
+
+  function queuePreparationProgress(operationId: number, progress: AnnotationLoadProgress) {
+    if (!operationIsActive(operationId)) return;
+    pendingProgressRef.current = { operationId, progress };
+    if (progressFrameRef.current !== null) return;
+
+    progressFrameRef.current = requestAnimationFrame(() => {
+      progressFrameRef.current = null;
+      const pending = pendingProgressRef.current;
+      pendingProgressRef.current = null;
+      if (!pending || !operationIsActive(pending.operationId)) return;
+      setPreparation({ stage: "loading", progress: pending.progress });
+    });
+  }
+
+  function finishPreparation(operationId: number) {
+    if (activeOperationRef.current !== operationId) return;
+
+    activeOperationRef.current = null;
+    pendingProgressRef.current = null;
+    if (progressFrameRef.current !== null) {
+      cancelAnimationFrame(progressFrameRef.current);
+      progressFrameRef.current = null;
+    }
+    if (mountedRef.current) setPreparation(null);
+  }
+
+  async function requestWorkspace(operationId: number, path: string) {
+    if (!operationIsActive(operationId)) return;
+
+    setPreparation({ stage: "loading", progress: null });
+    const onProgress = new Channel<AnnotationLoadProgress>();
+    onProgress.onmessage = (progress) => queuePreparationProgress(operationId, progress);
+    const result = await invoke<AnnotationLoadResult>("load_annotation_folder", { path, onProgress });
+    if (operationIsActive(operationId)) applyWorkspace(result.workspace, result.summary);
+  }
+
   async function selectFolder() {
+    const operationId = beginPreparation("selecting");
+    if (operationId === null) return;
+
     try {
-      const next = await invoke<AnnotationWorkspace>("select_annotation_folder");
-      applyWorkspace(next);
+      const path = await invoke<string | null>("select_annotation_folder");
+      if (path && operationIsActive(operationId)) await requestWorkspace(operationId, path);
     } catch (error) {
-      onStatus(String(error));
+      if (operationIsActive(operationId)) onStatus(String(error));
+    } finally {
+      finishPreparation(operationId);
     }
   }
 
   async function loadWorkspaceFromPath(path: string) {
+    const operationId = beginPreparation("loading");
+    if (operationId === null) return;
+
     try {
-      const next = await invoke<AnnotationWorkspace>("load_annotation_folder", { path });
-      applyWorkspace(next);
+      await requestWorkspace(operationId, path);
     } catch (error) {
-      onStatus(String(error));
+      if (operationIsActive(operationId)) onStatus(String(error));
+    } finally {
+      finishPreparation(operationId);
     }
   }
 
-  function applyWorkspace(next: AnnotationWorkspace) {
+  function applyWorkspace(next: AnnotationWorkspace, summary: AnnotationLoadSummary) {
     const normalized = normalizeWorkspace(next);
     setWorkspace(normalized);
+    setWorkspaceRevision((current) => current + 1);
     setCurrentIndex(0);
     setSelectedClass(normalized.classes.length ? 0 : null);
     setClassName("");
     setClassMenu(null);
-    const message = normalized.invalid_class_ids.length
+    const workspaceMessage = normalized.invalid_class_ids.length
       ? `標記檔案中有 class index ${normalized.invalid_class_ids.join(", ")}，請先建立對應 class。`
       : `已載入 ${normalized.images.length} 張圖片`;
-    onStatus(message);
+    const firstFailure = summary.failed_files[0];
+    const exifMessage = summary.failed
+      ? `EXIF 方向檢查 ${summary.total} 張，修正 ${summary.corrected} 張，${summary.failed} 張處理失敗${firstFailure ? `（${firstFailure}）` : ""}`
+      : summary.corrected
+        ? `已將 ${summary.corrected} 張圖片的 EXIF 方向寫入圖片內容`
+        : summary.total
+          ? "圖片方向檢查完成，不需要修正"
+          : "資料夾內沒有可檢查的圖片";
+    onStatus(`${workspaceMessage}；${exifMessage}`);
   }
 
   function normalizeWorkspace(next: AnnotationWorkspace): AnnotationWorkspace {
@@ -585,6 +697,64 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   const guideStrokeWidth = compensateForCssZoom(1.25, zoom);
   const guideDashArray = `${compensateForCssZoom(7, zoom)} ${compensateForCssZoom(5, zoom)}`;
   const draftDashArray = `${compensateForCssZoom(7, zoom)} ${compensateForCssZoom(5, zoom)}`;
+
+  if (preparation) {
+    const { progress } = preparation;
+    const total = Math.max(progress?.total ?? 0, 0);
+    const processed = Math.min(Math.max(progress?.processed ?? 0, 0), total);
+    const isDeterminate = preparation.stage === "loading" && progress !== null && total > 0;
+    const percentage = isDeterminate ? Math.min(Math.round((processed / total) * 100), 100) : 0;
+    const phaseText =
+      preparation.stage === "selecting"
+        ? "請在 Windows 視窗中選擇圖片資料夾"
+        : progress?.phase === "loading"
+          ? "圖片方向處理完成，正在載入標註資料"
+          : progress?.phase === "complete"
+            ? "圖片方向與標註資料處理完成"
+            : progress?.phase === "normalizing"
+              ? "正在檢查 EXIF 方向，必要時會將方向寫回圖片"
+              : "正在統計資料夾內的圖片";
+    const progressText = isDeterminate
+      ? `${processed.toLocaleString()} / ${total.toLocaleString()}（${percentage}%）`
+      : preparation.stage === "selecting"
+        ? "等待選擇資料夾"
+        : "正在準備圖片清單";
+
+    return (
+      <section className="annotationStart annotationPreparing" aria-busy="true">
+        <div className="annotationDropPanel annotationProgressPanel">
+          <LoaderCircle className="spin annotationProgressIcon" size={54} />
+          <h2>正在準備標註資料夾</h2>
+          <p>{phaseText}</p>
+          <div
+            className={`annotationExifProgress ${isDeterminate ? "" : "isIndeterminate"}`}
+            role="progressbar"
+            aria-label="圖片 EXIF 方向處理進度"
+            aria-valuemin={0}
+            aria-valuetext={progressText}
+            {...(isDeterminate ? { "aria-valuemax": total, "aria-valuenow": processed } : {})}
+          >
+            <span style={{ "--annotation-progress": `${percentage}%` } as CSSProperties} />
+          </div>
+          <div className="annotationProgressStats">
+            <strong>{progressText}</strong>
+            {progress && (
+              <span>
+                已修正 {progress.corrected.toLocaleString()} 張
+                {progress.failed > 0 && <em>・{progress.failed.toLocaleString()} 張失敗</em>}
+              </span>
+            )}
+          </div>
+          {progress?.current_file && (
+            <small className="annotationProgressFile" title={progress.current_file}>
+              {progress.current_file}
+            </small>
+          )}
+          <small className="annotationProgressNote">沒有 EXIF 旋轉標籤的圖片會直接略過，完成前請勿關閉程式。</small>
+        </div>
+      </section>
+    );
+  }
 
   if (!workspace) {
     return (

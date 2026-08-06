@@ -2,7 +2,7 @@
 
 這份文件是未來理解與修改本專案的主要入口。讀完後應該能知道：這個程式有哪些功能、前後端怎麼分工、常見功能要改哪裡、版本號如何由 `version.txt` 統一管理，以及 commit / push 的工作習慣。
 
-目前軟體版本：`3.13.1`
+目前軟體版本：`3.14.1`
 
 > 注意：`dev_readme.md` 目前會納入 git 追蹤。若交接內容或維護流程有變更，應和相關程式碼一起 commit。
 
@@ -20,14 +20,14 @@
 - UI icon：`lucide-react`
 - Windows bundle：Tauri NSIS
 
-## Current frontend architecture (3.13.1)
+## Current frontend architecture (3.14.1)
 
 This section is the authoritative source map for the current frontend. Some older notes below may still mention the pre-refactor shape where most UI lived in `src/App.tsx`; when in doubt, follow this section.
 
 - `src/App.tsx`
   - App controller only: dashboard/view state, running action state, Tauri `invoke` calls, camera flow, converter flow, version-check state, and wiring child views together.
 - `src/types.ts`
-  - Shared frontend types for dashboard/settings/download/converter/version-check/view/action data.
+  - Shared frontend types for dashboard/settings/download/converter/version-check/view/action data, including annotation preparation progress and summary payloads.
 - `src/i18n.ts`
   - `translations`, `languageNames`, `installActionLabels`, `cameraGuideSteps`, and `PREFERENCE_COPY_MESSAGE`.
 - `src/appConfig.ts`
@@ -45,7 +45,7 @@ This section is the authoritative source map for the current frontend. Some olde
   - `SettingsView.tsx`: settings page UI, including auto update check, Preference version, UVC format, and reset.
   - `CameraView.tsx`: camera page UI.
   - `ConverterView.tsx`: model converter page UI.
-  - `AnnotationView.tsx`: object detection labeling UI, including folder loading, class management, image navigation, box drawing/moving/resizing, and current-image reset.
+  - `AnnotationView.tsx`: object detection labeling UI, including folder selection/drop, EXIF preparation progress, class management, image navigation, box drawing/moving/resizing, and current-image reset.
   - `NetworkStatus.tsx`: global online/offline status indicator fixed to the lower-left corner of every view.
 - `src/styles.css`
   - Shared styling for shell, header, home cards, settings, camera, converter, annotation workspace, toast, and network status.
@@ -65,9 +65,14 @@ Object detection annotation behavior:
 - The home annotation card is built in `src/homeCards.ts` and opens `view === "annotator"`.
 - `src/components/AnnotationView.tsx` owns the annotation workspace UI and local interaction state.
 - Tauri drag/drop is enabled in `src-tauri/tauri.conf.json` so a folder path can be received by `getCurrentWebview().onDragDropEvent`.
-- Rust annotation commands live in `src-tauri/src/lib.rs`: `select_annotation_folder`, `load_annotation_folder`, `read_annotation_image`, `save_annotation_classes`, `save_annotation_file`, and `save_annotation_workspace`.
+- Rust annotation commands live in `src-tauri/src/lib.rs`: `select_annotation_folder` only returns the selected path, while asynchronous `load_annotation_folder` scans and normalizes image orientation before loading the workspace; image reading and annotation saving continue through `read_annotation_image`, `save_annotation_classes`, `save_annotation_file`, and `save_annotation_workspace`.
+- EXIF orientation normalization is isolated in `src-tauri/src/annotation_orientation.rs`. The blocking image work runs outside the async executor, and a per-invocation Tauri channel reports `discovering`, `normalizing`, `loading`, and `complete` progress phases.
 - The backend creates `{image-folder-name}_labels` beside the selected image folder, reads/writes `classes.txt`, and stores one YOLO `.txt` file per image.
 - If `classes.txt` is missing, the backend derives the required class count from the highest loaded YOLO class ID, creates `object1` through `objectN`, and writes the recovered file before returning the workspace. Existing class files are never replaced by this recovery path.
+- Selecting or dropping a folder always completes the orientation scan before entering the annotation workspace. The progress view stays visible while the folder is being enumerated, normalized, and loaded.
+- Only images with EXIF Orientation `2` through `8` are decoded and rewritten. The orientation transform is applied to the pixels so the visible direction remains unchanged, then the output no longer depends on the EXIF orientation value. Images without a relevant orientation are left byte-for-byte untouched.
+- Each rewritten image is produced through a same-directory temporary file and atomically replaces the original only after a successful encode. A failed image retains its original file, is recorded in the summary, and does not stop the remaining folder scan.
+- JPEG rewrites retain the edited EXIF, ICC profile, JFIF density, and comments; PNG rewrites retain the edited EXIF, ICC profile, and an explicit allowlist of safe ancillary metadata. APNG files that need orientation work are reported as failures and remain byte-for-byte unchanged so animation frames are never discarded.
 - The frontend reads image bytes through `read_annotation_image`, converts them to a Blob URL, and avoids `assetProtocol` permissions.
 - Label rows use YOLO normalized values: `<class_id> <x_center> <y_center> <width> <height>`.
 - Bounding-box, draft, and resize-handle strokes compensate for CSS zoom so their visible thickness stays constant.
@@ -452,7 +457,7 @@ UI 原則：
 
 ## 版本號更新清單
 
-目前版本是 `3.13.1`。未來更新版本時，只手動修改 repo 根目錄的 `version.txt`。
+目前版本是 `3.14.1`。未來更新版本時，只手動修改 repo 根目錄的 `version.txt`。
 
 `npm run sync-version` 會把 `version.txt` 同步到：
 
