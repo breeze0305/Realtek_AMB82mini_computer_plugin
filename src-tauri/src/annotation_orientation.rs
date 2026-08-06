@@ -1,5 +1,7 @@
-use super::{
-    create_temporary_part_file, display_path, is_supported_image, replace_downloaded_file, AppError,
+use super::{display_path, is_supported_image, AppError};
+use crate::image_safety::{
+    create_locked_temporary_image, rename_to_unique_sibling, validate_image_dimensions,
+    ImageSourceGuard, LockedImageSource,
 };
 use image::{
     codecs::{jpeg::JpegEncoder, png::PngEncoder},
@@ -17,7 +19,7 @@ use std::{
     path::Path,
 };
 
-const JPEG_QUALITY: u8 = 95;
+pub(super) const JPEG_QUALITY: u8 = 95;
 const MAX_REPORTED_FAILURES: usize = 20;
 const EXIF_ORIENTATION_TAG: u16 = 0x0112;
 const TIFF_ENTRY_BYTES: usize = 12;
@@ -131,7 +133,7 @@ fn orientation_progress(
     }
 }
 
-fn normalize_image_orientation(path: &Path) -> Result<bool, AppError> {
+pub(super) fn normalize_image_orientation(path: &Path) -> Result<bool, AppError> {
     if path
         .extension()
         .and_then(|extension| extension.to_str())
@@ -140,7 +142,8 @@ fn normalize_image_orientation(path: &Path) -> Result<bool, AppError> {
         return Ok(false);
     }
 
-    let original_bytes = ContainerBytes::from(fs::read(path)?);
+    let (source_guard, original_bytes) = LockedImageSource::open(path)?.into_parts();
+    let original_bytes = ContainerBytes::from(original_bytes);
     let metadata_reader = image_reader_from_bytes(original_bytes.clone())?;
     let format = metadata_reader.format().ok_or_else(|| {
         AppError::Message(format!(
@@ -151,6 +154,7 @@ fn normalize_image_orientation(path: &Path) -> Result<bool, AppError> {
     let mut decoder = metadata_reader
         .into_decoder()
         .map_err(|error| image_operation_error(path, "read image metadata", error))?;
+    validate_image_dimensions(path, decoder.dimensions())?;
     let Some(mut exif) = decoder
         .exif_metadata()
         .map_err(|error| image_operation_error(path, "read EXIF metadata", error))?
@@ -187,41 +191,121 @@ fn normalize_image_orientation(path: &Path) -> Result<bool, AppError> {
     image.apply_orientation(orientation);
     let expected_dimensions = image.dimensions();
 
-    let (temporary_path, mut temporary_file) = create_temporary_part_file(path)?;
+    let mut output_guard = create_locked_temporary_image(path)?;
+    let temporary_path = output_guard.path().to_path_buf();
     let write_result = (|| -> Result<(), AppError> {
         let encoded =
             encode_normalized_image(format, &image, exif.clone(), icc_profile.clone(), path)?;
         {
-            let mut writer = BufWriter::new(&mut temporary_file);
+            let mut writer = BufWriter::new(output_guard.file_mut());
             write_with_preserved_metadata(&mut writer, format, encoded, preserved_metadata, path)?;
             writer.flush()?;
         }
-        temporary_file.flush()?;
-        temporary_file.sync_all()?;
+        output_guard.file_mut().flush()?;
+        output_guard.file_mut().sync_all()?;
         Ok(())
     })();
-    drop(temporary_file);
     drop(image);
 
     if let Err(error) = write_result {
-        let _ = fs::remove_file(&temporary_path);
-        return Err(error);
+        return Err(discard_normalized_output(output_guard, error));
     }
-    if let Err(error) = verify_normalized_image(
+    let temporary_bytes = match output_guard.read_all_from_start() {
+        Ok(bytes) => ContainerBytes::from(bytes),
+        Err(error) => return Err(discard_normalized_output(output_guard, error)),
+    };
+    if let Err(error) = verify_normalized_image_bytes(
         &temporary_path,
+        temporary_bytes,
         expected_dimensions,
         &exif,
         icc_profile.as_deref(),
     ) {
-        let _ = fs::remove_file(&temporary_path);
-        return Err(error);
+        return Err(discard_normalized_output(output_guard, error));
     }
-    if let Err(error) = replace_downloaded_file(&temporary_path, path) {
-        let _ = fs::remove_file(&temporary_path);
-        return Err(error);
+    commit_normalized_image(path, source_guard, output_guard)?;
+    Ok(true)
+}
+
+fn commit_normalized_image(
+    original_path: &Path,
+    mut source_guard: ImageSourceGuard,
+    mut output_guard: ImageSourceGuard,
+) -> Result<(), AppError> {
+    let backup_path =
+        match rename_to_unique_sibling(&mut source_guard, original_path, "orientation-backup") {
+            Ok(path) => path,
+            Err(error) => return Err(discard_normalized_output(output_guard, error)),
+        };
+
+    if let Err(publish_error) = output_guard.rename_exact(original_path) {
+        if let Err(rollback_error) = source_guard.rename_exact(original_path) {
+            return Err(AppError::Message(format!(
+                "Failed to publish the normalized image ({publish_error}) and failed to restore the exact original ({rollback_error}); the original remains at {} and the verified output remains at {}",
+                display_path(&backup_path),
+                display_path(output_guard.path())
+            )));
+        }
+        return Err(discard_normalized_output(
+            output_guard,
+            publish_error.into(),
+        ));
     }
 
-    Ok(true)
+    if let Err(delete_error) = source_guard.mark_delete() {
+        let recovery_path = match rename_to_unique_sibling(
+            &mut output_guard,
+            original_path,
+            "orientation-recovery",
+        ) {
+            Ok(path) => path,
+            Err(output_rollback_error) => {
+                return Err(AppError::Message(format!(
+                    "Failed to delete the exact original backup ({delete_error}) and failed to move the replacement out of the original path ({output_rollback_error}); the original remains at {} and the replacement remains at {}",
+                    display_path(&backup_path),
+                    display_path(output_guard.path())
+                )));
+            }
+        };
+
+        if let Err(source_rollback_error) = source_guard.rename_exact(original_path) {
+            return Err(AppError::Message(format!(
+                "Failed to delete the exact original backup ({delete_error}) and failed to restore it ({source_rollback_error}); the original remains at {} and the verified replacement remains at {}",
+                display_path(&backup_path),
+                display_path(&recovery_path)
+            )));
+        }
+        if let Err(output_cleanup_error) = output_guard.mark_delete() {
+            return Err(AppError::Message(format!(
+                "The exact original was restored after its deletion failed ({delete_error}), but the replacement cleanup failed ({output_cleanup_error}); the replacement remains at {}",
+                display_path(&recovery_path)
+            )));
+        }
+        drop(output_guard);
+        drop(source_guard);
+        return Err(AppError::Message(format!(
+            "The exact original backup could not be deleted ({delete_error}); the replacement was rolled back and the original was restored"
+        )));
+    }
+
+    drop(source_guard);
+    drop(output_guard);
+    Ok(())
+}
+
+fn discard_normalized_output(
+    mut output_guard: ImageSourceGuard,
+    original_error: AppError,
+) -> AppError {
+    let output_path = output_guard.path().to_path_buf();
+    if let Err(cleanup_error) = output_guard.mark_delete() {
+        return AppError::Message(format!(
+            "{original_error}; verified output cleanup also failed for {}: {cleanup_error}",
+            display_path(&output_path)
+        ));
+    }
+    drop(output_guard);
+    original_error
 }
 
 fn image_reader_from_bytes(
@@ -490,13 +574,13 @@ fn write_with_preserved_metadata(
     Ok(())
 }
 
-fn verify_normalized_image(
+fn verify_normalized_image_bytes(
     path: &Path,
+    bytes: ContainerBytes,
     expected_dimensions: (u32, u32),
     expected_exif: &[u8],
     expected_icc: Option<&[u8]>,
 ) -> Result<(), AppError> {
-    let bytes = ContainerBytes::from(fs::read(path)?);
     let metadata_reader = image_reader_from_bytes(bytes)?;
     let mut decoder = metadata_reader
         .into_decoder()
@@ -543,6 +627,22 @@ fn verify_normalized_image(
     Ok(())
 }
 
+#[cfg(test)]
+fn verify_normalized_image(
+    path: &Path,
+    expected_dimensions: (u32, u32),
+    expected_exif: &[u8],
+    expected_icc: Option<&[u8]>,
+) -> Result<(), AppError> {
+    verify_normalized_image_bytes(
+        path,
+        ContainerBytes::from(fs::read(path)?),
+        expected_dimensions,
+        expected_exif,
+        expected_icc,
+    )
+}
+
 fn image_operation_error(path: &Path, operation: &str, error: impl std::fmt::Display) -> AppError {
     AppError::Message(format!(
         "Failed to {operation} for {}: {error}",
@@ -556,7 +656,7 @@ enum TiffEndian {
     Big,
 }
 
-fn remove_orientation_entries(exif: &mut [u8]) -> Result<usize, AppError> {
+pub(super) fn remove_orientation_entries(exif: &mut [u8]) -> Result<usize, AppError> {
     let (endian, entries_start, mut entry_count) = tiff_ifd0_layout(exif)?;
     let mut removed = 0_usize;
     let mut index = 0_usize;
@@ -599,7 +699,7 @@ fn remove_orientation_entries(exif: &mut [u8]) -> Result<usize, AppError> {
     Ok(removed)
 }
 
-fn count_orientation_entries(exif: &[u8]) -> Result<usize, AppError> {
+pub(super) fn count_orientation_entries(exif: &[u8]) -> Result<usize, AppError> {
     let (endian, entries_start, entry_count) = tiff_ifd0_layout(exif)?;
     Ok((0..entry_count)
         .filter(|index| {
@@ -867,7 +967,7 @@ mod tests {
         let first = normalize_annotation_orientations(&root, |_| {}).unwrap();
 
         assert_eq!(first.total, 2);
-        assert_eq!(first.corrected, 1);
+        assert_eq!(first.corrected, 1, "{:?}", first.failed_files);
         assert_eq!(first.failed, 0);
         assert!(!output_has_orientation(&oriented));
         let decoded = image_reader(&oriented).decode().unwrap();
@@ -897,7 +997,7 @@ mod tests {
 
         let summary = normalize_annotation_orientations(&root, |_| {}).unwrap();
 
-        assert_eq!(summary.corrected, 1);
+        assert_eq!(summary.corrected, 1, "{:?}", summary.failed_files);
         assert_eq!(summary.failed, 0);
         assert!(!output_has_orientation(&path));
         assert_eq!(image_reader(&path).decode().unwrap().dimensions(), (3, 2));
@@ -1116,6 +1216,65 @@ mod tests {
         assert_eq!(fs::read(&broken).unwrap(), broken_before);
         assert_eq!(progress.first().unwrap().processed, 0);
         assert_eq!(progress.last().unwrap().processed, 2);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn active_writer_prevents_normalization_and_preserves_source() {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+        };
+
+        let root = test_directory("writer-lock");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("writer.png");
+        write_png(
+            &path,
+            &DynamicImage::ImageLuma8(base_image()),
+            Some(test_exif(6, TiffEndian::Little)),
+        );
+        let before = fs::read(&path).unwrap();
+        let writer = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+            .open(&path)
+            .unwrap();
+
+        assert!(normalize_image_orientation(&path).is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
+
+        drop(writer);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[allow(clippy::permissions_set_readonly_false)]
+    fn source_delete_failure_restores_exact_original_and_cleans_replacement() {
+        let root = test_directory("delete-rollback");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("readonly.png");
+        write_png(
+            &path,
+            &DynamicImage::ImageLuma8(base_image()),
+            Some(test_exif(6, TiffEndian::Little)),
+        );
+        let before = fs::read(&path).unwrap();
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&path, permissions).unwrap();
+
+        let error = normalize_image_orientation(&path).unwrap_err();
+
+        assert!(error.to_string().contains("rolled back"));
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        permissions.set_readonly(false);
+        fs::set_permissions(&path, permissions).unwrap();
         fs::remove_dir_all(root).unwrap();
     }
 

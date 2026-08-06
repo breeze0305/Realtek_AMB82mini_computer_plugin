@@ -1,6 +1,6 @@
 export type Language = "zh_TW" | "en_US" | "ja_JP";
 export type ResourceCategory = "installers" | "weights";
-export type View = "home" | ResourceCategory | "camera" | "settings" | "converter" | "annotator";
+export type View = "home" | ResourceCategory | "camera" | "settings" | "converter" | "annotator" | "image-converter";
 export type UvcdFormat = "YUY2" | "NV12" | "MJPG" | "H264" | "H265";
 export type PreferenceVersion = "release" | "beta";
 export type ModelType = "yolo" | "classification";
@@ -165,6 +165,26 @@ export type AnnotationImageData = {
 export type AnnotationSaveResult = {
   path: string;
   count: number;
+};
+
+export type ImageConversionProgress = {
+  phase: "discovering" | "converting" | "complete";
+  processed: number;
+  total: number;
+  converted: number;
+  normalized: number;
+  skipped: number;
+  failed: number;
+  current_file: string | null;
+};
+
+export type ImageConversionSummary = {
+  total: number;
+  converted: number;
+  normalized: number;
+  skipped: number;
+  failed: number;
+  failed_files: string[];
 };
 
 export type RunningAction =

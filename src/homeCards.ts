@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileArchive,
   FolderOpen,
+  Images,
   PackageCheck,
   PackageOpen,
   RefreshCcw,
@@ -42,6 +43,7 @@ type CreateHomeCardGroupsParams = {
   onOpenAnnotator: () => void;
   onOpenCamera: () => void;
   onOpenConverter: () => void;
+  onOpenImageConverter: () => void;
   onOpenResourceCategory: (category: ResourceCategory) => void;
   onOpenVersionUpdate: () => void;
   onVersionChecked: (result: VersionCheck) => void;
@@ -64,6 +66,7 @@ export function createHomeCardGroups({
   onOpenAnnotator,
   onOpenCamera,
   onOpenConverter,
+  onOpenImageConverter,
   onOpenResourceCategory,
   onOpenVersionUpdate,
   onVersionChecked,
@@ -233,6 +236,17 @@ export function createHomeCardGroups({
       detail: "",
       icon: Tags,
       action: onOpenAnnotator,
+      label: t.open,
+      disabled: false,
+      key: null,
+      actionIcon: CheckCircle2,
+    },
+    {
+      id: "image-converter",
+      title: t.imageConverter,
+      detail: "",
+      icon: Images,
+      action: onOpenImageConverter,
       label: t.open,
       disabled: false,
       key: null,

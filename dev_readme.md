@@ -27,7 +27,7 @@ This section is the authoritative source map for the current frontend. Some olde
 - `src/App.tsx`
   - App controller only: dashboard/view state, running action state, Tauri `invoke` calls, camera flow, converter flow, version-check state, and wiring child views together.
 - `src/types.ts`
-  - Shared frontend types for dashboard/settings/download/converter/version-check/view/action data, including annotation preparation progress and summary payloads.
+  - Shared frontend types for dashboard/settings/download/converter/version-check/view/action data, including annotation preparation and image-conversion progress/summary payloads.
 - `src/i18n.ts`
   - `translations`, `languageNames`, `installActionLabels`, `cameraGuideSteps`, and `PREFERENCE_COPY_MESSAGE`.
 - `src/appConfig.ts`
@@ -40,12 +40,13 @@ This section is the authoritative source map for the current frontend. Some olde
   - `AppHeader.tsx`: app title, back button, language menu, settings entry.
   - `CardGrid.tsx`: shared numbered card grid, download progress, running state, and split-action rendering.
   - `LinkPanel.tsx`: GitHub repository and AMB Preference link panel.
-  - `HomeView.tsx`: main-menu heading, two numbered resource entries, divider, and five primary function cards.
+  - `HomeView.tsx`: main-menu heading, two numbered resource entries, divider, and six primary function cards.
   - `ResourceLibraryView.tsx`: category-specific secondary page for either installers or code/model weights.
   - `SettingsView.tsx`: settings page UI, including auto update check, Preference version, UVC format, and reset.
   - `CameraView.tsx`: camera page UI.
   - `ConverterView.tsx`: model converter page UI.
   - `AnnotationView.tsx`: object detection labeling UI, including folder selection/drop, EXIF preparation progress, class management, image navigation, box drawing/moving/resizing, and current-image reset.
+  - `ImageConversionView.tsx`: recursive image-conversion folder selection/drop UI, progress display, completion summary, and return-to-home flow.
   - `NetworkStatus.tsx`: global online/offline status indicator fixed to the lower-left corner of every view.
 - `src/styles.css`
   - Shared styling for shell, header, home cards, settings, camera, converter, annotation workspace, toast, and network status.
@@ -79,6 +80,20 @@ Object detection annotation behavior:
 - The drawing cursor shows horizontal and vertical dashed guides to the image edges; guides hide outside the image and during pan or box editing.
 - Box edits autosave silently; save errors still surface through the shared toast.
 
+Image conversion behavior:
+
+- The home image-conversion card is built in `src/homeCards.ts` and opens `view === "image-converter"`.
+- `src/components/ImageConversionView.tsx` selects or accepts a dropped folder, receives throttled progress through a Tauri `Channel`, prevents re-entry while work is active, and returns home with a completion summary.
+- Rust commands `select_image_conversion_folder` and `convert_image_folder` live in `src-tauri/src/lib.rs`; the blocking work is isolated in `src-tauri/src/image_conversion.rs`.
+- The selected directory is scanned recursively without following symbolic links, Windows junctions, or any other reparse point. A selected root that is itself a reparse point is rejected. Supported extensions are `jpg`, `jpeg`, `png`, `bmp`, `webp`, `heic`, and `heif`; other files are ignored.
+- JPEG/PNG reuse `annotation_orientation.rs` and are only rewritten when EXIF Orientation `2` through `8` needs to be baked into pixels. BMP, static WebP, HEIC, and HEVC (`hvc1`) HEIF become same-directory `.jpg` files.
+- Animated WebP is rejected and preserved because flattening it would discard frames. Alpha from static WebP/HEIC is composited over white before JPEG encoding.
+- HEIC/HEIF decoding uses pinned pure-Rust `hpvcd 0.3.2`, so the release does not depend on the optional Windows Store HEIF/HEVC codecs or native DLLs. The converter strictly parses `pitm` and `ipma` to inspect only transforms associated with the primary item; transforms belonging only to tiles or auxiliary items do not cause rejection. One primary-associated `imir` or `irot` is supported, while combined or duplicate primary transforms are rejected because this decoder version does not compose them correctly. The parsed transform payload and the orientation reported by the decoder must agree. The decoder-baked container transform is authoritative; EXIF Orientation is only applied as a pixel fallback when the container orientation is `Normal`, and its tag is then removed.
+- `src-tauri/src/image_safety.rs` opens each source with read/delete access while sharing read access only. The same Windows handle remains alive through verification, no-overwrite rename, exact-source deletion, and rollback, so another process cannot write, rename, delete, or atomically replace that source during the transaction.
+- Conversion first writes a same-directory temporary JPEG through a retained read/write/delete handle, flushes it, reads it back, and fully verifies its dimensions/edited EXIF/ICC. It then renames that exact temporary file without overwriting an existing target and commits deletion against the exact source handle last. JPG/PNG normalization similarly moves the exact source to a unique recovery name before publishing the verified replacement. A collision, active writer, failed verification, or failed deletion preserves or restores the original; rollback never deletes an unknown file merely because it occupies the expected path.
+- Every processed source is limited to 512 MiB, 16,384 pixels on either side, and 64 megapixels before a full pixel decode.
+- Annotation preparation and image conversion share `AppState.image_processing_lock`, preventing both mutation workflows from running concurrently.
+
 
 ## 重要檔案
 
@@ -99,9 +114,13 @@ Object detection annotation behavior:
   - 輸出資料夾管理。
   - 相機截圖儲存。
   - UVC device 格式設定持久化。
-- `UVCD_pram.h` 背景覆寫。
-- AMB Preference release / beta 版本連結切換。
+  - `UVCD_pram.h` 背景覆寫。
+  - AMB Preference release / beta 版本連結切換。
   - 內嵌資源讀取。
+- `src-tauri/src/image_conversion.rs`
+  - 遞迴掃描、BMP/WebP/HEIC/HEIF 解碼、EXIF 方向套用、JPEG 安全寫入與驗證。
+- `src-tauri/src/image_safety.rs`
+  - 圖片大小／尺寸上限、Windows 禁止同時寫入的來源 handle，以及 reparse point／junction 防護。
 
 - `src-tauri/src/main.rs`
   - Tauri 程式入口。
@@ -129,6 +148,9 @@ Object detection annotation behavior:
 - `readme.md`
   - 使用者面向 README。
 
+- `THIRD_PARTY_NOTICES.txt`
+  - 隨 bundle 提供的第三方元件授權；新增會進入正式執行檔的原生依賴時應同步維護。
+
 - `version.txt`
   - 遠端版本檢查會讀 GitHub main branch 上的這個檔案。
 
@@ -143,11 +165,12 @@ Object detection annotation behavior:
 - `01` 安裝檔：CH340/CH341、Arduino IDE、VLC
 - `02` 程式碼與權重：手勢追蹤、AMB 盒子追蹤、日本／台灣／新加坡影像分類權重
 
-兩張資源入口之後以「主要功能」分隔線區隔，再排列五張一般功能卡：
+兩張資源入口之後以「主要功能」分隔線區隔，再排列六張一般功能卡：
 
 - AMB 相機畫面擷取
 - 模型量化轉換
 - 物件偵測標記
+- 圖片轉檔
 - 開啟 AmebaPro2 資料夾
 - 版本檢查
 
@@ -577,6 +600,10 @@ npm.cmd run tauri build
 13. 相機頁可掃描 camera、預覽、截圖。
 14. 輸出圖片序號會接續既有最大編號。
 15. 相機頁開啟「選擇資料夾」時，對話框保持在主視窗上方，主視窗不可操作；取消或完成後恢復操作。
+16. 圖片轉檔可遞迴處理巢狀資料夾，BMP、靜態 WebP 與真實 HEIC 會在原目錄產生同名 JPG，成功後來源檔消失。
+17. 含 EXIF Orientation 的 WebP/JPG/PNG 轉換後顯示方向不變，輸出不再含 Orientation tag；透明區域成為白色。
+18. 同名 JPG 已存在、圖片正被其他程式寫入、動畫 WebP、破損、主要圖片組合／重複關聯 `imir`、`irot`，或非 `hvc1` HEIF 時，原檔保持不變，完成摘要正確顯示失敗數量；主要圖片單獨關聯 `imir` 或 `irot` 可正常處理，僅屬於 aux／tile 的 transform 不會誤判。
+19. 大量檔案處理時進度條持續更新；完成後自動回首頁，繁中／英文／日文摘要與第一個失敗檔案顯示正常。
 
 ## 已知限制
 
@@ -585,6 +612,8 @@ npm.cmd run tauri build
 - 拍照間隔目前沒有 UI 可調整。
 - Arduino IDE / VLC 下載尚未做取消下載功能。
 - UVCD 設定改完後，使用者仍需要重新燒錄 AMB82 mini 的 AmebaUSB / UVC_device。
+- 目前 HEIF/HEIC 轉檔支援 HEVC `hvc1` 圖片與主要圖片單獨關聯的 `imir`／`irot`；AV1、VVC、JPEG-in-HEIF，以及主要圖片組合或重複關聯的鏡像／旋轉 transform 會保留原檔並回報失敗。
+- 動畫 WebP 不會轉成 JPG，以免靜默丟失其他動畫影格。
 
 ## Tauri 版本鎖定
 

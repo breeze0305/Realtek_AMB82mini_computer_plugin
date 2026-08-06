@@ -1,7 +1,13 @@
 mod annotation_orientation;
+mod image_conversion;
+mod image_safety;
 
 use annotation_orientation::{
     normalize_annotation_orientations, AnnotationOrientationProgress, AnnotationOrientationSummary,
+};
+use image_conversion::{
+    convert_images_in_folder, ImageConversionProgress as CoreImageConversionProgress,
+    ImageConversionSummary as CoreImageConversionSummary,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -184,6 +190,41 @@ struct AnnotationLoadResult {
 }
 
 #[derive(Clone, Debug, Serialize)]
+struct ImageConversionProgress {
+    phase: &'static str,
+    processed: usize,
+    total: usize,
+    converted: usize,
+    normalized: usize,
+    skipped: usize,
+    failed: usize,
+    current_file: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct ImageConversionSummary {
+    total: usize,
+    converted: usize,
+    normalized: usize,
+    skipped: usize,
+    failed: usize,
+    failed_files: Vec<String>,
+}
+
+impl From<CoreImageConversionSummary> for ImageConversionSummary {
+    fn from(summary: CoreImageConversionSummary) -> Self {
+        Self {
+            total: summary.total,
+            converted: summary.converted,
+            normalized: summary.normalized,
+            skipped: summary.skipped,
+            failed: summary.failed,
+            failed_files: summary.failed_files,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
 struct AnnotationImage {
     name: String,
     path: String,
@@ -360,7 +401,7 @@ struct AppState {
     output_folder: Mutex<Option<PathBuf>>,
     capture_lock: Mutex<()>,
     native_dialog_lock: Mutex<()>,
-    annotation_load_lock: Arc<Mutex<()>>,
+    image_processing_lock: Arc<Mutex<()>>,
     arduino_installer_lock: Mutex<()>,
     vlc_installer_lock: Mutex<()>,
 }
@@ -489,7 +530,7 @@ pub fn run() {
             output_folder: Mutex::new(None),
             capture_lock: Mutex::new(()),
             native_dialog_lock: Mutex::new(()),
-            annotation_load_lock: Arc::new(Mutex::new(())),
+            image_processing_lock: Arc::new(Mutex::new(())),
             arduino_installer_lock: Mutex::new(()),
             vlc_installer_lock: Mutex::new(()),
         })
@@ -525,6 +566,8 @@ pub fn run() {
             save_capture_image,
             select_annotation_folder,
             load_annotation_folder,
+            select_image_conversion_folder,
+            convert_image_folder,
             read_annotation_image,
             save_annotation_classes,
             save_annotation_file,
@@ -1101,9 +1144,9 @@ async fn load_annotation_folder(
     on_progress: Channel<AnnotationExifProgress>,
     state: tauri::State<'_, AppState>,
 ) -> Result<AnnotationLoadResult, AppError> {
-    let annotation_load_lock = Arc::clone(&state.annotation_load_lock);
+    let image_processing_lock = Arc::clone(&state.image_processing_lock);
     tauri::async_runtime::spawn_blocking(move || {
-        let _load_guard = annotation_load_lock
+        let _load_guard = image_processing_lock
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         prepare_annotation_folder(&path, |progress| {
@@ -1112,6 +1155,100 @@ async fn load_annotation_folder(
     })
     .await
     .map_err(|error| AppError::Message(format!("Annotation preparation task failed: {error}")))?
+}
+
+#[tauri::command]
+fn select_image_conversion_folder(
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<Option<String>, AppError> {
+    let Some(folder) = pick_folder_dialog(&window, &state, "Select image conversion folder")?
+    else {
+        return Ok(None);
+    };
+    Ok(Some(display_path(folder)))
+}
+
+#[tauri::command]
+async fn convert_image_folder(
+    path: String,
+    on_progress: Channel<ImageConversionProgress>,
+    state: tauri::State<'_, AppState>,
+) -> Result<ImageConversionSummary, AppError> {
+    let image_processing_lock = Arc::clone(&state.image_processing_lock);
+    tauri::async_runtime::spawn_blocking(move || {
+        let _processing_guard = image_processing_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        prepare_image_conversion(&path, |progress| {
+            let _ = on_progress.send(progress);
+        })
+    })
+    .await
+    .map_err(|error| AppError::Message(format!("Image conversion task failed: {error}")))?
+}
+
+fn prepare_image_conversion(
+    path: &str,
+    mut on_progress: impl FnMut(ImageConversionProgress),
+) -> Result<ImageConversionSummary, AppError> {
+    let folder = PathBuf::from(path);
+    if !folder.is_dir() {
+        return Err(AppError::Message(format!(
+            "Please select an image folder: {}",
+            display_path(folder)
+        )));
+    }
+
+    on_progress(ImageConversionProgress {
+        phase: "discovering",
+        processed: 0,
+        total: 0,
+        converted: 0,
+        normalized: 0,
+        skipped: 0,
+        failed: 0,
+        current_file: None,
+    });
+
+    let mut last_progress_at = Instant::now()
+        .checked_sub(Duration::from_secs(1))
+        .unwrap_or_else(Instant::now);
+    let summary = convert_images_in_folder(&folder, |progress| {
+        let is_boundary = progress.processed == 0 || progress.processed == progress.total;
+        if is_boundary || last_progress_at.elapsed() >= Duration::from_millis(50) {
+            last_progress_at = Instant::now();
+            on_progress(image_conversion_progress("converting", &progress));
+        }
+    })?;
+
+    on_progress(ImageConversionProgress {
+        phase: "complete",
+        processed: summary.total,
+        total: summary.total,
+        converted: summary.converted,
+        normalized: summary.normalized,
+        skipped: summary.skipped,
+        failed: summary.failed,
+        current_file: None,
+    });
+    Ok(summary.into())
+}
+
+fn image_conversion_progress(
+    phase: &'static str,
+    progress: &CoreImageConversionProgress,
+) -> ImageConversionProgress {
+    ImageConversionProgress {
+        phase,
+        processed: progress.processed,
+        total: progress.total,
+        converted: progress.converted,
+        normalized: progress.normalized,
+        skipped: progress.skipped,
+        failed: progress.failed,
+        current_file: progress.current_file.clone(),
+    }
 }
 
 fn prepare_annotation_folder(
@@ -3408,7 +3545,7 @@ mod tests {
             output_folder: Mutex::new(None),
             capture_lock: Mutex::new(()),
             native_dialog_lock: Mutex::new(()),
-            annotation_load_lock: Arc::new(Mutex::new(())),
+            image_processing_lock: Arc::new(Mutex::new(())),
             arduino_installer_lock: Mutex::new(()),
             vlc_installer_lock: Mutex::new(()),
         };

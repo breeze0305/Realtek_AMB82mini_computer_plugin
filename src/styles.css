@@ -1181,6 +1181,40 @@ dd {
   line-height: 1;
 }
 
+.imageConversionDropPanel {
+  width: min(720px, 100%);
+}
+
+.imageConversionDropPanel .annotationFolderButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+
+.imageConversionHints {
+  display: grid;
+  gap: 9px;
+  width: min(560px, 100%);
+  margin: 0;
+  padding: 18px 22px 18px 42px;
+  border: 1px solid #d9dfd8;
+  border-radius: 7px;
+  color: #4e5c58;
+  background: #f7faf6;
+  font-size: 14px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.imageConversionHints li::marker {
+  color: #0f766e;
+}
+
+.imageConversionProgressStats span {
+  line-height: 1.55;
+}
+
 .annotationBackButton {
   display: inline-flex;
   align-items: center;

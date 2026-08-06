@@ -4,6 +4,7 @@ import { createHomeCardGroups } from "./homeCards";
 import { translations } from "./i18n";
 
 function createGroups(internetConnected: boolean) {
+  const onOpenImageConverter = vi.fn();
   const onOpenResourceCategory = vi.fn();
   const groups = createHomeCardGroups({
     dashboard: null,
@@ -12,6 +13,7 @@ function createGroups(internetConnected: boolean) {
     onOpenAnnotator: vi.fn(),
     onOpenCamera: vi.fn(),
     onOpenConverter: vi.fn(),
+    onOpenImageConverter,
     onOpenResourceCategory,
     onOpenVersionUpdate: vi.fn(),
     onVersionChecked: vi.fn(),
@@ -20,12 +22,12 @@ function createGroups(internetConnected: boolean) {
     versionCheck: null,
   });
 
-  return { groups, onOpenResourceCategory };
+  return { groups, onOpenImageConverter, onOpenResourceCategory };
 }
 
 describe("createHomeCardGroups", () => {
-  it("creates two independent resource entries before the five main functions", () => {
-    const { groups, onOpenResourceCategory } = createGroups(true);
+  it("creates two independent resource entries before the six main functions", () => {
+    const { groups, onOpenImageConverter, onOpenResourceCategory } = createGroups(true);
 
     expect(groups.resourceEntryCards.map((card) => card.id)).toEqual(["resource-installers", "resource-weights"]);
     expect(groups.resourceEntryCards.every((card) => card.wholeCardAction)).toBe(true);
@@ -33,6 +35,7 @@ describe("createHomeCardGroups", () => {
       "camera",
       "converter",
       "annotator",
+      "image-converter",
       "realtek-folder",
       "version",
     ]);
@@ -44,7 +47,9 @@ describe("createHomeCardGroups", () => {
 
     groups.resourceEntryCards[0].action();
     groups.resourceEntryCards[1].action();
+    groups.mainCards.find((card) => card.id === "image-converter")?.action();
     expect(onOpenResourceCategory.mock.calls).toEqual([["installers"], ["weights"]]);
+    expect(onOpenImageConverter).toHaveBeenCalledOnce();
   });
 
   it("keeps installer and embedded resource cards available offline", () => {

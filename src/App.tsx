@@ -20,6 +20,7 @@ import { AnnotationView } from "./components/AnnotationView";
 import { CameraView } from "./components/CameraView";
 import { ConverterView } from "./components/ConverterView";
 import { HomeView } from "./components/HomeView";
+import { ImageConversionView } from "./components/ImageConversionView";
 import { LinkPanel } from "./components/LinkPanel";
 import { NetworkStatus } from "./components/NetworkStatus";
 import { ResourceLibraryView } from "./components/ResourceLibraryView";
@@ -401,6 +402,12 @@ function App() {
     cancelModelConversionRequest();
     stopCamera();
     setView("annotator");
+  }
+
+  function openImageConverterView() {
+    cancelModelConversionRequest();
+    stopCamera();
+    setView("image-converter");
   }
 
   async function loadConverterModels() {
@@ -827,6 +834,7 @@ function App() {
     onOpenAnnotator: () => void openAnnotationView(),
     onOpenCamera: () => void openCameraView(),
     onOpenConverter: () => void openConverterView(),
+    onOpenImageConverter: () => void openImageConverterView(),
     onOpenResourceCategory: (category) => void openResourcesView(category),
     onOpenVersionUpdate: () => void openUrl(RELEASES_URL),
     onVersionChecked: rememberVersionCheck,
@@ -839,10 +847,10 @@ function App() {
       {...(isNativeDialogOpen ? { inert: "" } : {})}
       aria-busy={isNativeDialogOpen}
       className={`appShell ${view === "settings" ? "settingsShell" : ""} ${view === "converter" ? "converterShell" : ""} ${
-        view === "annotator" ? "annotationShell" : ""
+        view === "annotator" || view === "image-converter" ? "annotationShell" : ""
       }`}
     >
-      {view !== "annotator" && (
+      {view !== "annotator" && view !== "image-converter" && (
         <AppHeader
           dashboard={dashboard}
           isLanguageMenuOpen={isLanguageMenuOpen}
@@ -877,7 +885,16 @@ function App() {
         />
       )}
 
-      {status && <div className={`feedbackToast ${isFeedbackLeaving ? "leaving" : ""}`}>{status}</div>}
+      {status && (
+        <div
+          className={`feedbackToast ${isFeedbackLeaving ? "leaving" : ""}`}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {status}
+        </div>
+      )}
 
       {view === "home" && (
         <HomeView
@@ -948,6 +965,17 @@ function App() {
             setView("home");
           }}
           onStatus={setStatus}
+        />
+      )}
+
+      {view === "image-converter" && (
+        <ImageConversionView
+          language={language}
+          onBackHome={() => {
+            setView("home");
+          }}
+          onStatus={setStatus}
+          t={t}
         />
       )}
 

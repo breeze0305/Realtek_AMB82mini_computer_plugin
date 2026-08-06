@@ -8,7 +8,7 @@
 
 # Realtek AMB82-mini Computer Plugin
 
-Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助 Realtek AMB82-mini 開發者快速取得開發資源、設定 AMB UVC 格式、擷取相機畫面、進行物件偵測標註、開啟模型轉換工具，並檢查軟體版本。
+Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助 Realtek AMB82-mini 開發者快速取得開發資源、設定 AMB UVC 格式、擷取相機畫面、進行物件偵測標註、批次轉換圖片、開啟模型轉換工具，並檢查軟體版本。
 
 本專案由舊版 Python CLI 工具重構而來，保留原本的核心功能，但改以 Tauri + React 桌面介面重新設計。新版不再要求使用者安裝 Python、OpenCV 或其他開發環境，並把文字選單流程改成更直覺、可直接發佈的 Windows 應用程式。舊版程式碼仍保留在 `legacy/v2` 分支中。
 
@@ -24,6 +24,7 @@ Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助
 - 設定 AMB UVC device 輸出格式：`YUY2`、`NV12`、`MJPG`、`H264`、`H265`。
 - 使用 AMB82-mini UVC 相機進行即時預覽與定時擷取。
 - 使用物件偵測標註工具建立 YOLO 格式資料集。
+- 遞迴轉換 `BMP`、`WebP`、`HEIC` 與採 HEVC 編碼的 `HEIF` 圖片，並將方向資訊寫入像素。
 - 開啟模型量化轉換網站。
 - 檢查 GitHub 上的最新版本。
 - 在所有頁面左下角固定顯示外網連線狀態；無外網時會停用需要網路的功能。
@@ -154,6 +155,25 @@ image_00003.jpg
 <class_id> <x_center> <y_center> <width> <height>
 ```
 
+### 圖片轉檔
+
+圖片轉檔工具可選擇或拖入一個資料夾，並遞迴處理其中所有子資料夾：
+
+- `BMP`、靜態 `WebP`、`HEIC`，以及採 HEVC（`hvc1`）編碼的 `HEIF` 會轉成同目錄、同檔名的 `.jpg`；單獨的容器鏡像或旋轉屬性也支援。
+- `JPG`、`JPEG`、`PNG` 不會改變格式；只有存在 EXIF Orientation `2`～`8` 時才會把方向寫入像素。
+- 轉檔後的圖片維持原本顯示方向，EXIF Orientation 不會再控制圖片旋轉。
+- 透明像素會合成在白色背景上，因為 JPEG 不支援透明度。
+- 動畫 `WebP` 不會被轉成單一影格；程式會保留原檔並列入失敗摘要。
+- 若同目錄已存在同名 `.jpg`，或多個來源會產生同一個 `.jpg`，程式不會覆蓋任何檔案。
+- 程式不會跟隨 symbolic link、Windows junction 或其他 reparse point，避免處理到所選資料夾以外的圖片。
+- 處理期間會阻止其他程式同時寫入該張來源圖；若圖片正被可寫入方式開啟，該檔會保留並列為失敗。
+- 每張新 JPEG 都會先寫入同目錄暫存檔，完成解碼、尺寸、EXIF 與 ICC 驗證後才取代來源；JPG／PNG 也會以鎖定檔案身分的安全交易替換，失敗時復原或保留原圖並繼續處理其他檔案。
+
+處理畫面會顯示總數、目前進度、轉檔／方向修正／略過／失敗數量。全部完成後會自動回到主選單並顯示摘要。
+
+> [!NOTE]
+> `HEIF` 是容器格式；目前內建解碼器支援常見 HEVC `hvc1` 圖片，以及主要圖片單獨關聯的 `imir` 鏡像或 `irot` 旋轉。若主要圖片同時關聯 `imir` 與 `irot`，或重複關聯其中一種 transform，程式會安全保留原檔並列為失敗；僅屬於輔助圖片或 tile 的 transform 不受此限制。這是目前固定解碼器版本的組合方向限制。容器沒有方向 transform 時才會使用 EXIF Orientation 作為顯示方向備援，避免重複旋轉。
+
 ### 模型量化轉換
 
 模型量化轉換功能會開啟或呼叫：
@@ -234,7 +254,7 @@ src-tauri/target/release/bundle/nsis/AMB82 Mini Computer Plugin_<version>_x64-se
 
 ## 授權與注意事項
 
-本工具用於輔助 Realtek AMB82-mini 開發流程。Arduino IDE、VLC、Realtek AmebaPro2 套件與相關第三方工具仍依各自官方授權與使用條款為準。
+本工具用於輔助 Realtek AMB82-mini 開發流程。Arduino IDE、VLC、Realtek AmebaPro2 套件與相關第三方工具仍依各自官方授權與使用條款為準。隨安裝包提供的 `THIRD_PARTY_NOTICES.txt` 記載新增原生元件的第三方授權。
 
 ## 貢獻者
 
