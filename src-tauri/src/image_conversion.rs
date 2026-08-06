@@ -407,6 +407,7 @@ fn decode_heif(
         container_orientation,
     )?;
     validate_image_dimensions(path, (width, height))?;
+    let exif = canonicalize_heif_exif(exif)?;
     let (exif, exif_orientation) = sanitize_exif(exif)?;
     let rgb = heic_pixels_to_rgb8(path, pixels, bit_depth.minus8())?;
     let alpha = heic_alpha_to_u8(path, alpha, bit_depth.minus8(), width, height)?;
@@ -866,6 +867,40 @@ fn composite_rgb_on_white(
     Ok(rgb)
 }
 
+fn canonicalize_heif_exif(exif: Option<Vec<u8>>) -> Result<Option<Vec<u8>>, AppError> {
+    const EXIF_IDENTIFIER: &[u8] = b"Exif\0\0";
+
+    let Some(exif) = exif else {
+        return Ok(None);
+    };
+
+    if has_tiff_header(&exif) {
+        count_orientation_entries(&exif).map_err(invalid_heif_exif)?;
+        return Ok(Some(exif));
+    }
+
+    let Some(tiff) = exif.strip_prefix(EXIF_IDENTIFIER) else {
+        return Err(invalid_heif_exif("missing TIFF header"));
+    };
+    if !has_tiff_header(tiff) {
+        return Err(invalid_heif_exif(
+            "the Exif identifier is not followed by a TIFF header",
+        ));
+    }
+    count_orientation_entries(tiff).map_err(invalid_heif_exif)?;
+    Ok(Some(tiff.to_vec()))
+}
+
+fn has_tiff_header(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[b'I', b'I', 42, 0]) || bytes.starts_with(&[b'M', b'M', 0, 42])
+}
+
+fn invalid_heif_exif(reason: impl std::fmt::Display) -> AppError {
+    AppError::Message(format!(
+        "HEIF/HEIC EXIF metadata is malformed or unsupported ({reason}); the source was preserved"
+    ))
+}
+
 fn sanitize_exif(mut exif: Option<Vec<u8>>) -> Result<(Option<Vec<u8>>, Orientation), AppError> {
     let orientation = exif
         .as_deref()
@@ -1093,6 +1128,18 @@ mod tests {
         exif[12..14].copy_from_slice(&3_u16.to_le_bytes());
         exif[14..18].copy_from_slice(&1_u32.to_le_bytes());
         exif[18..20].copy_from_slice(&orientation.to_le_bytes());
+        exif
+    }
+
+    fn test_exif_big_endian(orientation: u16) -> Vec<u8> {
+        let mut exif = vec![0_u8; 8 + 2 + 12 + 4];
+        exif[..4].copy_from_slice(&[b'M', b'M', 0, 42]);
+        exif[4..8].copy_from_slice(&8_u32.to_be_bytes());
+        exif[8..10].copy_from_slice(&1_u16.to_be_bytes());
+        exif[10..12].copy_from_slice(&0x0112_u16.to_be_bytes());
+        exif[12..14].copy_from_slice(&3_u16.to_be_bytes());
+        exif[14..18].copy_from_slice(&1_u32.to_be_bytes());
+        exif[18..20].copy_from_slice(&orientation.to_be_bytes());
         exif
     }
 
@@ -1341,6 +1388,60 @@ mod tests {
 
         assert_eq!(image.dimensions(), (3, 2));
         assert_eq!(image.to_luma8().as_raw(), &[5, 3, 1, 6, 4, 2]);
+    }
+
+    #[test]
+    fn heif_exif_canonicalizer_preserves_raw_little_and_big_endian_tiff() {
+        for raw in [test_exif(6), test_exif_big_endian(8)] {
+            assert_eq!(
+                canonicalize_heif_exif(Some(raw.clone())).unwrap(),
+                Some(raw)
+            );
+        }
+        assert_eq!(canonicalize_heif_exif(None).unwrap(), None);
+    }
+
+    #[test]
+    fn heif_exif_canonicalizer_strips_one_identifier_from_valid_tiff() {
+        for (raw, expected_orientation) in [
+            (test_exif(6), Orientation::Rotate90),
+            (test_exif_big_endian(8), Orientation::Rotate270),
+        ] {
+            let mut wrapped = b"Exif\0\0".to_vec();
+            wrapped.extend_from_slice(&raw);
+
+            let canonical = canonicalize_heif_exif(Some(wrapped)).unwrap();
+            assert_eq!(canonical.as_deref(), Some(raw.as_slice()));
+
+            let (sanitized, orientation) = sanitize_exif(canonical).unwrap();
+            assert_eq!(
+                count_orientation_entries(sanitized.as_deref().unwrap()).unwrap(),
+                0
+            );
+            assert_eq!(orientation, expected_orientation);
+        }
+    }
+
+    #[test]
+    fn heif_exif_canonicalizer_rejects_short_wrapped_or_ambiguous_data() {
+        let raw = test_exif(6);
+        let mut double_wrapped = b"Exif\0\0Exif\0\0".to_vec();
+        double_wrapped.extend_from_slice(&raw);
+        let mut garbage_prefixed = b"garbage".to_vec();
+        garbage_prefixed.extend_from_slice(&raw);
+
+        for invalid in [
+            Vec::new(),
+            b"II*\0".to_vec(),
+            b"Exif".to_vec(),
+            b"Exif\0\0".to_vec(),
+            b"Exif\0\0not a TIFF payload".to_vec(),
+            double_wrapped,
+            garbage_prefixed,
+        ] {
+            let error = canonicalize_heif_exif(Some(invalid)).unwrap_err();
+            assert!(error.to_string().contains("source was preserved"));
+        }
     }
 
     #[test]
