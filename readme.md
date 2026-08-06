@@ -24,7 +24,7 @@ Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助
 - 設定 AMB UVC device 輸出格式：`YUY2`、`NV12`、`MJPG`、`H264`、`H265`。
 - 使用 AMB82-mini UVC 相機進行即時預覽與定時擷取。
 - 使用物件偵測標註工具建立 YOLO 格式資料集。
-- 遞迴轉換 `BMP`、`WebP`、`HEIC` 與採 HEVC 編碼的 `HEIF` 圖片，並將方向資訊寫入像素。
+- 遞迴轉換 `BMP`、`WebP`、`HEIC` 與採 HEVC 編碼的 `HEIF` 圖片，相容常見 Apple／iPhone HEIC 的 EXIF 包裝資料，並將方向資訊寫入像素。
 - 開啟模型量化轉換網站。
 - 檢查 GitHub 上的最新版本。
 - 在所有頁面左下角固定顯示外網連線狀態；無外網時會停用需要網路的功能。
@@ -159,7 +159,11 @@ image_00003.jpg
 
 圖片轉檔工具可選擇或拖入一個資料夾，並遞迴處理其中所有子資料夾：
 
+> [!WARNING]
+> `BMP`、`WebP`、`HEIC`、`HEIF` 會在新 JPG 完成寫入與驗證後移除原格式來源。若需要保留原始格式，請先備份資料夾。同名 JPG 已存在或處理失敗時，程式不會覆蓋檔案，來源也會保留。
+
 - `BMP`、靜態 `WebP`、`HEIC`，以及採 HEVC（`hvc1`）編碼的 `HEIF` 會轉成同目錄、同檔名的 `.jpg`；單獨的容器鏡像或旋轉屬性也支援。
+- 已相容常見 Apple／iPhone HEIC 所使用的 EXIF 包裝資料；程式會先驗證並正規化 EXIF，再套用圖片方向並移除 Orientation 標籤。EXIF 結構損壞或不受支援時，會保留來源並列入失敗摘要。
 - `JPG`、`JPEG`、`PNG` 不會改變格式；只有存在 EXIF Orientation `2`～`8` 時才會把方向寫入像素。
 - 轉檔後的圖片維持原本顯示方向，EXIF Orientation 不會再控制圖片旋轉。
 - 透明像素會合成在白色背景上，因為 JPEG 不支援透明度。

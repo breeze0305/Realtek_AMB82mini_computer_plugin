@@ -89,6 +89,7 @@ Image conversion behavior:
 - JPEG/PNG reuse `annotation_orientation.rs` and are only rewritten when EXIF Orientation `2` through `8` needs to be baked into pixels. BMP, static WebP, HEIC, and HEVC (`hvc1`) HEIF become same-directory `.jpg` files.
 - Animated WebP is rejected and preserved because flattening it would discard frames. Alpha from static WebP/HEIC is composited over white before JPEG encoding.
 - HEIC/HEIF decoding uses pinned pure-Rust `hpvcd 0.3.2`, so the release does not depend on the optional Windows Store HEIF/HEVC codecs or native DLLs. The converter strictly parses `pitm` and `ipma` to inspect only transforms associated with the primary item; transforms belonging only to tiles or auxiliary items do not cause rejection. One primary-associated `imir` or `irot` is supported, while combined or duplicate primary transforms are rejected because this decoder version does not compose them correctly. The parsed transform payload and the orientation reported by the decoder must agree. The decoder-baked container transform is authoritative; EXIF Orientation is only applied as a pixel fallback when the container orientation is `Normal`, and its tag is then removed.
+- Before HEIF EXIF reaches the shared sanitizer, `canonicalize_heif_exif` accepts either raw little-/big-endian TIFF or exactly one common `Exif\0\0` identifier followed by a valid TIFF payload. The identifier is removed only after validation; the code does not scan arbitrary offsets. Missing TIFF headers, empty or repeated wrappers, garbage prefixes, and other ambiguous metadata fail closed so the source remains unchanged.
 - `src-tauri/src/image_safety.rs` opens each source with read/delete access while sharing read access only. The same Windows handle remains alive through verification, no-overwrite rename, exact-source deletion, and rollback, so another process cannot write, rename, delete, or atomically replace that source during the transaction.
 - Conversion first writes a same-directory temporary JPEG through a retained read/write/delete handle, flushes it, reads it back, and fully verifies its dimensions/edited EXIF/ICC. It then renames that exact temporary file without overwriting an existing target and commits deletion against the exact source handle last. JPG/PNG normalization similarly moves the exact source to a unique recovery name before publishing the verified replacement. A collision, active writer, failed verification, or failed deletion preserves or restores the original; rollback never deletes an unknown file merely because it occupies the expected path.
 - Every processed source is limited to 512 MiB, 16,384 pixels on either side, and 64 megapixels before a full pixel decode.
@@ -118,7 +119,7 @@ Image conversion behavior:
   - AMB Preference release / beta 版本連結切換。
   - 內嵌資源讀取。
 - `src-tauri/src/image_conversion.rs`
-  - 遞迴掃描、BMP/WebP/HEIC/HEIF 解碼、EXIF 方向套用、JPEG 安全寫入與驗證。
+  - 遞迴掃描、BMP/WebP/HEIC/HEIF 解碼、HEIF EXIF 正規化、方向套用、JPEG 安全寫入與驗證。
 - `src-tauri/src/image_safety.rs`
   - 圖片大小／尺寸上限、Windows 禁止同時寫入的來源 handle，以及 reparse point／junction 防護。
 
@@ -601,9 +602,10 @@ npm.cmd run tauri build
 14. 輸出圖片序號會接續既有最大編號。
 15. 相機頁開啟「選擇資料夾」時，對話框保持在主視窗上方，主視窗不可操作；取消或完成後恢復操作。
 16. 圖片轉檔可遞迴處理巢狀資料夾，BMP、靜態 WebP 與真實 HEIC 會在原目錄產生同名 JPG，成功後來源檔消失。
-17. 含 EXIF Orientation 的 WebP/JPG/PNG 轉換後顯示方向不變，輸出不再含 Orientation tag；透明區域成為白色。
-18. 同名 JPG 已存在、圖片正被其他程式寫入、動畫 WebP、破損、主要圖片組合／重複關聯 `imir`、`irot`，或非 `hvc1` HEIF 時，原檔保持不變，完成摘要正確顯示失敗數量；主要圖片單獨關聯 `imir` 或 `irot` 可正常處理，僅屬於 aux／tile 的 transform 不會誤判。
-19. 大量檔案處理時進度條持續更新；完成後自動回首頁，繁中／英文／日文摘要與第一個失敗檔案顯示正常。
+17. 使用帶有常見 `Exif\0\0` 包裝與 Orientation 的 Apple HEIC 驗證：輸出 JPG 的尺寸與顯示方向正確、Orientation tag 已移除，且成功後只刪除測試用來源複本；破損或雙重包裝的 EXIF 應保留來源並回報失敗。
+18. 含 EXIF Orientation 的 WebP/JPG/PNG 轉換後顯示方向不變，輸出不再含 Orientation tag；透明區域成為白色。
+19. 同名 JPG 已存在、圖片正被其他程式寫入、動畫 WebP、破損、主要圖片組合／重複關聯 `imir`、`irot`，或非 `hvc1` HEIF 時，原檔保持不變，完成摘要正確顯示失敗數量；主要圖片單獨關聯 `imir` 或 `irot` 可正常處理，僅屬於 aux／tile 的 transform 不會誤判。
+20. 大量檔案處理時進度條持續更新；完成後自動回首頁，繁中／英文／日文摘要與第一個失敗檔案顯示正常。
 
 ## 已知限制
 
