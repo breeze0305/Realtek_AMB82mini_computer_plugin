@@ -53,6 +53,18 @@ type EditingState = {
   handle?: BoxHandle;
   start: Point;
   originalRect: Rect;
+  originalBox: AnnotationBox;
+};
+
+type EditingDraft = {
+  boxIndex: number;
+  box: AnnotationBox;
+};
+
+type PointerPosition = {
+  pointerId: number;
+  clientX: number;
+  clientY: number;
 };
 
 type PanState = {
@@ -76,6 +88,10 @@ const CLASS_NAME_RE = /^[A-Za-z0-9]+$/;
 const MIN_BOX_PIXELS = 4;
 const HANDLE_SCREEN_PIXELS = 14;
 const HANDLE_RADIUS_SCREEN_PIXELS = 3;
+const IMAGE_LIST_ITEM_HEIGHT = 42;
+const IMAGE_LIST_ROW_HEIGHT = 52;
+const IMAGE_LIST_OVERSCAN = 5;
+const IMAGE_LIST_DEFAULT_VIEWPORT_HEIGHT = 720;
 const CLASS_COLORS = [
   "#0f766e",
   "#b9473b",
@@ -102,6 +118,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
   const [drawing, setDrawing] = useState<DrawingState | null>(null);
   const [editing, setEditing] = useState<EditingState | null>(null);
+  const [editingDraft, setEditingDraft] = useState<EditingDraft | null>(null);
   const [panning, setPanning] = useState<PanState | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
   const [dropActive, setDropActive] = useState(false);
@@ -109,18 +126,36 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   const [cursorStagePoint, setCursorStagePoint] = useState<Point | null>(null);
   const [preparation, setPreparation] = useState<AnnotationPreparationState | null>(null);
   const [workspaceRevision, setWorkspaceRevision] = useState(0);
+  const [imageListScrollTop, setImageListScrollTop] = useState(0);
+  const [imageListViewportHeight, setImageListViewportHeight] = useState(IMAGE_LIST_DEFAULT_VIEWPORT_HEIGHT);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const imageListRef = useRef<HTMLElement | null>(null);
   const mountedRef = useRef(true);
   const operationCounterRef = useRef(0);
   const activeOperationRef = useRef<number | null>(null);
   const pendingProgressRef = useRef<{ operationId: number; progress: AnnotationLoadProgress } | null>(null);
   const progressFrameRef = useRef<number | null>(null);
+  const pendingPointerMoveRef = useRef<PointerPosition | null>(null);
+  const pointerMoveFrameRef = useRef<number | null>(null);
+  const applyPointerMoveRef = useRef<(position: PointerPosition) => void>(() => undefined);
 
   const currentImage = workspace?.images[currentIndex] ?? null;
   const currentBoxes = currentImage && workspace ? (workspace.annotations[currentImage.name] ?? []) : [];
   const hasWorkspace = workspace !== null;
   const isPreparing = preparation !== null;
   const geometry = useMemo(() => computeGeometry(stageSize, imageSize, pan, zoom), [stageSize, imageSize, pan, zoom]);
+  const imageListRange = useMemo(
+    () =>
+      visibleImageRange(
+        workspace?.images.length ?? 0,
+        imageListScrollTop,
+        imageListViewportHeight,
+        IMAGE_LIST_ROW_HEIGHT,
+        IMAGE_LIST_OVERSCAN,
+      ),
+    [imageListScrollTop, imageListViewportHeight, workspace?.images.length],
+  );
+  const visibleImages = workspace?.images.slice(imageListRange.start, imageListRange.end) ?? [];
   const guidePoint = useMemo(
     () =>
       cursorStagePoint && selectedClass !== null && !spaceDown && !panning && !editing
@@ -139,21 +174,54 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
         cancelAnimationFrame(progressFrameRef.current);
         progressFrameRef.current = null;
       }
+      pendingPointerMoveRef.current = null;
+      if (pointerMoveFrameRef.current !== null) {
+        cancelAnimationFrame(pointerMoveFrameRef.current);
+        pointerMoveFrameRef.current = null;
+      }
     };
   }, []);
 
   useEffect(() => {
     const stage = stageRef.current;
-    if (!stage) return;
+    const imageList = imageListRef.current;
+    if (!stage && !imageList) return;
 
     const observer = new ResizeObserver((entries) => {
-      const rect = entries[0]?.contentRect;
-      if (!rect) return;
-      setStageSize({ width: rect.width, height: rect.height });
+      for (const entry of entries) {
+        if (entry.target === stage) {
+          setStageSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+        } else if (entry.target === imageList) {
+          setImageListViewportHeight(imageListContentHeight(imageList));
+        }
+      }
     });
-    observer.observe(stage);
+    if (stage) observer.observe(stage);
+    if (imageList) {
+      setImageListViewportHeight(imageListContentHeight(imageList));
+      observer.observe(imageList);
+    }
     return () => observer.disconnect();
   }, [hasWorkspace, isPreparing]);
+
+  useEffect(() => {
+    const panel = imageListRef.current;
+    if (!panel || !workspace?.images.length) return;
+
+    const viewportHeight = imageListContentHeight(panel);
+    const itemTop = currentIndex * IMAGE_LIST_ROW_HEIGHT;
+    const itemBottom = itemTop + IMAGE_LIST_ITEM_HEIGHT;
+    let nextScrollTop = panel.scrollTop;
+
+    if (itemTop < panel.scrollTop) {
+      nextScrollTop = itemTop;
+    } else if (itemBottom > panel.scrollTop + viewportHeight) {
+      nextScrollTop = itemBottom - viewportHeight;
+    }
+
+    if (nextScrollTop !== panel.scrollTop) panel.scrollTop = nextScrollTop;
+    setImageListScrollTop(nextScrollTop);
+  }, [currentIndex, imageListViewportHeight, isPreparing, workspace?.images.length]);
 
   useEffect(() => {
     let disposed = false;
@@ -267,6 +335,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
     function handleKeyUp(event: KeyboardEvent) {
       if (activeOperationRef.current !== null) return;
       if (event.code === "Space") {
+        flushPendingPointerMove();
         setSpaceDown(false);
         setPanning(null);
       }
@@ -285,12 +354,14 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   function beginPreparation(stage: AnnotationPreparationState["stage"]) {
     if (activeOperationRef.current !== null) return null;
 
+    cancelPendingPointerMove();
     const operationId = ++operationCounterRef.current;
     activeOperationRef.current = operationId;
     setDropActive(false);
     setPreparation({ stage, progress: null });
     setDrawing(null);
     setEditing(null);
+    setEditingDraft(null);
     setPanning(null);
     setSpaceDown(false);
     setClassMenu(null);
@@ -326,6 +397,20 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
       progressFrameRef.current = null;
     }
     if (mountedRef.current) setPreparation(null);
+  }
+
+  function cancelPendingPointerMove() {
+    pendingPointerMoveRef.current = null;
+    if (pointerMoveFrameRef.current !== null) {
+      cancelAnimationFrame(pointerMoveFrameRef.current);
+      pointerMoveFrameRef.current = null;
+    }
+  }
+
+  function flushPendingPointerMove() {
+    const pending = pendingPointerMoveRef.current;
+    cancelPendingPointerMove();
+    if (pending) applyPointerMoveRef.current(pending);
   }
 
   async function requestWorkspace(operationId: number, path: string) {
@@ -399,11 +484,13 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
 
   function goToImage(index: number) {
     if (!workspace?.images.length) return;
+    cancelPendingPointerMove();
     const nextIndex = Math.min(Math.max(index, 0), workspace.images.length - 1);
     setCurrentIndex(nextIndex);
     setSelectedBox(null);
     setDrawing(null);
     setEditing(null);
+    setEditingDraft(null);
     setPanning(null);
   }
 
@@ -527,9 +614,8 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   function setCurrentBoxes(boxes: AnnotationBox[]) {
     if (!workspace || !currentImage) return;
     const annotations = { ...workspace.annotations, [currentImage.name]: boxes };
-    const images = workspace.images.map((image) =>
-      image.name === currentImage.name ? { ...image, annotation_count: boxes.length } : image,
-    );
+    const images = [...workspace.images];
+    images[currentIndex] = { ...currentImage, annotation_count: boxes.length };
     setWorkspace({ ...workspace, annotations, images });
   }
 
@@ -541,16 +627,23 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
 
   function deleteSelectedBox() {
     if (selectedBox === null) return;
+    cancelPendingPointerMove();
     const nextBoxes = currentBoxes.filter((_, index) => index !== selectedBox);
     setSelectedBox(null);
+    setDrawing(null);
+    setEditing(null);
+    setEditingDraft(null);
+    setPanning(null);
     replaceCurrentBoxes(nextBoxes);
   }
 
   function resetCurrentImageBoxes() {
     if (!currentImage || currentBoxes.length === 0) return;
+    cancelPendingPointerMove();
     setSelectedBox(null);
     setDrawing(null);
     setEditing(null);
+    setEditingDraft(null);
     replaceCurrentBoxes([]);
   }
 
@@ -573,31 +666,44 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
   ) {
     if (spaceDown) return;
     const start = imagePoint(event);
-    if (!start) return;
+    const originalBox = currentBoxes[boxIndex];
+    if (!start || !originalBox) return;
 
+    cancelPendingPointerMove();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     setSelectedBox(boxIndex);
     setDrawing(null);
+    setEditingDraft({ boxIndex, box: originalBox });
     setEditing({
       pointerId: event.pointerId,
       boxIndex,
       mode,
       handle,
       start,
-      originalRect: boxToRect(currentBoxes[boxIndex], imageSize),
+      originalRect: boxToRect(originalBox, imageSize),
+      originalBox,
     });
   }
 
-  function editedBoxes(state: EditingState, current: Point) {
+  function editedBox(state: EditingState, current: Point) {
     const rect =
       state.mode === "move"
         ? moveRect(state.originalRect, current.x - state.start.x, current.y - state.start.y, imageSize)
         : resizeRect(state.originalRect, state.handle ?? "se", current, imageSize);
-    const originalBox = currentBoxes[state.boxIndex];
-    if (!originalBox) return currentBoxes;
-    const nextBox = rectToBox(rect, originalBox.class_id, imageSize);
-    return currentBoxes.map((box, index) => (index === state.boxIndex ? nextBox : box));
+    return rectToBox(rect, state.originalBox.class_id, imageSize);
+  }
+
+  function queuePointerMove(position: PointerPosition) {
+    pendingPointerMoveRef.current = position;
+    if (pointerMoveFrameRef.current !== null) return;
+
+    pointerMoveFrameRef.current = requestAnimationFrame(() => {
+      pointerMoveFrameRef.current = null;
+      const pending = pendingPointerMoveRef.current;
+      pendingPointerMoveRef.current = null;
+      if (pending) applyPointerMoveRef.current(pending);
+    });
   }
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -608,6 +714,7 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
     setCursorStagePoint(point);
 
     if (spaceDown) {
+      cancelPendingPointerMove();
       event.currentTarget.setPointerCapture(event.pointerId);
       setPanning({ pointerId: event.pointerId, start: point, origin: pan });
       return;
@@ -620,58 +727,49 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
 
     const start = imagePoint(event);
     if (!start) return;
+    cancelPendingPointerMove();
     event.currentTarget.setPointerCapture(event.pointerId);
     setSelectedBox(null);
     setEditing(null);
+    setEditingDraft(null);
     setDrawing({ pointerId: event.pointerId, start, current: start });
   }
 
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
-    setCursorStagePoint(stagePoint(event));
+    queuePointerMove({ pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY });
+  }
+
+  function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
+    cancelPendingPointerMove();
 
     if (editing?.pointerId === event.pointerId) {
       const current = imagePoint(event);
-      if (!current) return;
-      setCurrentBoxes(editedBoxes(editing, current));
+      if (current && currentImage) {
+        const nextBox = editedBox(editing, current);
+        const nextBoxes = currentBoxes.map((box, index) => (index === editing.boxIndex ? nextBox : box));
+        setCurrentBoxes(nextBoxes);
+        void persistImageAnnotations(currentImage.name, nextBoxes);
+      }
+      setEditing(null);
+      setEditingDraft(null);
       return;
     }
 
     if (panning?.pointerId === event.pointerId) {
       const point = stagePoint(event);
-      if (!point) return;
-      setPan({
-        x: panning.origin.x + point.x - panning.start.x,
-        y: panning.origin.y + point.y - panning.start.y,
-      });
-      return;
-    }
-
-    if (drawing?.pointerId === event.pointerId) {
-      const current = imagePoint(event);
-      if (!current) return;
-      setDrawing({ ...drawing, current });
-    }
-  }
-
-  function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
-    if (editing?.pointerId === event.pointerId) {
-      const current = imagePoint(event);
-      if (current && currentImage) {
-        const nextBoxes = editedBoxes(editing, current);
-        setCurrentBoxes(nextBoxes);
-        void persistImageAnnotations(currentImage.name, nextBoxes);
+      if (point) {
+        setPan({
+          x: panning.origin.x + point.x - panning.start.x,
+          y: panning.origin.y + point.y - panning.start.y,
+        });
       }
-      setEditing(null);
-      return;
-    }
-
-    if (panning?.pointerId === event.pointerId) {
       setPanning(null);
       return;
     }
 
     if (!drawing || drawing.pointerId !== event.pointerId || selectedClass === null) return;
-    const nextRect = rectFromPoints(drawing.start, drawing.current, imageSize);
+    const current = imagePoint(event) ?? drawing.current;
+    const nextRect = rectFromPoints(drawing.start, current, imageSize);
     setDrawing(null);
 
     if (nextRect.width < MIN_BOX_PIXELS || nextRect.height < MIN_BOX_PIXELS) {
@@ -681,6 +779,31 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
     const nextBox = rectToBox(nextRect, selectedClass, imageSize);
     replaceCurrentBoxes([...currentBoxes, nextBox]);
   }
+
+  applyPointerMoveRef.current = (position) => {
+    const point = stagePoint(position);
+    setCursorStagePoint(point);
+
+    if (editing?.pointerId === position.pointerId) {
+      const current = imagePoint(position);
+      if (current) setEditingDraft({ boxIndex: editing.boxIndex, box: editedBox(editing, current) });
+      return;
+    }
+
+    if (panning?.pointerId === position.pointerId) {
+      if (!point) return;
+      setPan({
+        x: panning.origin.x + point.x - panning.start.x,
+        y: panning.origin.y + point.y - panning.start.y,
+      });
+      return;
+    }
+
+    if (drawing?.pointerId === position.pointerId) {
+      const current = imagePoint(position);
+      if (current) setDrawing({ ...drawing, current });
+    }
+  };
 
   function handleWheel(event: WheelEvent<HTMLDivElement>) {
     if (!currentImage) return;
@@ -861,12 +984,17 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={() => {
+            cancelPendingPointerMove();
             setDrawing(null);
             setEditing(null);
+            setEditingDraft(null);
             setPanning(null);
             setCursorStagePoint(null);
           }}
-          onPointerLeave={() => setCursorStagePoint(null)}
+          onPointerLeave={() => {
+            setCursorStagePoint(null);
+            if (!editing && !drawing && !panning) cancelPendingPointerMove();
+          }}
           onWheel={handleWheel}
           ref={stageRef}
         >
@@ -909,13 +1037,14 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
                   </g>
                 )}
                 {currentBoxes.map((box, index) => {
-                  const rect = boxToRect(box, imageSize);
-                  const color = classColor(box.class_id);
+                  const displayedBox = editingDraft?.boxIndex === index ? editingDraft.box : box;
+                  const rect = boxToRect(displayedBox, imageSize);
+                  const color = classColor(displayedBox.class_id);
                   const handleSize = screenPixelsToImageUnits(HANDLE_SCREEN_PIXELS, geometry, imageSize, zoom);
                   const handleRadius = screenPixelsToImageUnits(HANDLE_RADIUS_SCREEN_PIXELS, geometry, imageSize, zoom);
                   const handleOffset = handleSize / 2;
                   return (
-                    <g key={`${index}-${box.class_id}`}>
+                    <g key={`${index}-${displayedBox.class_id}`}>
                       <rect
                         className={`annotationBox ${selectedBox === index ? "isSelected" : ""}`}
                         x={rect.x}
@@ -973,18 +1102,36 @@ export function AnnotationView({ onBackHome, onStatus }: AnnotationViewProps) {
         </div>
       </main>
 
-      <aside className="imageListPanel">
-        {workspace.images.map((image, index) => (
-          <button
-            type="button"
-            className={`imageListItem ${index === currentIndex ? "isSelected" : ""}`}
-            onClick={() => goToImage(index)}
-            key={image.path}
-          >
-            <span>{image.name}</span>
-            <em>{image.annotation_count}</em>
-          </button>
-        ))}
+      <aside
+        className="imageListPanel"
+        aria-label="圖片列表"
+        onScroll={(event) => setImageListScrollTop(event.currentTarget.scrollTop)}
+        ref={imageListRef}
+      >
+        <div
+          className="imageListVirtualCanvas"
+          style={{ height: Math.max(0, workspace.images.length * IMAGE_LIST_ROW_HEIGHT - 10) }}
+        >
+          {visibleImages.map((image, offset) => {
+            const index = imageListRange.start + offset;
+            return (
+              <button
+                type="button"
+                className={`imageListItem ${index === currentIndex ? "isSelected" : ""}`}
+                aria-current={index === currentIndex ? "true" : undefined}
+                aria-label={`${image.name}，${image.annotation_count} 個標記`}
+                aria-posinset={index + 1}
+                aria-setsize={workspace.images.length}
+                onClick={() => goToImage(index)}
+                style={{ transform: `translateY(${index * IMAGE_LIST_ROW_HEIGHT}px)` }}
+                key={image.path}
+              >
+                <span>{image.name}</span>
+                <em>{image.annotation_count}</em>
+              </button>
+            );
+          })}
+        </div>
       </aside>
 
       {classMenu && (
@@ -1103,6 +1250,29 @@ function boxHandles(rect: Rect): Array<{ key: BoxHandle; x: number; y: number }>
     { key: "sw", x: rect.x, y: rect.y + rect.height },
     { key: "se", x: rect.x + rect.width, y: rect.y + rect.height },
   ];
+}
+
+function visibleImageRange(
+  count: number,
+  scrollTop: number,
+  viewportHeight: number,
+  rowHeight: number,
+  overscan: number,
+) {
+  if (count <= 0) return { start: 0, end: 0 };
+  const safeScrollTop = Math.max(0, scrollTop);
+  const safeViewportHeight = Math.max(1, viewportHeight);
+  const start = Math.max(0, Math.floor(safeScrollTop / rowHeight) - overscan);
+  const end = Math.min(count, Math.ceil((safeScrollTop + safeViewportHeight) / rowHeight) + overscan);
+  return { start, end };
+}
+
+function imageListContentHeight(panel: HTMLElement) {
+  if (!panel.clientHeight) return IMAGE_LIST_DEFAULT_VIEWPORT_HEIGHT;
+  const styles = getComputedStyle(panel);
+  const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+  const paddingBottom = Number.parseFloat(styles.paddingBottom) || 0;
+  return Math.max(1, panel.clientHeight - paddingTop - paddingBottom);
 }
 
 function clamp(value: number, min: number, max: number) {
