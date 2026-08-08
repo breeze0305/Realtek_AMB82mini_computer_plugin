@@ -8,8 +8,8 @@ use crate::image_safety::{
     validate_traversal_root, ImageSourceGuard, LockedImageSource,
 };
 use hpvcd::{
-    Decoder as HeicDecoder, ImageBuffer as HeicImageBuffer, Orientation as HeicOrientation,
-    SampleBuf as HeicSampleBuf,
+    Decoder as HeicDecoder, HeicSettings, ImageBuffer as HeicImageBuffer,
+    Orientation as HeicOrientation, SampleBuf as HeicSampleBuf,
 };
 use image::{
     codecs::{jpeg::JpegEncoder, webp::WebPDecoder},
@@ -18,14 +18,21 @@ use image::{
 };
 use std::{
     any::Any,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs,
     io::{BufWriter, Cursor, Write},
     panic::{catch_unwind, AssertUnwindSafe},
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        mpsc::sync_channel,
+        Arc, Condvar, Mutex,
+    },
+    thread,
 };
 
 const MAX_REPORTED_FAILURES: usize = 20;
+const IMAGE_CONVERSION_WORKERS: usize = 4;
 const MAX_BMFF_BOXES: usize = 65_536;
 const MAX_IPMA_ENTRIES: usize = 65_536;
 
@@ -74,6 +81,60 @@ struct DecodedForJpeg {
     icc_profile: Option<Vec<u8>>,
 }
 
+struct CandidateCompletion {
+    index: usize,
+    relative_path: String,
+    result: Result<ConversionOutcome, AppError>,
+}
+
+struct WorkerStartGate {
+    state: Mutex<WorkerStartState>,
+    changed: Condvar,
+}
+
+#[derive(Clone, Copy)]
+enum WorkerStartState {
+    Waiting,
+    Run,
+    Abort,
+}
+
+impl WorkerStartGate {
+    fn new() -> Self {
+        Self {
+            state: Mutex::new(WorkerStartState::Waiting),
+            changed: Condvar::new(),
+        }
+    }
+
+    fn wait(&self) -> bool {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        loop {
+            match *state {
+                WorkerStartState::Waiting => {
+                    state = self
+                        .changed
+                        .wait(state)
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                }
+                WorkerStartState::Run => return true,
+                WorkerStartState::Abort => return false,
+            }
+        }
+    }
+
+    fn release(&self, state: WorkerStartState) {
+        *self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = state;
+        self.changed.notify_all();
+    }
+}
+
 pub(super) fn convert_images_in_folder(
     folder: &Path,
     mut on_progress: impl FnMut(ImageConversionProgress),
@@ -93,46 +154,163 @@ pub(super) fn convert_images_in_folder(
     };
     on_progress(conversion_progress(0, &summary, None));
 
-    let heic_decoder = HeicDecoder::new().with_decode_gain_map(false);
-    for (index, candidate) in candidates.iter().enumerate() {
-        let relative_path = display_path(&candidate.relative_path);
-        on_progress(conversion_progress(
-            index,
-            &summary,
-            Some(relative_path.clone()),
-        ));
+    let worker_count = conversion_worker_count(total);
+    if worker_count > 0 {
+        let decoder_threads = heic_decoder_threads_for_workers(worker_count);
+        let needs_heic_decoder = candidates
+            .iter()
+            .any(|candidate| candidate.kind == ConversionKind::Heif);
+        let mut decoders = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            decoders.push(if needs_heic_decoder {
+                Some(create_heic_decoder(decoder_threads)?)
+            } else {
+                None
+            });
+        }
 
-        let result = if let Some(conflict) = &candidate.conflict {
-            Err(AppError::Message(conflict.clone()))
-        } else {
-            match catch_unwind(AssertUnwindSafe(|| {
-                process_candidate(candidate, &heic_decoder)
-            })) {
-                Ok(result) => result,
-                Err(payload) => Err(AppError::Message(format!(
-                    "Image decoder stopped unexpectedly; the source was preserved: {}",
-                    panic_message(payload.as_ref())
-                ))),
-            }
-        };
+        let next_index = AtomicUsize::new(0);
+        let (completion_sender, completion_receiver) = sync_channel(worker_count);
+        let mut processed = 0;
+        let mut failures = BTreeMap::<usize, String>::new();
 
-        match result {
-            Ok(ConversionOutcome::Converted) => summary.converted += 1,
-            Ok(ConversionOutcome::Normalized) => summary.normalized += 1,
-            Ok(ConversionOutcome::Skipped) => summary.skipped += 1,
-            Err(error) => {
-                summary.failed += 1;
-                if summary.failed_files.len() < MAX_REPORTED_FAILURES {
-                    summary
-                        .failed_files
-                        .push(format!("{relative_path}: {error}"));
+        thread::scope(|scope| -> Result<(), AppError> {
+            let start_gate = Arc::new(WorkerStartGate::new());
+            for (worker_index, decoder) in decoders.into_iter().enumerate() {
+                let completion_sender = completion_sender.clone();
+                let next_index = &next_index;
+                let candidates = &candidates;
+                let worker_start_gate = Arc::clone(&start_gate);
+                if let Err(error) = thread::Builder::new()
+                    .name(format!("image-conversion-{worker_index}"))
+                    .spawn_scoped(scope, move || {
+                        if !worker_start_gate.wait() {
+                            return;
+                        }
+                        loop {
+                            let index = next_index.fetch_add(1, Ordering::Relaxed);
+                            let Some(candidate) = candidates.get(index) else {
+                                break;
+                            };
+                            let relative_path = display_path(&candidate.relative_path);
+                            let result = process_candidate_safely(candidate, decoder.as_ref());
+                            if completion_sender
+                                .send(CandidateCompletion {
+                                    index,
+                                    relative_path,
+                                    result,
+                                })
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                    })
+                {
+                    start_gate.release(WorkerStartState::Abort);
+                    return Err(AppError::Message(format!(
+                        "Failed to start image conversion worker pool; no images were changed: {error}"
+                    )));
                 }
             }
+            start_gate.release(WorkerStartState::Run);
+            drop(completion_sender);
+
+            for completion in completion_receiver {
+                match completion.result {
+                    Ok(ConversionOutcome::Converted) => summary.converted += 1,
+                    Ok(ConversionOutcome::Normalized) => summary.normalized += 1,
+                    Ok(ConversionOutcome::Skipped) => summary.skipped += 1,
+                    Err(error) => {
+                        summary.failed += 1;
+                        failures.insert(
+                            completion.index,
+                            format!("{}: {error}", completion.relative_path),
+                        );
+                        if failures.len() > MAX_REPORTED_FAILURES {
+                            failures.pop_last();
+                        }
+                    }
+                }
+                processed += 1;
+                on_progress(conversion_progress(
+                    processed,
+                    &summary,
+                    Some(completion.relative_path),
+                ));
+            }
+            Ok(())
+        })?;
+
+        if processed != total {
+            return Err(AppError::Message(format!(
+                "Image conversion worker pool stopped after {processed} of {total} files"
+            )));
         }
+        summary.failed_files = failures.into_values().collect();
     }
 
     on_progress(conversion_progress(total, &summary, None));
     Ok(summary)
+}
+
+fn conversion_worker_count(total: usize) -> usize {
+    total.min(IMAGE_CONVERSION_WORKERS)
+}
+
+fn heic_decoder_threads_for_workers(worker_count: usize) -> usize {
+    let available = thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1);
+    heic_decoder_threads(available, worker_count)
+}
+
+fn heic_decoder_threads(available: usize, worker_count: usize) -> usize {
+    // hpvcd's calling file worker also helps drain decode jobs. Reserve that
+    // caller before assigning the decoder-owned workers so four HEIC files do
+    // not each create a full machine-sized pool.
+    let threads_per_worker = available.max(1) / worker_count.max(1);
+    threads_per_worker.saturating_sub(1).max(1)
+}
+
+fn create_heic_decoder(threads: usize) -> Result<HeicDecoder, AppError> {
+    match catch_unwind(AssertUnwindSafe(|| {
+        // Construct directly from fixed settings. Decoder::new().with_threads
+        // would first create an available-parallelism pool and then replace it.
+        HeicDecoder::from_settings(
+            HeicSettings::new()
+                .with_threads(threads)
+                .with_decode_gain_map(false),
+        )
+    })) {
+        Ok(decoder) => Ok(decoder),
+        Err(payload) => Err(AppError::Message(format!(
+            "HEIF/HEIC decoder could not start; no images were changed: {}",
+            panic_message(payload.as_ref())
+        ))),
+    }
+}
+
+fn process_candidate_safely(
+    candidate: &ConversionCandidate,
+    heic_decoder: Option<&HeicDecoder>,
+) -> Result<ConversionOutcome, AppError> {
+    if let Some(conflict) = &candidate.conflict {
+        return Err(AppError::Message(conflict.clone()));
+    }
+    catch_candidate_result(|| process_candidate(candidate, heic_decoder))
+}
+
+fn catch_candidate_result(
+    operation: impl FnOnce() -> Result<ConversionOutcome, AppError>,
+) -> Result<ConversionOutcome, AppError> {
+    match catch_unwind(AssertUnwindSafe(operation)) {
+        Ok(result) => result,
+        Err(payload) => Err(AppError::Message(format!(
+            "Image decoder stopped unexpectedly; the source was preserved: {}",
+            panic_message(payload.as_ref())
+        ))),
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -203,7 +381,9 @@ fn discover_candidates(folder: &Path) -> Result<Vec<ConversionCandidate>, AppErr
     }
 
     candidates.sort_by(|left, right| {
-        path_collision_key(&left.relative_path).cmp(&path_collision_key(&right.relative_path))
+        path_collision_key(&left.relative_path)
+            .cmp(&path_collision_key(&right.relative_path))
+            .then_with(|| left.relative_path.cmp(&right.relative_path))
     });
     Ok(candidates)
 }
@@ -285,7 +465,7 @@ fn path_collision_key(path: &Path) -> String {
 
 fn process_candidate(
     candidate: &ConversionCandidate,
-    heic_decoder: &HeicDecoder,
+    heic_decoder: Option<&HeicDecoder>,
 ) -> Result<ConversionOutcome, AppError> {
     if candidate.kind == ConversionKind::Normalize {
         return normalize_image_orientation(&candidate.source).map(|changed| {
@@ -308,7 +488,15 @@ fn process_candidate(
             decode_standard_image(&candidate.source, &original_bytes, ImageFormat::Bmp, false)?
         }
         ConversionKind::WebP => decode_webp(&candidate.source, &original_bytes)?,
-        ConversionKind::Heif => decode_heif(&candidate.source, &original_bytes, heic_decoder)?,
+        ConversionKind::Heif => decode_heif(
+            &candidate.source,
+            &original_bytes,
+            heic_decoder.ok_or_else(|| {
+                AppError::Message(
+                    "HEIF/HEIC decoder is unavailable; the source was preserved".into(),
+                )
+            })?,
+        )?,
         ConversionKind::Normalize => unreachable!(),
     };
     let write_result = write_converted_jpeg(&candidate.source, target, decoded, &mut source_guard);
@@ -1189,6 +1377,110 @@ mod tests {
         let exif = decoder.exif_metadata().unwrap();
         DynamicImage::from_decoder(decoder).unwrap();
         (format, dimensions, exif)
+    }
+
+    #[test]
+    fn worker_count_and_nested_heic_threads_are_bounded() {
+        assert_eq!(conversion_worker_count(0), 0);
+        assert_eq!(conversion_worker_count(1), 1);
+        assert_eq!(conversion_worker_count(3), 3);
+        assert_eq!(conversion_worker_count(4), 4);
+        assert_eq!(conversion_worker_count(10_000), 4);
+
+        assert_eq!(heic_decoder_threads(24, 4), 5);
+        assert_eq!(heic_decoder_threads(12, 4), 2);
+        assert_eq!(heic_decoder_threads(8, 4), 1);
+        assert_eq!(heic_decoder_threads(24, 1), 23);
+        assert_eq!(heic_decoder_threads(1, 4), 1);
+
+        let decoder = HeicDecoder::from_settings(
+            HeicSettings::new()
+                .with_threads(2)
+                .with_decode_gain_map(false),
+        );
+        assert_eq!(decoder.threads(), 2);
+        assert!(!decoder.decodes_gain_map());
+    }
+
+    #[test]
+    fn bounded_workers_process_every_candidate_and_aggregate_progress() {
+        let root = test_directory("bounded-workers");
+        fs::create_dir_all(&root).unwrap();
+        for index in 0..12 {
+            write_bmp(&root.join(format!("convert-{index:02}.bmp")));
+        }
+        for index in 0..3 {
+            write_png(&root.join(format!("keep-{index:02}.png")), None);
+        }
+        for index in 0..2 {
+            fs::write(
+                root.join(format!("broken-{index:02}.webp")),
+                b"not a WebP image",
+            )
+            .unwrap();
+        }
+        let mut progress = Vec::new();
+
+        let summary = convert_images_in_folder(&root, |item| progress.push(item)).unwrap();
+
+        assert_eq!(summary.total, 17);
+        assert_eq!(summary.converted, 12);
+        assert_eq!(summary.skipped, 3);
+        assert_eq!(summary.failed, 2);
+        assert_eq!(summary.failed_files.len(), 2);
+        assert!(summary.failed_files[0].starts_with("broken-00.webp:"));
+        assert!(summary.failed_files[1].starts_with("broken-01.webp:"));
+        assert_eq!(progress.first().unwrap().processed, 0);
+        assert_eq!(progress.last().unwrap().processed, 17);
+        assert_eq!(progress.last().unwrap().current_file, None);
+        assert!(progress
+            .windows(2)
+            .all(|items| items[0].processed <= items[1].processed));
+        let reported_files = progress
+            .iter()
+            .filter_map(|item| item.current_file.as_deref())
+            .collect::<HashSet<_>>();
+        assert_eq!(reported_files.len(), 17);
+        assert!(fs::read_dir(&root).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".part")
+        }));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn parallel_failures_are_reported_in_deterministic_candidate_order() {
+        let root = test_directory("deterministic-failures");
+        fs::create_dir_all(&root).unwrap();
+        for index in (0..25).rev() {
+            fs::write(
+                root.join(format!("broken-{index:02}.webp")),
+                b"not a WebP image",
+            )
+            .unwrap();
+        }
+
+        let first = convert_images_in_folder(&root, |_| {}).unwrap();
+        let second = convert_images_in_folder(&root, |_| {}).unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(first.failed, 25);
+        assert_eq!(first.failed_files.len(), MAX_REPORTED_FAILURES);
+        for (index, failure) in first.failed_files.iter().enumerate() {
+            assert!(failure.starts_with(&format!("broken-{index:02}.webp:")));
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn candidate_panics_are_contained_as_file_failures() {
+        let error = catch_candidate_result(|| panic!("worker boom")).unwrap_err();
+
+        assert!(error.to_string().contains("worker boom"));
+        assert!(error.to_string().contains("source was preserved"));
     }
 
     #[test]
