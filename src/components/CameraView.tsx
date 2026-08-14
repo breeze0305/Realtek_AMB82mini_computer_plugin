@@ -1,4 +1,4 @@
-import { FolderOpen, Play, Square } from "lucide-react";
+import { FolderOpen, Play, RefreshCcw, Square } from "lucide-react";
 import type { RefObject } from "react";
 
 type CameraViewProps = {
@@ -10,6 +10,7 @@ type CameraViewProps = {
   isPreviewing: boolean;
   lastSaved: string;
   onOpenOutputFolder: () => void;
+  onRefreshCameras: () => void;
   onSelectCamera: (deviceId: string) => void;
   onSelectOutputFolder: () => void;
   onStartCapture: () => void;
@@ -29,6 +30,7 @@ export function CameraView({
   isPreviewing,
   lastSaved,
   onOpenOutputFolder,
+  onRefreshCameras,
   onSelectCamera,
   onSelectOutputFolder,
   onStartCapture,
@@ -65,6 +67,14 @@ export function CameraView({
             </option>
           ))}
         </select>
+        <button
+          className="secondaryBtn"
+          onClick={onRefreshCameras}
+          disabled={isCapturing || isCameraBusy || isChoosingOutputFolder}
+        >
+          <RefreshCcw size={17} />
+          {t.refreshCameras}
+        </button>
         <button
           className={isCapturing ? "dangerBtn" : "primaryBtn"}
           onClick={isCapturing ? onStopCaptureTimer : onStartCapture}

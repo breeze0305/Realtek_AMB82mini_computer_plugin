@@ -37,17 +37,28 @@ vi.mock("./components/HomeView", () => ({
 vi.mock("./components/CameraView", () => ({
   CameraView: ({
     cameras,
+    isCameraBusy,
+    isCapturing,
+    isChoosingOutputFolder,
     isPreviewing,
+    onRefreshCameras,
     videoRef,
   }: {
     cameras: MediaDeviceInfo[];
+    isCameraBusy: boolean;
+    isCapturing: boolean;
+    isChoosingOutputFolder: boolean;
     isPreviewing: boolean;
+    onRefreshCameras: () => void;
     videoRef: RefObject<HTMLVideoElement>;
   }) => (
     <section data-testid="camera-view">
       <video ref={videoRef} />
       <span data-testid="camera-count">{cameras.length}</span>
       <span data-testid="preview-state">{String(isPreviewing)}</span>
+      <button onClick={onRefreshCameras} disabled={isCapturing || isCameraBusy || isChoosingOutputFolder}>
+        refresh-camera
+      </button>
     </section>
   ),
 }));
@@ -125,6 +136,49 @@ describe("camera session cleanup", () => {
       return Promise.resolve(undefined);
     });
     tauriMocks.listen.mockResolvedValue(vi.fn());
+  });
+
+  it("finds and previews a camera connected after the page was opened", async () => {
+    const refreshPermissionStream = createStream();
+    const previewStream = createStream();
+    const camera = createCameraDevice();
+    const enumerateDevices = vi.fn<() => Promise<MediaDeviceInfo[]>>().mockResolvedValue([camera]);
+    const getUserMedia = vi
+      .fn<(constraints: MediaStreamConstraints) => Promise<MediaStream>>()
+      .mockRejectedValueOnce(new DOMException("No camera found", "NotFoundError"))
+      .mockResolvedValueOnce(refreshPermissionStream.stream)
+      .mockResolvedValueOnce(previewStream.stream);
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { enumerateDevices, getUserMedia },
+    });
+
+    render(<App />);
+    await openCamera();
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
+    expect(enumerateDevices).not.toHaveBeenCalled();
+    expect(screen.getByTestId("camera-count")).toHaveTextContent("0");
+    const refreshButton = screen.getByRole("button", { name: "refresh-camera" });
+    await waitFor(() => expect(refreshButton).toBeEnabled());
+
+    fireEvent.click(refreshButton);
+
+    await waitFor(() => expect(screen.getByTestId("camera-count")).toHaveTextContent("1"));
+    await waitFor(() => expect(screen.getByTestId("preview-state")).toHaveTextContent("true"));
+    expect(enumerateDevices).toHaveBeenCalledTimes(1);
+    expect(getUserMedia).toHaveBeenCalledTimes(3);
+    expect(getUserMedia).toHaveBeenNthCalledWith(3, {
+      video: {
+        deviceId: { exact: "camera-1" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
+    expect(refreshPermissionStream.stop).toHaveBeenCalledTimes(1);
+    expect(previewStream.stop).not.toHaveBeenCalled();
+    expect(play).toHaveBeenCalledTimes(1);
   });
 
   it("stops a permission stream that resolves after leaving the camera view", async () => {

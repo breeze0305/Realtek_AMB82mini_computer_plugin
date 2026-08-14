@@ -377,6 +377,13 @@ function App() {
     setView("camera");
   }
 
+  function refreshCameras() {
+    if (nativeDialogOpenRef.current || cameraOperationGate.isBusy() || captureSchedulerRef.current?.isActive()) {
+      return;
+    }
+    void scanCameras();
+  }
+
   function openResourcesView(category: ResourceCategory) {
     cancelModelConversionRequest();
     stopCamera();
@@ -991,6 +998,7 @@ function App() {
           onOpenOutputFolder={() =>
             void runAction<ActionResult>("output", "open_output_folder", (result) => result.path ?? result.message)
           }
+          onRefreshCameras={refreshCameras}
           onSelectCamera={(deviceId) => void selectCamera(deviceId)}
           onSelectOutputFolder={() => void selectOutputFolder()}
           onStartCapture={() => void startCapture()}
