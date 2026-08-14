@@ -22,6 +22,7 @@ Realtek AMB82-mini Computer Plugin 是一款 Windows 桌面工具，用來協助
 - 複製 AMB Preference package URL。
 - 切換 AMB Preference release / beta 版本來源。
 - 設定 AMB UVC device 輸出格式：`YUY2`、`NV12`、`MJPG`、`H264`、`H265`。
+- 從設定頁清除 AmebaPro2 範例中已安裝的影像分類與物件偵測權重。
 - 使用 AMB82-mini UVC 相機進行即時預覽與定時擷取。
 - 使用物件偵測標註工具建立 YOLO 格式資料集。
 - 遞迴轉換 `BMP`、`WebP`、`HEIC` 與採 HEVC 編碼的 `HEIF` 圖片，相容常見 Apple／iPhone HEIC 的 EXIF 包裝資料，並將方向資訊寫入像素。
@@ -93,7 +94,16 @@ Arduino IDE 會透過官方 release metadata 解析最新版安裝檔及其 SHA-
 - `H264`
 - `H265`
 
-設定會儲存在：
+設定頁也提供「清除權重紀錄」功能，只會刪除目前偵測到的 AmebaPro2 版本資料夾內這兩個固定相對路徑：
+
+```text
+libraries\NeuralNetwork\examples\RTSPImageClassification\img_class_cnn.nb
+libraries\NeuralNetwork\examples\ObjectDetectionLoop\yolov7_tiny.nb
+```
+
+若其中一個或兩個檔案原本就不存在，程式會視為已清除，不會回報失敗。操作不會搜尋其他位置，也不會刪除其他 `.nb` 檔案；找不到 AmebaPro2 資料夾或遇到檔案權限／I/O 錯誤時會顯示錯誤訊息。兩個檔案會分別嘗試刪除；若只有其中一個失敗，訊息會標明部分成功與失敗數量，已刪除的檔案不會自動復原。
+
+Preference 與 UVC 設定會儲存在：
 
 ```text
 %LOCALAPPDATA%\AMB82 Mini Computer Plugin\settings.json

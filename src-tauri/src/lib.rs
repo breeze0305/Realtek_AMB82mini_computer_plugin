@@ -40,6 +40,10 @@ const GITHUB_METADATA_MAX_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_RECOVERED_ANNOTATION_CLASSES: usize = 10_000;
 const SUPPORTED_UVCD_FORMATS: &[&str] = &["YUY2", "NV12", "MJPG", "H264", "H265"];
 const SUPPORTED_PREFERENCE_VERSIONS: &[&str] = &["release", "beta"];
+const INSTALLED_WEIGHT_RELATIVE_PATHS: [&str; 2] = [
+    "libraries/NeuralNetwork/examples/RTSPImageClassification/img_class_cnn.nb",
+    "libraries/NeuralNetwork/examples/ObjectDetectionLoop/yolov7_tiny.nb",
+];
 const ALLOWED_EXTERNAL_URL_HOSTS: &[&str] = &[
     "github.com",
     "raw.githubusercontent.com",
@@ -119,6 +123,13 @@ struct ActionResult {
     ok: bool,
     message: String,
     path: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct InstalledWeightCleanupResult {
+    deleted: usize,
+    missing: usize,
+    folder: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -546,6 +557,7 @@ pub fn run() {
             set_uvcd_format,
             set_preference_version,
             reset_settings,
+            clear_installed_weights,
             open_realtek_folder,
             open_output_folder,
             select_output_folder,
@@ -759,6 +771,13 @@ fn reset_settings(state: tauri::State<AppState>) -> Result<SettingsResetResult, 
         dashboard: get_dashboard(state)?,
         uvcd,
     })
+}
+
+#[tauri::command]
+fn clear_installed_weights() -> Result<InstalledWeightCleanupResult, AppError> {
+    let folder = find_realtek_folder()
+        .ok_or_else(|| AppError::Message("Realtek AmebaPro2 folder was not found".into()))?;
+    clear_installed_weights_from(&folder)
 }
 
 #[tauri::command]
@@ -2775,6 +2794,161 @@ fn find_realtek_folder() -> Option<PathBuf> {
     versions.pop().or(Some(root))
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InstalledWeightDeleteOutcome {
+    Deleted,
+    Missing,
+}
+
+fn clear_installed_weights_from(
+    version_folder: &Path,
+) -> Result<InstalledWeightCleanupResult, AppError> {
+    let canonical_version_folder = validate_installed_weight_root(version_folder)?;
+    let mut deleted = 0;
+    let mut missing = 0;
+    let mut failures = Vec::new();
+
+    for relative_path in INSTALLED_WEIGHT_RELATIVE_PATHS {
+        match delete_installed_weight_file(
+            version_folder,
+            &canonical_version_folder,
+            Path::new(relative_path),
+        ) {
+            Ok(InstalledWeightDeleteOutcome::Deleted) => deleted += 1,
+            Ok(InstalledWeightDeleteOutcome::Missing) => missing += 1,
+            Err(error) => failures.push(format!("{relative_path}: {error}")),
+        }
+    }
+
+    if !failures.is_empty() {
+        return Err(AppError::Message(format!(
+            "Failed to clear all installed weights under {} (deleted: {deleted}, missing: {missing}, failed: {}): {}",
+            display_path(version_folder),
+            failures.len(),
+            failures.join("; ")
+        )));
+    }
+
+    Ok(InstalledWeightCleanupResult {
+        deleted,
+        missing,
+        folder: display_path(version_folder),
+    })
+}
+
+fn validate_installed_weight_root(version_folder: &Path) -> Result<PathBuf, AppError> {
+    let version_metadata = fs::symlink_metadata(version_folder).map_err(|error| {
+        AppError::Message(format!(
+            "Failed to inspect the AmebaPro2 version folder {}: {error}",
+            display_path(version_folder)
+        ))
+    })?;
+    if image_safety::metadata_is_reparse_point(&version_metadata) || !version_metadata.is_dir() {
+        return Err(AppError::Message(format!(
+            "The AmebaPro2 version folder is not a regular directory: {}",
+            display_path(version_folder)
+        )));
+    }
+
+    let canonical_version_folder = fs::canonicalize(version_folder).map_err(|error| {
+        AppError::Message(format!(
+            "Failed to resolve the AmebaPro2 version folder {}: {error}",
+            display_path(version_folder)
+        ))
+    })?;
+    Ok(canonical_version_folder)
+}
+
+fn delete_installed_weight_file(
+    version_folder: &Path,
+    canonical_version_folder: &Path,
+    relative_path: &Path,
+) -> Result<InstalledWeightDeleteOutcome, AppError> {
+    let mut current_path = version_folder.to_path_buf();
+    let mut components = relative_path.components().peekable();
+
+    while let Some(component) = components.next() {
+        let std::path::Component::Normal(name) = component else {
+            return Err(AppError::Message(format!(
+                "Installed weight path is not a safe relative path: {}",
+                display_path(relative_path)
+            )));
+        };
+        current_path.push(name);
+        let is_file = components.peek().is_none();
+        let metadata = match fs::symlink_metadata(&current_path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(InstalledWeightDeleteOutcome::Missing);
+            }
+            Err(error) => {
+                return Err(AppError::Message(format!(
+                    "Failed to inspect {}: {error}",
+                    display_path(&current_path)
+                )));
+            }
+        };
+
+        if image_safety::metadata_is_reparse_point(&metadata) {
+            return Err(AppError::Message(format!(
+                "Refusing to follow a symbolic link or reparse point: {}",
+                display_path(&current_path)
+            )));
+        }
+        if is_file {
+            if !metadata.is_file() {
+                return Err(AppError::Message(format!(
+                    "Installed weight path is not a regular file: {}",
+                    display_path(&current_path)
+                )));
+            }
+        } else if !metadata.is_dir() {
+            return Err(AppError::Message(format!(
+                "Installed weight parent is not a regular directory: {}",
+                display_path(&current_path)
+            )));
+        }
+    }
+
+    let mut target_guard = match image_safety::open_locked_file_for_delete(&current_path) {
+        Ok(guard) => guard,
+        Err(AppError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(InstalledWeightDeleteOutcome::Missing);
+        }
+        Err(error) => return Err(error),
+    };
+    let resolved_target = target_guard.resolved_path().map_err(|error| {
+        AppError::Message(format!(
+            "Failed to resolve the opened installed weight {}: {error}",
+            display_path(&current_path)
+        ))
+    })?;
+    ensure_canonical_path_within(canonical_version_folder, &resolved_target, &current_path)?;
+
+    target_guard.mark_delete().map_err(|error| {
+        AppError::Message(format!(
+            "Failed to delete {}: {error}",
+            display_path(&current_path)
+        ))
+    })?;
+    drop(target_guard);
+    Ok(InstalledWeightDeleteOutcome::Deleted)
+}
+
+fn ensure_canonical_path_within(
+    canonical_root: &Path,
+    canonical_path: &Path,
+    original_path: &Path,
+) -> Result<(), AppError> {
+    if !canonical_path.starts_with(canonical_root) {
+        return Err(AppError::Message(format!(
+            "Resolved path escapes the AmebaPro2 version folder: {}",
+            display_path(original_path)
+        )));
+    }
+    Ok(())
+}
+
 fn repair_uvcd(format: &str) -> Result<UvcdResult, AppError> {
     let format = normalize_uvcd_format(format)?;
     let version_folder = find_realtek_folder()
@@ -3063,6 +3237,16 @@ mod tests {
         std::env::temp_dir().join(format!("amb82-{name}-{}-{nonce}", std::process::id()))
     }
 
+    fn installed_weight_test_folder(name: &str) -> PathBuf {
+        let folder = test_directory(name);
+        fs::create_dir_all(folder.join("libraries")).unwrap();
+        folder
+    }
+
+    fn installed_weight_path(folder: &Path, index: usize) -> PathBuf {
+        folder.join(Path::new(INSTALLED_WEIGHT_RELATIVE_PATHS[index]))
+    }
+
     fn metadata_for_bytes(file_name: &str, bytes: &[u8]) -> InstallerMetadata {
         let (_, sha256) = sha256_reader(std::io::Cursor::new(bytes)).unwrap();
         InstallerMetadata {
@@ -3237,6 +3421,135 @@ mod tests {
         assert!(recover_annotation_class_names(overflow_box.iter()).is_err());
         assert!(!labels.join("classes.txt").exists());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn installed_weight_cleanup_deletes_both_fixed_files() {
+        let folder = installed_weight_test_folder("weight-cleanup-both");
+        for index in 0..INSTALLED_WEIGHT_RELATIVE_PATHS.len() {
+            let path = installed_weight_path(&folder, index);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, format!("weight-{index}")).unwrap();
+        }
+        let unrelated_weight = folder
+            .join("libraries/NeuralNetwork/examples/ObjectDetectionLoop")
+            .join("keep-this-model.nb");
+        fs::write(&unrelated_weight, b"unrelated").unwrap();
+
+        let result = clear_installed_weights_from(&folder).unwrap();
+
+        assert_eq!(
+            result,
+            InstalledWeightCleanupResult {
+                deleted: 2,
+                missing: 0,
+                folder: display_path(&folder),
+            }
+        );
+        assert!(!installed_weight_path(&folder, 0).exists());
+        assert!(!installed_weight_path(&folder, 1).exists());
+        assert_eq!(fs::read(&unrelated_weight).unwrap(), b"unrelated");
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn installed_weight_cleanup_is_idempotent_when_files_are_missing() {
+        let folder = installed_weight_test_folder("weight-cleanup-idempotent");
+        let first = installed_weight_path(&folder, 0);
+        fs::create_dir_all(first.parent().unwrap()).unwrap();
+        fs::write(&first, b"weight").unwrap();
+
+        let first_result = clear_installed_weights_from(&folder).unwrap();
+        assert_eq!(first_result.deleted, 1);
+        assert_eq!(first_result.missing, 1);
+
+        let second_result = clear_installed_weights_from(&folder).unwrap();
+        assert_eq!(second_result.deleted, 0);
+        assert_eq!(second_result.missing, 2);
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn installed_weight_cleanup_treats_missing_libraries_as_already_clear() {
+        let folder = test_directory("weight-cleanup-no-libraries");
+        fs::create_dir_all(&folder).unwrap();
+
+        let result = clear_installed_weights_from(&folder).unwrap();
+
+        assert_eq!(result.deleted, 0);
+        assert_eq!(result.missing, 2);
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn installed_weight_cleanup_attempts_both_targets_and_reports_partial_failure() {
+        let folder = installed_weight_test_folder("weight-cleanup-partial");
+        let invalid_target = installed_weight_path(&folder, 0);
+        fs::create_dir_all(&invalid_target).unwrap();
+        let valid_target = installed_weight_path(&folder, 1);
+        fs::create_dir_all(valid_target.parent().unwrap()).unwrap();
+        fs::write(&valid_target, b"weight").unwrap();
+
+        let error = clear_installed_weights_from(&folder).unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("deleted: 1"));
+        assert!(message.contains("missing: 0"));
+        assert!(message.contains("failed: 1"));
+        assert!(message.contains(INSTALLED_WEIGHT_RELATIVE_PATHS[0]));
+        assert!(invalid_target.is_dir());
+        assert!(!valid_target.exists());
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn canonical_weight_path_must_remain_inside_the_version_folder() {
+        let folder = test_directory("weight-cleanup-containment");
+        let inside = folder.join("libraries").join("model.nb");
+        let outside = folder
+            .parent()
+            .unwrap()
+            .join("amb82-weight-cleanup-outside")
+            .join("model.nb");
+
+        assert!(ensure_canonical_path_within(&folder, &inside, &inside).is_ok());
+        assert!(ensure_canonical_path_within(&folder, &outside, &outside).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn installed_weight_cleanup_rejects_a_symlinked_parent() {
+        use std::os::unix::fs::symlink;
+
+        let folder = installed_weight_test_folder("weight-cleanup-symlink");
+        let outside = test_directory("weight-cleanup-symlink-outside");
+        let outside_neural_network = outside.join("NeuralNetwork");
+        let first_outside = outside_neural_network
+            .join("examples")
+            .join("RTSPImageClassification")
+            .join("img_class_cnn.nb");
+        let second_outside = outside_neural_network
+            .join("examples")
+            .join("ObjectDetectionLoop")
+            .join("yolov7_tiny.nb");
+        fs::create_dir_all(first_outside.parent().unwrap()).unwrap();
+        fs::create_dir_all(second_outside.parent().unwrap()).unwrap();
+        fs::write(&first_outside, b"first").unwrap();
+        fs::write(&second_outside, b"second").unwrap();
+        symlink(
+            &outside_neural_network,
+            folder.join("libraries/NeuralNetwork"),
+        )
+        .unwrap();
+
+        let error = clear_installed_weights_from(&folder).unwrap_err();
+
+        assert!(error.to_string().contains("symbolic link or reparse point"));
+        assert_eq!(fs::read(&first_outside).unwrap(), b"first");
+        assert_eq!(fs::read(&second_outside).unwrap(), b"second");
+        fs::remove_file(folder.join("libraries/NeuralNetwork")).unwrap();
+        fs::remove_dir_all(folder).unwrap();
+        fs::remove_dir_all(outside).unwrap();
     }
 
     #[test]

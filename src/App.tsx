@@ -48,6 +48,7 @@ import type {
   UvcdResult,
   VersionCheck,
   View,
+  WeightCleanupResult,
 } from "./types";
 
 function isStoredVersionCheck(value: unknown): value is VersionCheck {
@@ -298,6 +299,22 @@ function App() {
       setInternetConnected(result.dashboard.internet_connected);
       changeAutoCheckUpdates(true);
       setStatus(result.uvcd.path ? t.settingsReset : `${t.settingsReset}: ${result.uvcd.message}`);
+    } catch (error) {
+      setStatus(String(error));
+    } finally {
+      setRunning(null);
+    }
+  }
+
+  async function clearWeightRecords() {
+    try {
+      setRunning("weightCleanup");
+      const result = await invoke<WeightCleanupResult>("clear_installed_weights");
+      setStatus(
+        result.deleted > 0
+          ? t.weightRecordsCleared.replace("{count}", String(result.deleted))
+          : t.weightRecordsAlreadyClear,
+      );
     } catch (error) {
       setStatus(String(error));
     } finally {
@@ -935,6 +952,7 @@ function App() {
           onChangeAutoCheckUpdates={changeAutoCheckUpdates}
           onChangePreferenceVersion={(version) => void changePreferenceVersion(version)}
           onChangeUvcdFormat={(format) => void changeUvcdFormat(format)}
+          onClearWeightRecords={() => void clearWeightRecords()}
           onResetSettings={() => void resetSettings()}
           running={running}
           selectedPreferenceVersion={selectedPreferenceVersion}

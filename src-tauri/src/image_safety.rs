@@ -24,31 +24,8 @@ pub(super) struct ImageSourceGuard {
 
 impl LockedImageSource {
     pub(super) fn open(path: &Path) -> Result<Self, AppError> {
-        let mut options = OpenOptions::new();
-        options.read(true);
-
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            use windows_sys::Win32::{
-                Foundation::GENERIC_READ,
-                Storage::FileSystem::{DELETE, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ},
-            };
-
-            options
-                .access_mode(GENERIC_READ | DELETE)
-                .share_mode(FILE_SHARE_READ)
-                .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
-        }
-
-        let mut file = options.open(path)?;
-        let metadata = file.metadata()?;
-        if metadata_is_reparse_point(&metadata) || !metadata.is_file() {
-            return Err(AppError::Message(format!(
-                "Image source is not a regular file: {}",
-                display_path(path)
-            )));
-        }
+        let mut guard = open_locked_file_for_delete(path)?;
+        let metadata = guard.file.metadata()?;
         validate_source_length(path, metadata.len())?;
 
         let capacity = usize::try_from(metadata.len()).map_err(|_| {
@@ -58,7 +35,7 @@ impl LockedImageSource {
             ))
         })?;
         let mut bytes = Vec::with_capacity(capacity);
-        file.read_to_end(&mut bytes)?;
+        guard.file.read_to_end(&mut bytes)?;
         if bytes.len() as u64 != metadata.len() {
             return Err(AppError::Message(format!(
                 "Image size changed while it was being opened: {}",
@@ -66,18 +43,47 @@ impl LockedImageSource {
             )));
         }
 
-        Ok(Self {
-            guard: ImageSourceGuard {
-                file,
-                current_path: absolute_path(path)?,
-            },
-            bytes,
-        })
+        Ok(Self { guard, bytes })
     }
 
     pub(super) fn into_parts(self) -> (ImageSourceGuard, Vec<u8>) {
         (self.guard, self.bytes)
     }
+}
+
+/// Opens a regular file with deletion rights while keeping its identity locked.
+/// On Windows the handle rejects rename, replacement, and writes until it is dropped.
+pub(super) fn open_locked_file_for_delete(path: &Path) -> Result<ImageSourceGuard, AppError> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::{
+            Foundation::GENERIC_READ,
+            Storage::FileSystem::{DELETE, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ},
+        };
+
+        options
+            .access_mode(GENERIC_READ | DELETE)
+            .share_mode(FILE_SHARE_READ)
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+
+    let file = options.open(path)?;
+    let metadata = file.metadata()?;
+    if metadata_is_reparse_point(&metadata) || !metadata.is_file() {
+        return Err(AppError::Message(format!(
+            "File selected for deletion is not a regular file: {}",
+            display_path(path)
+        )));
+    }
+
+    Ok(ImageSourceGuard {
+        file,
+        current_path: absolute_path(path)?,
+    })
 }
 
 impl ImageSourceGuard {
@@ -105,6 +111,10 @@ impl ImageSourceGuard {
 
     pub(super) fn mark_delete(&mut self) -> std::io::Result<()> {
         mark_open_file_for_deletion(&self.file, &self.current_path)
+    }
+
+    pub(super) fn resolved_path(&self) -> std::io::Result<PathBuf> {
+        resolved_open_file_path(&self.file, &self.current_path)
     }
 }
 
@@ -203,6 +213,45 @@ fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
     } else {
         Ok(std::env::current_dir()?.join(path))
     }
+}
+
+#[cfg(windows)]
+fn resolved_open_file_path(file: &File, _path: &Path) -> std::io::Result<PathBuf> {
+    use std::{ffi::OsString, os::windows::ffi::OsStringExt, os::windows::io::AsRawHandle};
+    use windows_sys::Win32::Storage::FileSystem::GetFinalPathNameByHandleW;
+
+    let required =
+        unsafe { GetFinalPathNameByHandleW(file.as_raw_handle(), std::ptr::null_mut(), 0, 0) };
+    if required == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+
+    let mut buffer = vec![0_u16; required as usize];
+    let written = unsafe {
+        GetFinalPathNameByHandleW(
+            file.as_raw_handle(),
+            buffer.as_mut_ptr(),
+            u32::try_from(buffer.len())
+                .map_err(|_| std::io::Error::other("Resolved file path is too long"))?,
+            0,
+        )
+    };
+    if written == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    if written as usize >= buffer.len() {
+        return Err(std::io::Error::other(
+            "Resolved file path changed while it was being read",
+        ));
+    }
+
+    buffer.truncate(written as usize);
+    Ok(PathBuf::from(OsString::from_wide(&buffer)))
+}
+
+#[cfg(not(windows))]
+fn resolved_open_file_path(_file: &File, path: &Path) -> std::io::Result<PathBuf> {
+    fs::canonicalize(path)
 }
 
 #[cfg(windows)]
@@ -408,6 +457,10 @@ mod tests {
         fs::write(&replacement, b"replacement image").unwrap();
         let (guard, bytes) = LockedImageSource::open(&source).unwrap().into_parts();
 
+        assert_eq!(
+            guard.resolved_path().unwrap(),
+            fs::canonicalize(&source).unwrap()
+        );
         assert!(fs::rename(&source, &moved).is_err());
         let source_wide: Vec<u16> = replacement
             .as_os_str()

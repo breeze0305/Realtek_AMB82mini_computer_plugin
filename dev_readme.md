@@ -42,7 +42,7 @@ This section is the authoritative source map for the current frontend. Some olde
   - `LinkPanel.tsx`: GitHub repository and AMB Preference link panel.
   - `HomeView.tsx`: main-menu heading, two numbered resource entries, divider, and six primary function cards.
   - `ResourceLibraryView.tsx`: category-specific secondary page for either installers or code/model weights.
-  - `SettingsView.tsx`: settings page UI, including auto update check, Preference version, UVC format, and reset.
+  - `SettingsView.tsx`: settings page UI, including auto update check, Preference version, UVC format, installed-weight cleanup, and reset.
   - `CameraView.tsx`: camera page UI.
   - `ConverterView.tsx`: model converter page UI.
   - `AnnotationView.tsx`: object detection labeling UI, including folder selection/drop, EXIF preparation progress, class management, image navigation, box drawing/moving/resizing, and current-image reset.
@@ -239,9 +239,9 @@ Image conversion behavior:
 
 相機頁底部有 UVC 相機設定教學，文字在 `cameraGuideSteps`。
 
-### 設定頁、Preference version 與 UVC device 格式
+### 設定頁、Preference version、UVC device 格式與權重清除
 
-設定入口在右上角語言選單旁的齒輪按鈕。設定頁目前包含 AMB Preference 版本切換、UVC device 屬性設定、簡易警告文字，以及恢復預設設定按鈕。
+設定入口在右上角語言選單旁的齒輪按鈕。設定頁目前包含 AMB Preference 版本切換、UVC device 屬性設定、清除權重紀錄、簡易警告文字，以及恢復預設設定按鈕。
 
 Preference version：
 
@@ -258,6 +258,23 @@ Reset：
 - Reset 按鈕會把設定頁參數恢復成 `preference_version = beta`、`uvcd_format = MJPG`。
 - Reset 會寫回 `settings.json`，並嘗試把 `UVCD_pram.h` 也修回 MJPG。
 - Reset 不會變更語言設定。
+
+清除權重紀錄：
+
+- 前端呼叫 Rust command `clear_installed_weights`。
+- command 會重用「開啟 AmebaPro2 資料夾」卡片的資料夾偵測方式，從目前偵測到的 AmebaPro2 版本資料夾開始處理。
+- 只會刪除下列兩個固定相對路徑：
+
+  ```text
+  libraries\NeuralNetwork\examples\RTSPImageClassification\img_class_cnn.nb
+  libraries\NeuralNetwork\examples\ObjectDetectionLoop\yolov7_tiny.nb
+  ```
+
+- 任一目標檔案不存在時會視為已清除，不算錯誤；兩個檔案都不存在時也會正常完成。
+- command 不會遞迴搜尋權重，也不會刪除固定路徑以外的其他 `.nb` 檔案。
+- 找不到 AmebaPro2 資料夾或遇到權限／I/O 錯誤時，前端會顯示錯誤訊息；錯誤處理不會擴大刪除範圍。
+- 兩個目標會各自嘗試刪除；部分失敗時錯誤訊息會列出 `deleted` / `missing` / `failed`，已成功刪除的檔案不會 rollback。
+- 此功能不會修改 `settings.json`，也不屬於 Reset 設定流程。
 
 可選格式：
 
@@ -594,19 +611,20 @@ npm.cmd run tauri build
 5. 右上設定按鈕可進入設定頁。
 6. 設定頁切換 `YUY2`、`NV12`、`MJPG`、`H264`、`H265` 後，`settings.json` 有保存。
 7. 設定頁切換格式後，`UVCD_pram.h` 被覆寫為選定格式 `1`、其他格式 `0`。
-8. 資源二級頁的檔案另存功能正常。
-9. 無外網且沒有快取時，Arduino / VLC 會清楚回報無法取得；內嵌資源仍可取得。
-10. 有外網時首次取得 Arduino / VLC 會顯示下載進度，完成後可正常另存或自動安裝。
-11. 中斷外網後再次取得或安裝同一版本，會通過 SHA-256 驗證並重用快取，不重新下載。
-12. 修改快取檔案後再次操作，程式會拒用該檔案；恢復網路後可重新下載並修復快取。
-13. 相機頁可掃描 camera、預覽、截圖；進入頁面後再插入鏡頭時，可按「重新偵測鏡頭」直接更新清單並啟動預覽。
-14. 輸出圖片序號會接續既有最大編號。
-15. 相機頁開啟「選擇資料夾」時，對話框保持在主視窗上方，主視窗不可操作；取消或完成後恢復操作。
-16. 圖片轉檔可遞迴處理巢狀資料夾，BMP、靜態 WebP 與真實 HEIC 會在原目錄產生同名 JPG，成功後來源檔消失。
-17. 使用帶有常見 `Exif\0\0` 包裝與 Orientation 的 Apple HEIC 驗證：輸出 JPG 的尺寸與顯示方向正確、Orientation tag 已移除，且成功後只刪除測試用來源複本；破損或雙重包裝的 EXIF 應保留來源並回報失敗。
-18. 含 EXIF Orientation 的 WebP/JPG/PNG 轉換後顯示方向不變，輸出不再含 Orientation tag；透明區域成為白色。
-19. 同名 JPG 已存在、圖片正被其他程式寫入、動畫 WebP、破損、主要圖片組合／重複關聯 `imir`、`irot`，或非 `hvc1` HEIF 時，原檔保持不變，完成摘要正確顯示失敗數量；主要圖片單獨關聯 `imir` 或 `irot` 可正常處理，僅屬於 aux／tile 的 transform 不會誤判。
-20. 大量檔案處理時進度條持續更新；完成後自動回首頁，繁中／英文／日文摘要與第一個失敗檔案顯示正常。
+8. 設定頁按下「清除權重紀錄」時，只刪除兩個固定路徑的權重；檔案不存在視為已清除，且相鄰或其他目錄中的 `.nb` 檔案保持不變。
+9. 資源二級頁的檔案另存功能正常。
+10. 無外網且沒有快取時，Arduino / VLC 會清楚回報無法取得；內嵌資源仍可取得。
+11. 有外網時首次取得 Arduino / VLC 會顯示下載進度，完成後可正常另存或自動安裝。
+12. 中斷外網後再次取得或安裝同一版本，會通過 SHA-256 驗證並重用快取，不重新下載。
+13. 修改快取檔案後再次操作，程式會拒用該檔案；恢復網路後可重新下載並修復快取。
+14. 相機頁可掃描 camera、預覽、截圖；進入頁面後再插入鏡頭時，可按「重新偵測鏡頭」直接更新清單並啟動預覽。
+15. 輸出圖片序號會接續既有最大編號。
+16. 相機頁開啟「選擇資料夾」時，對話框保持在主視窗上方，主視窗不可操作；取消或完成後恢復操作。
+17. 圖片轉檔可遞迴處理巢狀資料夾，BMP、靜態 WebP 與真實 HEIC 會在原目錄產生同名 JPG，成功後來源檔消失。
+18. 使用帶有常見 `Exif\0\0` 包裝與 Orientation 的 Apple HEIC 驗證：輸出 JPG 的尺寸與顯示方向正確、Orientation tag 已移除，且成功後只刪除測試用來源複本；破損或雙重包裝的 EXIF 應保留來源並回報失敗。
+19. 含 EXIF Orientation 的 WebP/JPG/PNG 轉換後顯示方向不變，輸出不再含 Orientation tag；透明區域成為白色。
+20. 同名 JPG 已存在、圖片正被其他程式寫入、動畫 WebP、破損、主要圖片組合／重複關聯 `imir`、`irot`，或非 `hvc1` HEIF 時，原檔保持不變，完成摘要正確顯示失敗數量；主要圖片單獨關聯 `imir` 或 `irot` 可正常處理，僅屬於 aux／tile 的 transform 不會誤判。
+21. 大量檔案處理時進度條持續更新；完成後自動回首頁，繁中／英文／日文摘要與第一個失敗檔案顯示正常。
 
 ## 已知限制
 

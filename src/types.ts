@@ -73,6 +73,12 @@ export type SettingsResetResult = {
   uvcd: UvcdResult;
 };
 
+export type WeightCleanupResult = {
+  deleted: number;
+  missing: number;
+  folder: string;
+};
+
 export type ConverterModel = {
   type: ModelType;
   label: string;
@@ -198,6 +204,7 @@ export type RunningAction =
   | "vlc"
   | "folder"
   | "settings"
+  | "weightCleanup"
   | "version"
   | "output"
   | "converter"

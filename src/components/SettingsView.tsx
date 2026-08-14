@@ -1,4 +1,4 @@
-import { RefreshCcw } from "lucide-react";
+import { LoaderCircle, RefreshCcw, Trash2 } from "lucide-react";
 
 import { uvcdFormatOptions } from "../appConfig";
 import { uvcdOptionLabel } from "../converterUtils";
@@ -9,6 +9,7 @@ type SettingsViewProps = {
   onChangeAutoCheckUpdates: (enabled: boolean) => void;
   onChangePreferenceVersion: (version: PreferenceVersion) => void;
   onChangeUvcdFormat: (format: UvcdFormat) => void;
+  onClearWeightRecords: () => void;
   onResetSettings: () => void;
   running: RunningAction;
   selectedPreferenceVersion: PreferenceVersion;
@@ -21,12 +22,16 @@ export function SettingsView({
   onChangeAutoCheckUpdates,
   onChangePreferenceVersion,
   onChangeUvcdFormat,
+  onClearWeightRecords,
   onResetSettings,
   running,
   selectedPreferenceVersion,
   selectedUvcdFormat,
   t,
 }: SettingsViewProps) {
+  const isClearingWeights = running === "weightCleanup";
+  const areSettingsActionsBusy = running === "settings" || isClearingWeights;
+
   return (
     <section className="contentSection settingsSection">
       <div className="settingsRow">
@@ -49,7 +54,7 @@ export function SettingsView({
               type="button"
               className={selectedPreferenceVersion === "release" ? "isSelected" : ""}
               onClick={() => onChangePreferenceVersion("release")}
-              disabled={running === "settings"}
+              disabled={areSettingsActionsBusy}
             >
               {t.releaseVersion}
             </button>
@@ -57,7 +62,7 @@ export function SettingsView({
               type="button"
               className={selectedPreferenceVersion === "beta" ? "isSelected" : ""}
               onClick={() => onChangePreferenceVersion("beta")}
-              disabled={running === "settings"}
+              disabled={areSettingsActionsBusy}
             >
               {t.betaVersion}
             </button>
@@ -71,7 +76,7 @@ export function SettingsView({
             id="uvcd-format"
             value={selectedUvcdFormat}
             onChange={(event) => onChangeUvcdFormat(event.target.value as UvcdFormat)}
-            disabled={running === "settings"}
+            disabled={areSettingsActionsBusy}
           >
             {uvcdFormatOptions.map((item) => (
               <option value={item.value} key={item.value}>
@@ -80,14 +85,33 @@ export function SettingsView({
             ))}
           </select>
         </div>
+        <div className="settingsWeightCleanup">
+          <div className="settingsWeightCleanupCopy">
+            <span className="settingsFieldLabel">{t.weightFiles}</span>
+            <p>{t.clearWeightRecordsDescription}</p>
+          </div>
+          <button
+            type="button"
+            className="dangerBtn settingsWeightCleanupButton"
+            onClick={onClearWeightRecords}
+            disabled={running !== null}
+          >
+            {isClearingWeights ? (
+              <LoaderCircle className="spin" size={17} aria-hidden="true" />
+            ) : (
+              <Trash2 size={17} aria-hidden="true" />
+            )}
+            {isClearingWeights ? t.clearingWeightRecords : t.clearWeightRecords}
+          </button>
+        </div>
         <div className="settingsFooter">
           <button
             type="button"
             className="resetSettingsButton"
             onClick={onResetSettings}
-            disabled={running === "settings"}
+            disabled={areSettingsActionsBusy}
           >
-            <RefreshCcw className={running === "settings" ? "spin" : undefined} size={17} />
+            <RefreshCcw className={running === "settings" ? "spin" : undefined} size={17} aria-hidden="true" />
             {t.resetSettings}
           </button>
         </div>
