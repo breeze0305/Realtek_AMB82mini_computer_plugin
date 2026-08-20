@@ -4,9 +4,9 @@
 #include "VideoStreamOverlay.h"
 #include "ObjectClassList.h"
 #include "AmebaServo.h"
-
 #define CHANNEL   0
 #define CHANNELNN 3
+
 #define NNWIDTH  640
 #define NNHEIGHT 640
 
@@ -23,13 +23,12 @@ int c = 3;
 int d = 4;
 
 // PWM 控制參數
-const int maxPWM  = 180;
-const int turnPWM = 100;
+const int maxPWM = 180;
+const int turnMaxPWM = 90;
 
 void setup()
 {
     Serial.begin(115200);
-
     pinMode(a, OUTPUT);
     pinMode(b, OUTPUT);
     pinMode(c, OUTPUT);
@@ -41,7 +40,8 @@ void setup()
     Camera.videoInit();
 
     ObjDet.configVideo(configNN);
-    ObjDet.modelSelect(OBJECT_DETECTION, DEFAULT_YOLOV7TINY, NA_MODEL, NA_MODEL);
+    ObjDet.modelSelect(OBJECT_DETECTION, CUSTOMIZED_YOLOV7TINY, NA_MODEL, NA_MODEL);
+    ObjDet.configThreshold(0.2, 0.2);
     ObjDet.begin();
 
     videoStreamer.registerInput(Camera.getStream(CHANNEL));
@@ -72,7 +72,7 @@ void loop()
         float highestScore = -1.0;
 
         for (int i = 0; i < ObjDet.getResultCount(); i++) {
-            if (itemList[results[i].type()].filter && results[i].score() > highestScore) {
+            if (results[i].score() > highestScore) {
                 highestScore = results[i].score();
                 bestIndex = i;
             }
@@ -88,45 +88,30 @@ void loop()
 
                 const char* position;
                 if (xcenter < im_w / 3) {
-                    position = "left";
+                    position = "左半部";
                 } else if (xcenter > 2 * im_w / 3) {
-                    position = "right";
+                    position = "右半部";
                 } else {
-                    position = "mid";
+                    position = "中間";
                 }
 
-                if (position == "mid") {  // 前進
-                    analogWrite(a, 0);
-                    analogWrite(b, maxPWM);
-                    analogWrite(c, 0);
-                    analogWrite(d, maxPWM);
-                    delay(300);
-                    analogWrite(a, 0);
-                    analogWrite(b, 0);
-                    analogWrite(c, 0);
-                    analogWrite(d, 0);
+                if (position == "中間") { // 前進
+                    analogWrite(a, 0);         // 右後停
+                    analogWrite(b, maxPWM);    // 右前轉
+                    analogWrite(c, 0);         // 左後停
+                    analogWrite(d, maxPWM);    // 左前轉
                 }
-                else if (position == "right") { // 右轉
+                else if (position == "右半部") { // 右轉
                     analogWrite(a, 0);
-                    analogWrite(b, turnPWM);
+                    analogWrite(b, turnMaxPWM);    // 右前較慢
                     analogWrite(c, 0);
-                    analogWrite(d, maxPWM);
-                    delay(150);
-                    analogWrite(a, 0);
-                    analogWrite(b, 0);
-                    analogWrite(c, 0);
-                    analogWrite(d, 0);
+                    analogWrite(d, maxPWM);        // 左前較快
                 }
-                else if (position == "left") {  // 左轉
+                else if (position == "左半部") { // 左轉
                     analogWrite(a, 0);
-                    analogWrite(b, maxPWM);
+                    analogWrite(b, maxPWM);        // 右前較快
                     analogWrite(c, 0);
-                    analogWrite(d, turnPWM);
-                    delay(150);
-                    analogWrite(a, 0);
-                    analogWrite(b, 0);
-                    analogWrite(c, 0);
-                    analogWrite(d, 0);
+                    analogWrite(d, turnMaxPWM);    // 左前較慢
                 }
                 else {
                     analogWrite(a, 0);
@@ -134,6 +119,14 @@ void loop()
                     analogWrite(c, 0);
                     analogWrite(d, 0);
                 }
+
+                delay(200); // 保持動作一段時間
+
+                // 停車
+                analogWrite(a, 0);
+                analogWrite(b, 0);
+                analogWrite(c, 0);
+                analogWrite(d, 0);
             }
         }
     }
