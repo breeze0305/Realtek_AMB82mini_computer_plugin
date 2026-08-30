@@ -110,6 +110,7 @@ export const translations = {
     invalidFileType: "檔案格式不符合目前模型類型",
     chooseAnotherFile: "選擇其他檔案",
     dropFileHint: "也可以將檔案拖放到這裡",
+    loadingDroppedFile: "正在讀取拖入的模型檔案…",
   },
   en_US: {
     appTitle: "Realtek AMB82-mini Tool",
@@ -225,6 +226,7 @@ export const translations = {
     invalidFileType: "File type does not match the selected model type",
     chooseAnotherFile: "Choose another file",
     dropFileHint: "You can also drop a file here",
+    loadingDroppedFile: "Reading dropped model file…",
   },
   ja_JP: {
     appTitle: "Realtek AMB82-mini ツール",
@@ -339,6 +341,7 @@ export const translations = {
     invalidFileType: "File type does not match the selected model type",
     chooseAnotherFile: "Choose another file",
     dropFileHint: "You can also drop a file here",
+    loadingDroppedFile: "ドロップしたモデルファイルを読み込んでいます…",
   },
 } satisfies Record<Language, Record<string, string>>;
 

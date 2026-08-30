@@ -37,6 +37,7 @@ const ARDUINO_LATEST_RELEASE_API: &str =
 const INSTALLER_CACHE_DIRECTORY: &str = "installer-cache/v1";
 const CACHE_METADATA_MAX_BYTES: u64 = 64 * 1024;
 const GITHUB_METADATA_MAX_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_MODEL_CONVERTER_FILE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_RECOVERED_ANNOTATION_CLASSES: usize = 10_000;
 const SUPPORTED_UVCD_FORMATS: &[&str] = &["YUY2", "NV12", "MJPG", "H264", "H265"];
 const SUPPORTED_PREFERENCE_VERSIONS: &[&str] = &["release", "beta"];
@@ -572,6 +573,7 @@ pub fn run() {
             download_and_install_arduino_ide,
             download_vlc_as,
             download_and_install_vlc,
+            read_model_converter_file,
             download_model_conversion_as,
             check_internet,
             check_version,
@@ -1087,6 +1089,68 @@ fn download_model_conversion_as(
     let target = save_dialog(&window, &state, &default_name, "Save converted model")?
         .ok_or_else(|| AppError::Message("Save was canceled".into()))?;
     download_to_path(&app, "converter", &url, &target)
+}
+
+#[tauri::command]
+async fn read_model_converter_file(
+    path: String,
+    max_bytes: u64,
+) -> Result<tauri::ipc::Response, AppError> {
+    let path = PathBuf::from(path);
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
+        read_model_converter_file_from(&path, max_bytes)
+    })
+    .await
+    .map_err(|error| AppError::Message(format!("Model file read task failed: {error}")))??;
+
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+fn read_model_converter_file_from(path: &Path, max_bytes: u64) -> Result<Vec<u8>, AppError> {
+    if max_bytes == 0 || max_bytes > MAX_MODEL_CONVERTER_FILE_BYTES {
+        return Err(AppError::Message("Invalid model file size limit".into()));
+    }
+
+    let mut file = fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
+        return Err(AppError::Message(
+            "The dropped path is not a regular file".into(),
+        ));
+    }
+
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase);
+    if !matches!(extension.as_deref(), Some("pt" | "h5")) {
+        return Err(AppError::Message(
+            "Only .pt and .h5 model files can be dropped".into(),
+        ));
+    }
+
+    if metadata.len() > max_bytes {
+        return Err(AppError::Message(format!(
+            "Model file exceeds the {} MB limit",
+            max_bytes / (1024 * 1024)
+        )));
+    }
+
+    let mut bytes = Vec::new();
+    (&mut file).take(max_bytes + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(AppError::Message(format!(
+            "Model file exceeds the {} MB limit",
+            max_bytes / (1024 * 1024)
+        )));
+    }
+    if bytes.len() as u64 != metadata.len() {
+        return Err(AppError::Message(
+            "Model file changed while it was being read; please try again".into(),
+        ));
+    }
+
+    Ok(bytes)
 }
 
 #[tauri::command]
@@ -3269,6 +3333,51 @@ mod tests {
             digest: Some(digest.to_string()),
             browser_download_url: browser_download_url.to_string(),
         }
+    }
+
+    #[test]
+    fn dropped_model_file_reader_accepts_supported_files_case_insensitively() {
+        let folder = test_directory("model-drop-supported");
+        fs::create_dir_all(&folder).unwrap();
+        let pt_path = folder.join("detector.PT");
+        let h5_path = folder.join("classifier.h5");
+        fs::write(&pt_path, b"pytorch model").unwrap();
+        fs::write(&h5_path, b"keras model").unwrap();
+
+        assert_eq!(
+            read_model_converter_file_from(&pt_path, 1024).unwrap(),
+            b"pytorch model"
+        );
+        assert_eq!(
+            read_model_converter_file_from(&h5_path, 1024).unwrap(),
+            b"keras model"
+        );
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn dropped_model_file_reader_rejects_unsupported_or_oversized_files() {
+        let folder = test_directory("model-drop-invalid");
+        fs::create_dir_all(&folder).unwrap();
+        let unsupported_path = folder.join("model.txt");
+        let oversized_path = folder.join("model.pt");
+        fs::write(&unsupported_path, b"model").unwrap();
+        fs::write(&oversized_path, b"12345").unwrap();
+
+        assert!(read_model_converter_file_from(&unsupported_path, 1024).is_err());
+        assert!(read_model_converter_file_from(&oversized_path, 4).is_err());
+        assert!(read_model_converter_file_from(&oversized_path, 0).is_err());
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn dropped_model_file_reader_rejects_a_directory() {
+        let folder = test_directory("model-drop-directory");
+        let directory_path = folder.join("model.pt");
+        fs::create_dir_all(&directory_path).unwrap();
+
+        assert!(read_model_converter_file_from(&directory_path, 1024).is_err());
+        fs::remove_dir_all(folder).unwrap();
     }
 
     fn annotation_test_folders(name: &str) -> (PathBuf, PathBuf, PathBuf) {

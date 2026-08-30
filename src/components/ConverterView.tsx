@@ -1,5 +1,6 @@
 import { Download, ExternalLink, RefreshCcw, UploadCloud } from "lucide-react";
-import type { CSSProperties, RefObject } from "react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 
 import { converterModelOrder } from "../appConfig";
 import type { CompletedConversion, ConversionStatusResponse, ConverterModel, ModelType } from "../types";
@@ -16,6 +17,7 @@ type ConverterViewProps = {
   internetConnected: boolean;
   isConverterBusy: boolean;
   modelConverterUrl: string;
+  onChooseDroppedPath: (path: string) => void;
   onChooseFile: (file?: File | null) => void;
   onDownloadCompletedConversion: () => void;
   onOpenUrl: (url?: string) => void;
@@ -37,6 +39,7 @@ export function ConverterView({
   internetConnected,
   isConverterBusy,
   modelConverterUrl,
+  onChooseDroppedPath,
   onChooseFile,
   onDownloadCompletedConversion,
   onOpenUrl,
@@ -45,6 +48,49 @@ export function ConverterView({
   selectedConverterModel,
   t,
 }: ConverterViewProps) {
+  const [dropActive, setDropActive] = useState(false);
+  const isConverterBusyRef = useRef(isConverterBusy);
+  const onChooseDroppedPathRef = useRef(onChooseDroppedPath);
+  isConverterBusyRef.current = isConverterBusy;
+  onChooseDroppedPathRef.current = onChooseDroppedPath;
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (disposed) return;
+        if (event.payload.type === "enter") {
+          if (!isConverterBusyRef.current) setDropActive(true);
+          return;
+        }
+        if (event.payload.type === "leave") {
+          setDropActive(false);
+          return;
+        }
+        if (event.payload.type === "drop") {
+          setDropActive(false);
+          if (isConverterBusyRef.current) return;
+          const [path] = event.payload.paths;
+          if (path) onChooseDroppedPathRef.current(path);
+        }
+      })
+      .then((nextUnlisten) => {
+        if (disposed) nextUnlisten();
+        else unlisten = nextUnlisten;
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isConverterBusy) setDropActive(false);
+  }, [isConverterBusy]);
+
   return (
     <section className="contentSection converterSection">
       <div className="converterCard">
@@ -76,10 +122,11 @@ export function ConverterView({
         </div>
 
         <label
-          className={`converterDropZone ${converterFile ? "hasFile" : ""}`}
+          className={`converterDropZone ${converterFile ? "hasFile" : ""} ${dropActive ? "isDropActive" : ""}`}
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
+            if (isConverterBusy) return;
             onChooseFile(event.dataTransfer.files.item(0));
           }}
         >

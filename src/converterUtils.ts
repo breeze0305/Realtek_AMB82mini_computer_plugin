@@ -25,9 +25,17 @@ export function converterApiUrl(apiBase: string, path: string) {
   return `${apiBase}${normalized}`;
 }
 
-export function fileMatchesExtensions(file: File, extensions: string[]) {
-  const name = file.name.toLowerCase();
+export function fileNameFromPath(path: string) {
+  return path.split(/[\\/]/).pop() ?? "";
+}
+
+export function fileNameMatchesExtensions(fileName: string, extensions: string[]) {
+  const name = fileName.toLowerCase();
   return extensions.some((extension) => name.endsWith(extension.toLowerCase()));
+}
+
+export function fileMatchesExtensions(file: File, extensions: string[]) {
+  return fileNameMatchesExtensions(file.name, extensions);
 }
 
 export function wait(ms: number, signal?: AbortSignal) {

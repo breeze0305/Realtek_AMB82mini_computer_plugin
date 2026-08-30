@@ -681,6 +681,12 @@ button:disabled {
   background: #f7fbf8;
 }
 
+.converterDropZone.isDropActive {
+  border-color: #2f6f61;
+  background: #f0f8f4;
+  box-shadow: 0 18px 44px rgba(47, 111, 97, 0.16);
+}
+
 .converterStartBtn {
   display: inline-flex;
   align-items: center;

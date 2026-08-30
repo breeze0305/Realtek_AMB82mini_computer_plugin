@@ -14,7 +14,15 @@ import {
 import { cameraGuideSteps, PREFERENCE_COPY_MESSAGE, translations } from "./i18n";
 import { createOperationGate } from "./operationGate";
 import { createSerialTaskScheduler, type SerialTaskScheduler } from "./serialTaskScheduler";
-import { converterApiUrl, fileMatchesExtensions, readApiJson, savedPhotoText, wait } from "./converterUtils";
+import {
+  converterApiUrl,
+  fileMatchesExtensions,
+  fileNameFromPath,
+  fileNameMatchesExtensions,
+  readApiJson,
+  savedPhotoText,
+  wait,
+} from "./converterUtils";
 import { AppHeader } from "./components/AppHeader";
 import { AnnotationView } from "./components/AnnotationView";
 import { CameraView } from "./components/CameraView";
@@ -132,6 +140,7 @@ function App() {
   const [completedConversion, setCompletedConversion] = useState<CompletedConversion | null>(null);
   const [converterStatus, setConverterStatus] = useState("");
   const [isConverterBusy, setIsConverterBusy] = useState(false);
+  const [isConverterFileLoading, setIsConverterFileLoading] = useState(false);
   const [versionCheck, setVersionCheck] = useState<VersionCheck | null>(null);
   const [autoCheckUpdates, setAutoCheckUpdates] = useState(readStoredAutoCheckUpdates);
   const languageMenuRef = useRef<HTMLDivElement | null>(null);
@@ -144,6 +153,7 @@ function App() {
   const autoCheckStartedRef = useRef(false);
   const converterAbortRef = useRef<AbortController | null>(null);
   const converterRunIdRef = useRef(0);
+  const converterFileLoadIdRef = useRef(0);
 
   const language = dashboard?.settings.language ?? "zh_TW";
   const t = translations[language];
@@ -217,6 +227,7 @@ function App() {
     }
     if (view !== "converter") {
       cancelModelConversionRequest();
+      cancelConverterFileLoad();
     }
     return () => {
       if (view === "camera") {
@@ -491,6 +502,11 @@ function App() {
     }
   }
 
+  function cancelConverterFileLoad() {
+    converterFileLoadIdRef.current += 1;
+    setIsConverterFileLoading(false);
+  }
+
   function isAbortError(error: unknown) {
     return error instanceof DOMException && error.name === "AbortError";
   }
@@ -511,6 +527,7 @@ function App() {
   function selectConverterType(type: ModelType) {
     if (type === converterType) return;
     cancelModelConversionRequest();
+    cancelConverterFileLoad();
     setConverterType(type);
     setConverterFile(null);
     setConverterTask(null);
@@ -523,10 +540,14 @@ function App() {
 
   function chooseConverterFile(file?: File | null) {
     if (!file) return;
+    cancelConverterFileLoad();
+    applyConverterFile(file, converterModels[converterType]);
+  }
+
+  function applyConverterFile(file: File, model: ConverterModel) {
     cancelModelConversionRequest();
     setConverterTask(null);
     setCompletedConversion(null);
-    const model = converterModels[converterType];
     if (!fileMatchesExtensions(file, model.input_extensions)) {
       setConverterFile(null);
       setConverterStatus(t.invalidFileType);
@@ -539,6 +560,45 @@ function App() {
     }
     setConverterFile(file);
     setConverterStatus("");
+  }
+
+  async function chooseDroppedConverterFile(path: string) {
+    const model = converterModels[converterType];
+    const fileName = fileNameFromPath(path);
+    if (!fileNameMatchesExtensions(fileName, model.input_extensions)) {
+      cancelConverterFileLoad();
+      cancelModelConversionRequest();
+      setConverterFile(null);
+      setConverterTask(null);
+      setCompletedConversion(null);
+      setConverterStatus(t.invalidFileType);
+      return;
+    }
+
+    cancelModelConversionRequest();
+    setConverterFile(null);
+    setConverterTask(null);
+    setCompletedConversion(null);
+    setConverterStatus(t.loadingDroppedFile);
+    const operationId = converterFileLoadIdRef.current + 1;
+    converterFileLoadIdRef.current = operationId;
+    setIsConverterFileLoading(true);
+
+    try {
+      const maxBytes = Math.floor(converterMaxFileSizeMb * 1024 * 1024);
+      const bytes = await invoke<ArrayBuffer>("read_model_converter_file", { path, maxBytes });
+      if (converterFileLoadIdRef.current !== operationId) return;
+      applyConverterFile(new File([bytes], fileName, { type: "application/octet-stream" }), model);
+    } catch (error) {
+      if (converterFileLoadIdRef.current === operationId) {
+        setConverterFile(null);
+        setConverterStatus(String(error));
+      }
+    } finally {
+      if (converterFileLoadIdRef.current === operationId) {
+        setIsConverterFileLoading(false);
+      }
+    }
   }
 
   async function startModelConversion() {
@@ -972,8 +1032,9 @@ function App() {
           converterTask={converterTask}
           converterType={converterType}
           internetConnected={internetConnected}
-          isConverterBusy={isConverterBusy}
+          isConverterBusy={isConverterBusy || isConverterFileLoading}
           modelConverterUrl={modelConverterUrl}
+          onChooseDroppedPath={(path) => void chooseDroppedConverterFile(path)}
           onChooseFile={chooseConverterFile}
           onDownloadCompletedConversion={() => void downloadCompletedConversion()}
           onOpenUrl={(url) => void openUrl(url)}
