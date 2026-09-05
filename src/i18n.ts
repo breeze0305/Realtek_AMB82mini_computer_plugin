@@ -40,6 +40,18 @@ export const translations = {
       "將 itemList 陣列改為 5 個項目（itemList[5]），類別 ID 0～4 依序對應 gesture1～gesture5，並將各項目的啟用值設為 1，如下圖所示。",
     resourceHandClassesImageAlt: "itemList[5] 內的類別 ID 0 到 4 依序設定為 gesture1 到 gesture5，啟用值皆為 1",
     resourceHandClassesImageCaption: "五種手勢的類別設定：gesture1、gesture2、gesture3、gesture4、gesture5。",
+    resourceHandOpenFolderTitle: "開啟 AmebaPro2 資料夾",
+    resourceHandOpenFolderBody:
+      "回到本工具（Plugin）的主選單，在「開啟AmebaPro2資料夾」卡片上按下「開啟」，即可開啟本機的 AmebaPro2 套件資料夾。",
+    resourceHandOpenFolderImageAlt: "Plugin 主選單中的「開啟AmebaPro2資料夾」卡片與「開啟」按鈕",
+    resourceHandOpenFolderImageCaption: "在「開啟AmebaPro2資料夾」卡片上按下「開啟」。",
+    resourceHandWeightLocationTitle: "放置手勢權重檔案",
+    resourceHandWeightLocationBody:
+      "在開啟的 AmebaPro2 資料夾中，依序進入 libraries → NeuralNetwork → examples → ObjectDetectionLoop。將取得的 yolov7_tiny.nb 權重檔案放入此資料夾，與 ObjectDetectionLoop.ino 及 ObjectClassList.h 放在同一層。",
+    resourceHandWeightLocationImageAlt:
+      "AmebaPro2 的 libraries、NeuralNetwork、examples、ObjectDetectionLoop 資料夾中，yolov7_tiny.nb 與 ObjectDetectionLoop.ino、ObjectClassList.h 位於同一層",
+    resourceHandWeightLocationImageCaption:
+      "將 yolov7_tiny.nb 放在 ObjectDetectionLoop 範例資料夾內，與程式碼檔案放在同一層。",
     resourceHandCarTitle: "搭配自走車使用",
     resourceHandCarBody:
       "以上為一般手勢權重的範例設定流程。如需使用自走車，請按「取得」儲存 hand_code.txt，複製其中的全部程式碼，再完整取代 ObjectDetectionLoop.ino 的內容；請勿附加在原程式碼後方。",
@@ -196,6 +208,18 @@ export const translations = {
     resourceHandClassesImageAlt:
       "itemList[5] with class IDs 0 through 4 mapped to gesture1 through gesture5, all with an enabled value of 1",
     resourceHandClassesImageCaption: "The five gesture classes: gesture1, gesture2, gesture3, gesture4, and gesture5.",
+    resourceHandOpenFolderTitle: "Open the AmebaPro2 folder",
+    resourceHandOpenFolderBody:
+      "Return to the Plugin's main menu and click Open on the Open AmebaPro2 Folder card to open the local AmebaPro2 package folder.",
+    resourceHandOpenFolderImageAlt: "The Open AmebaPro2 Folder card and its Open button in the Plugin's main menu",
+    resourceHandOpenFolderImageCaption: "Click Open on the Open AmebaPro2 Folder card.",
+    resourceHandWeightLocationTitle: "Place the gesture weight file",
+    resourceHandWeightLocationBody:
+      "In the AmebaPro2 folder, open libraries → NeuralNetwork → examples → ObjectDetectionLoop in order. Place the downloaded yolov7_tiny.nb weight file in this folder, alongside ObjectDetectionLoop.ino and ObjectClassList.h.",
+    resourceHandWeightLocationImageAlt:
+      "The AmebaPro2 libraries, NeuralNetwork, examples, ObjectDetectionLoop folder with yolov7_tiny.nb alongside ObjectDetectionLoop.ino and ObjectClassList.h",
+    resourceHandWeightLocationImageCaption:
+      "Place yolov7_tiny.nb in the ObjectDetectionLoop sample folder, alongside the code files.",
     resourceHandCarTitle: "Use with a robot car",
     resourceHandCarBody:
       "The steps above configure the sample for the gesture weights. To use a robot car, click Get to save hand_code.txt, copy all of its code, and replace the entire contents of ObjectDetectionLoop.ino. Do not append it to the existing code.",
@@ -366,6 +390,18 @@ export const translations = {
     resourceHandClassesImageAlt:
       "itemList[5] のクラス ID 0～4 に gesture1～gesture5 を順に設定し、有効化の値をすべて 1 にした画面",
     resourceHandClassesImageCaption: "5 種類のジェスチャークラス：gesture1、gesture2、gesture3、gesture4、gesture5。",
+    resourceHandOpenFolderTitle: "AmebaPro2 フォルダーを開く",
+    resourceHandOpenFolderBody:
+      "本ツール（Plugin）のメインメニューに戻り、「AmebaPro2 フォルダーを開く」カードの「開く」をクリックすると、ローカルの AmebaPro2 パッケージフォルダーが開きます。",
+    resourceHandOpenFolderImageAlt: "Plugin のメインメニューにある「AmebaPro2 フォルダーを開く」カードと「開く」ボタン",
+    resourceHandOpenFolderImageCaption: "「AmebaPro2 フォルダーを開く」カードの「開く」をクリックします。",
+    resourceHandWeightLocationTitle: "ジェスチャーの重みファイルを配置する",
+    resourceHandWeightLocationBody:
+      "開いた AmebaPro2 フォルダー内で、libraries → NeuralNetwork → examples → ObjectDetectionLoop の順に開きます。取得した yolov7_tiny.nb をこのフォルダーに配置し、ObjectDetectionLoop.ino および ObjectClassList.h と同じ階層に置いてください。",
+    resourceHandWeightLocationImageAlt:
+      "AmebaPro2 の libraries、NeuralNetwork、examples、ObjectDetectionLoop フォルダー内で、yolov7_tiny.nb が ObjectDetectionLoop.ino および ObjectClassList.h と同じ階層にある画面",
+    resourceHandWeightLocationImageCaption:
+      "yolov7_tiny.nb を ObjectDetectionLoop サンプルフォルダー内のコードファイルと同じ階層に配置します。",
     resourceHandCarTitle: "ロボットカーと組み合わせて使う",
     resourceHandCarBody:
       "以上がジェスチャーの重みを使うためのサンプル設定手順です。ロボットカーを使用する場合は、「取得」で hand_code.txt を保存し、そのコードをすべてコピーして ObjectDetectionLoop.ino の内容全体を置き換えてください。元のコードの末尾には追加しないでください。",

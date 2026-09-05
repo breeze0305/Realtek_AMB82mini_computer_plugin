@@ -117,8 +117,14 @@ describe("ResourceLibraryView", () => {
       expect(within(guide).getByText(card.detail)).toBeInTheDocument();
       if (resources[index].key === "hand") {
         const images = within(guide).getAllByRole("img");
-        const imageFiles = ["model-selection.png", "object-class-list-tab.png", "gesture-class-list.png"];
-        expect(images).toHaveLength(3);
+        const imageFiles = [
+          "model-selection.png",
+          "object-class-list-tab.png",
+          "gesture-class-list.png",
+          "open-amebapro2-folder.png",
+          "weight-folder-location.png",
+        ];
+        expect(images).toHaveLength(5);
         for (const [imageIndex, image] of images.entries()) {
           expect(image).toHaveAttribute(
             "src",

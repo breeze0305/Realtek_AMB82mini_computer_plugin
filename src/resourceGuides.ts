@@ -1,6 +1,8 @@
 import gestureClassList from "./assets/resource-guides/gesture/gesture-class-list.png";
 import gestureModelSelection from "./assets/resource-guides/gesture/model-selection.png";
 import gestureClassListTab from "./assets/resource-guides/gesture/object-class-list-tab.png";
+import gestureOpenFolder from "./assets/resource-guides/gesture/open-amebapro2-folder.png";
+import gestureWeightLocation from "./assets/resource-guides/gesture/weight-folder-location.png";
 
 export type ResourceGuide = {
   isPlaceholder: boolean;
@@ -68,6 +70,24 @@ const resourceGuides: Record<string, ResourceGuideDefinition> = {
           src: gestureClassList,
           altKey: "resourceHandClassesImageAlt",
           captionKey: "resourceHandClassesImageCaption",
+        },
+      },
+      {
+        titleKey: "resourceHandOpenFolderTitle",
+        bodyKey: "resourceHandOpenFolderBody",
+        image: {
+          src: gestureOpenFolder,
+          altKey: "resourceHandOpenFolderImageAlt",
+          captionKey: "resourceHandOpenFolderImageCaption",
+        },
+      },
+      {
+        titleKey: "resourceHandWeightLocationTitle",
+        bodyKey: "resourceHandWeightLocationBody",
+        image: {
+          src: gestureWeightLocation,
+          altKey: "resourceHandWeightLocationImageAlt",
+          captionKey: "resourceHandWeightLocationImageCaption",
         },
       },
       {
