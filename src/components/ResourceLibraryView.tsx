@@ -62,7 +62,7 @@ export function ResourceLibraryView({
               >
                 <div className="resourceGuideHeading">
                   <span className="resourceGuideEyebrow">{t.resourceGuideTitle}</span>
-                  <span className="resourceGuideBadge">{t.resourceGuidePlaceholder}</span>
+                  {guide.isPlaceholder && <span className="resourceGuideBadge">{t.resourceGuidePlaceholder}</span>}
                 </div>
                 <h3 id={`${guideId}-title`}>{selectedCard.title}</h3>
                 <p className="resourceGuideSummary">{guide.summary}</p>
@@ -77,6 +77,14 @@ export function ResourceLibraryView({
                       {section.title}
                     </h4>
                     <p>{section.body}</p>
+                    {section.codeExamples?.map((example) => (
+                      <div className="resourceGuideCode" key={example.label}>
+                        <span>{example.label}</span>
+                        <pre>
+                          <code>{example.code}</code>
+                        </pre>
+                      </div>
+                    ))}
                     {section.image && (
                       <figure>
                         {section.image.src ? (

@@ -1,34 +1,78 @@
+import gestureClassList from "./assets/resource-guides/gesture/gesture-class-list.png";
+import gestureModelSelection from "./assets/resource-guides/gesture/model-selection.png";
+import gestureClassListTab from "./assets/resource-guides/gesture/object-class-list-tab.png";
+
 export type ResourceGuide = {
+  isPlaceholder: boolean;
   summary: string;
   sections: Array<{
     title: string;
     body: string;
+    codeExamples?: Array<{ label: string; code: string }>;
     image?: { src?: string; alt: string; caption?: string };
   }>;
 };
 
 type ResourceGuideDefinition = {
+  isPlaceholder?: boolean;
   nameKey: string;
   summaryKey: string;
   sections: Array<{
     titleKey: string;
     bodyKey: string;
+    codeExamples?: Array<{ labelKey: string; code: string }>;
     image?: { src?: string; altKey: string; captionKey?: string };
   }>;
 };
 
-// Each resource owns its content keys and optional images. Replace a placeholder
-// in i18n.ts, then set that resource's image.src to a bundled image when ready.
+// Each resource owns its content keys, code examples, and bundled images.
+// Set isPlaceholder to false when replacing a resource's placeholder guide.
 const resourceGuides: Record<string, ResourceGuideDefinition> = {
   "resource-hand": {
+    isPlaceholder: false,
     nameKey: "hand",
     summaryKey: "resourceHandGuideSummary",
     sections: [
-      { titleKey: "resourceCodeGuideTitle", bodyKey: "resourceHandCodeGuide" },
       {
-        titleKey: "resourceWeightGuideTitle",
-        bodyKey: "resourceHandWeightGuide",
-        image: { altKey: "resourceWeightImageAlt", captionKey: "resourceWeightImageCaption" },
+        titleKey: "resourceHandCodeTitle",
+        bodyKey: "resourceHandCodeGuide",
+        codeExamples: [
+          {
+            labelKey: "resourceGuideBeforeCode",
+            code: "ObjDet.modelSelect(OBJECT_DETECTION, DEFAULT_YOLOV4TINY, NA_MODEL, NA_MODEL);",
+          },
+          {
+            labelKey: "resourceGuideAfterCode",
+            code: "ObjDet.modelSelect(OBJECT_DETECTION, CUSTOMIZED_YOLOV7TINY, NA_MODEL, NA_MODEL);",
+          },
+        ],
+        image: {
+          src: gestureModelSelection,
+          altKey: "resourceHandModelImageAlt",
+          captionKey: "resourceHandModelImageCaption",
+        },
+      },
+      {
+        titleKey: "resourceHandClassTabTitle",
+        bodyKey: "resourceHandClassTabBody",
+        image: {
+          src: gestureClassListTab,
+          altKey: "resourceHandTabImageAlt",
+          captionKey: "resourceHandTabImageCaption",
+        },
+      },
+      {
+        titleKey: "resourceHandClassesTitle",
+        bodyKey: "resourceHandClassesBody",
+        image: {
+          src: gestureClassList,
+          altKey: "resourceHandClassesImageAlt",
+          captionKey: "resourceHandClassesImageCaption",
+        },
+      },
+      {
+        titleKey: "resourceHandCarTitle",
+        bodyKey: "resourceHandCarBody",
       },
     ],
   },
@@ -90,6 +134,7 @@ export function getResourceGuide(resourceId: string, t: Record<string, string>):
 
   if (!definition) {
     return {
+      isPlaceholder: true,
       summary: placeholder,
       sections: [{ title: t.resourceGuideTitle ?? "Usage guide", body: placeholder }],
     };
@@ -99,10 +144,19 @@ export function getResourceGuide(resourceId: string, t: Record<string, string>):
   const translate = (key: string) => (t[key] ?? placeholder).split("{resource}").join(name);
 
   return {
+    isPlaceholder: definition.isPlaceholder ?? true,
     summary: translate(definition.summaryKey),
     sections: definition.sections.map((section) => ({
       title: translate(section.titleKey),
       body: translate(section.bodyKey),
+      ...(section.codeExamples
+        ? {
+            codeExamples: section.codeExamples.map((example) => ({
+              label: translate(example.labelKey),
+              code: example.code,
+            })),
+          }
+        : {}),
       ...(section.image
         ? {
             image: {

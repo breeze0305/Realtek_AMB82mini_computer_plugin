@@ -23,9 +23,26 @@ export const translations = {
     resourceWeightGuideTitle: "權重放置位置",
     resourceWeightImageAlt: "{resource}的權重放置示意圖",
     resourceWeightImageCaption: "此處預留「{resource}」的操作截圖與圖片說明。",
-    resourceHandGuideSummary: "手勢追蹤範例的說明預留區，之後會補上程式碼使用與權重放置教學。",
-    resourceHandCodeGuide: "手勢追蹤程式的操作步驟待補，之後會說明如何使用程式碼。",
-    resourceHandWeightGuide: "手勢追蹤權重的放置路徑與操作步驟待補。",
+    resourceHandGuideSummary: "依下列步驟設定手勢辨識範例；如需搭配自走車，請參閱最後一節的程式碼替換方式。",
+    resourceHandCodeTitle: "程式碼使用說明",
+    resourceHandCodeGuide:
+      "在 Arduino IDE 中開啟 File → AmebaNN → ObjectDetectionLoop，找到約第 82 行的 ObjDet.modelSelect，將 DEFAULT_YOLOV4TINY 改為 CUSTOMIZED_YOLOV7TINY。實際行號可能因版本而不同。",
+    resourceGuideBeforeCode: "修改前",
+    resourceGuideAfterCode: "修改後",
+    resourceHandModelImageAlt: "ObjectDetectionLoop 中將模型設定改為 CUSTOMIZED_YOLOV7TINY 的範例畫面",
+    resourceHandModelImageCaption: "模型設定修改範例：將預設模型替換為 CUSTOMIZED_YOLOV7TINY。",
+    resourceHandClassTabTitle: "切換類別設定頁面",
+    resourceHandClassTabBody: "在 Arduino IDE 上方的分頁列，切換到 ObjectClassList.h。",
+    resourceHandTabImageAlt: "Arduino IDE 中的 ObjectClassList.h 分頁位置",
+    resourceHandTabImageCaption: "點選 ObjectClassList.h 分頁，編輯辨識類別。",
+    resourceHandClassesTitle: "設定五種手勢類別",
+    resourceHandClassesBody:
+      "將 itemList 陣列改為 5 個項目（itemList[5]），類別 ID 0～4 依序對應 gesture1～gesture5，並將各項目的啟用值設為 1，如下圖所示。",
+    resourceHandClassesImageAlt: "itemList[5] 內的類別 ID 0 到 4 依序設定為 gesture1 到 gesture5，啟用值皆為 1",
+    resourceHandClassesImageCaption: "五種手勢的類別設定：gesture1、gesture2、gesture3、gesture4、gesture5。",
+    resourceHandCarTitle: "搭配自走車使用",
+    resourceHandCarBody:
+      "以上為一般手勢權重的範例設定流程。如需使用自走車，請按「取得」儲存 hand_code.txt，複製其中的全部程式碼，再完整取代 ObjectDetectionLoop.ino 的內容；請勿附加在原程式碼後方。",
     resourceBoxGuideSummary: "AMB 盒子追蹤範例的說明預留區，之後會補上程式碼使用與權重放置教學。",
     resourceBoxCodeGuide: "AMB 盒子追蹤程式的操作步驟待補，之後會說明如何使用程式碼。",
     resourceBoxWeightGuide: "AMB 盒子追蹤權重的放置路徑與操作步驟待補。",
@@ -160,10 +177,28 @@ export const translations = {
     resourceWeightGuideTitle: "Where to place the weights",
     resourceWeightImageAlt: "Weight placement illustration for {resource}",
     resourceWeightImageCaption: "Reserved for a screenshot and caption for {resource}.",
-    resourceHandGuideSummary: "Reserved for the gesture tracking guide, including code usage and weight placement.",
-    resourceHandCodeGuide: "Steps for using the gesture tracking code will be added here.",
-    resourceHandWeightGuide:
-      "The destination folder and steps for placing the gesture tracking weights will be added here.",
+    resourceHandGuideSummary:
+      "Follow these steps to configure the gesture recognition sample. For use with a robot car, see the final section on replacing the code.",
+    resourceHandCodeTitle: "Code usage instructions",
+    resourceHandCodeGuide:
+      "In Arduino IDE, open File → AmebaNN → ObjectDetectionLoop. Find ObjDet.modelSelect near line 82 and replace DEFAULT_YOLOV4TINY with CUSTOMIZED_YOLOV7TINY. The line number may vary by version.",
+    resourceGuideBeforeCode: "Before",
+    resourceGuideAfterCode: "After",
+    resourceHandModelImageAlt: "ObjectDetectionLoop example with the model setting changed to CUSTOMIZED_YOLOV7TINY",
+    resourceHandModelImageCaption: "Replace the default model with CUSTOMIZED_YOLOV7TINY as shown.",
+    resourceHandClassTabTitle: "Open the class settings",
+    resourceHandClassTabBody: "Switch to the ObjectClassList.h tab at the top of Arduino IDE.",
+    resourceHandTabImageAlt: "Location of the ObjectClassList.h tab in Arduino IDE",
+    resourceHandTabImageCaption: "Select ObjectClassList.h to edit the recognition classes.",
+    resourceHandClassesTitle: "Configure the five gesture classes",
+    resourceHandClassesBody:
+      "Set the itemList array to 5 entries (itemList[5]). Map class IDs 0–4 to gesture1–gesture5 in order, and set each entry's enabled value to 1, as shown below.",
+    resourceHandClassesImageAlt:
+      "itemList[5] with class IDs 0 through 4 mapped to gesture1 through gesture5, all with an enabled value of 1",
+    resourceHandClassesImageCaption: "The five gesture classes: gesture1, gesture2, gesture3, gesture4, and gesture5.",
+    resourceHandCarTitle: "Use with a robot car",
+    resourceHandCarBody:
+      "The steps above configure the sample for the gesture weights. To use a robot car, click Get to save hand_code.txt, copy all of its code, and replace the entire contents of ObjectDetectionLoop.ino. Do not append it to the existing code.",
     resourceBoxGuideSummary: "Reserved for the AMB box tracking guide, including code usage and weight placement.",
     resourceBoxCodeGuide: "Steps for using the AMB box tracking code will be added here.",
     resourceBoxWeightGuide:
@@ -313,9 +348,27 @@ export const translations = {
     resourceWeightImageAlt: "{resource}の重みファイル配置図",
     resourceWeightImageCaption: "ここに「{resource}」の操作画面と画像の説明を追加する予定です。",
     resourceHandGuideSummary:
-      "ジェスチャー追跡の説明用スペースです。コードの使い方と重みファイルの配置方法を追加する予定です。",
-    resourceHandCodeGuide: "ジェスチャー追跡コードの使い方は準備中です。",
-    resourceHandWeightGuide: "ジェスチャー追跡の重みファイルの配置場所と操作手順は準備中です。",
+      "次の手順でジェスチャー認識サンプルを設定します。ロボットカーと組み合わせる場合は、最後のセクションのコード置き換え手順を参照してください。",
+    resourceHandCodeTitle: "コードの使用手順",
+    resourceHandCodeGuide:
+      "Arduino IDE で File → AmebaNN → ObjectDetectionLoop を開きます。82 行目付近の ObjDet.modelSelect を探し、DEFAULT_YOLOV4TINY を CUSTOMIZED_YOLOV7TINY に変更してください。行番号はバージョンによって異なる場合があります。",
+    resourceGuideBeforeCode: "変更前",
+    resourceGuideAfterCode: "変更後",
+    resourceHandModelImageAlt: "ObjectDetectionLoop のモデル設定を CUSTOMIZED_YOLOV7TINY に変更した画面",
+    resourceHandModelImageCaption: "モデル設定の変更例：既定のモデルを CUSTOMIZED_YOLOV7TINY に置き換えます。",
+    resourceHandClassTabTitle: "クラス設定のタブを開く",
+    resourceHandClassTabBody: "Arduino IDE 上部のタブから ObjectClassList.h に切り替えてください。",
+    resourceHandTabImageAlt: "Arduino IDE の ObjectClassList.h タブの位置",
+    resourceHandTabImageCaption: "ObjectClassList.h タブを選択し、認識クラスを編集します。",
+    resourceHandClassesTitle: "5 種類のジェスチャークラスを設定する",
+    resourceHandClassesBody:
+      "itemList 配列を 5 項目（itemList[5]）に変更します。下の画像のように、クラス ID 0～4 を順に gesture1～gesture5 に対応させ、各項目の有効化の値を 1 に設定してください。",
+    resourceHandClassesImageAlt:
+      "itemList[5] のクラス ID 0～4 に gesture1～gesture5 を順に設定し、有効化の値をすべて 1 にした画面",
+    resourceHandClassesImageCaption: "5 種類のジェスチャークラス：gesture1、gesture2、gesture3、gesture4、gesture5。",
+    resourceHandCarTitle: "ロボットカーと組み合わせて使う",
+    resourceHandCarBody:
+      "以上がジェスチャーの重みを使うためのサンプル設定手順です。ロボットカーを使用する場合は、「取得」で hand_code.txt を保存し、そのコードをすべてコピーして ObjectDetectionLoop.ino の内容全体を置き換えてください。元のコードの末尾には追加しないでください。",
     resourceBoxGuideSummary:
       "AMB ボックス追跡の説明用スペースです。コードの使い方と重みファイルの配置方法を追加する予定です。",
     resourceBoxCodeGuide: "AMB ボックス追跡コードの使い方は準備中です。",

@@ -639,6 +639,25 @@ button:disabled {
   margin: 16px 0 0;
 }
 
+.resourceGuideCode {
+  margin-top: 14px;
+  color: #66716d;
+  font-size: 12px;
+}
+
+.resourceGuideCode pre {
+  margin: 6px 0 0;
+  padding: 12px;
+  border: 1px solid #dce6df;
+  border-radius: 6px;
+  color: #263b34;
+  background: #f3f7f3;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .resourceGuideStep img {
   display: block;
   width: 100%;

@@ -115,9 +115,30 @@ describe("ResourceLibraryView", () => {
       expect(button).toHaveAttribute("aria-controls", guide.id);
       expect(within(guide).getByText(translations.en_US[resources[index].summaryKey])).toBeInTheDocument();
       expect(within(guide).getByText(card.detail)).toBeInTheDocument();
-      expect(
-        within(guide).getByRole("img", { name: `Weight placement illustration for ${card.title}` }),
-      ).toBeInTheDocument();
+      if (resources[index].key === "hand") {
+        const images = within(guide).getAllByRole("img");
+        const imageFiles = ["model-selection.png", "object-class-list-tab.png", "gesture-class-list.png"];
+        expect(images).toHaveLength(3);
+        for (const [imageIndex, image] of images.entries()) {
+          expect(image).toHaveAttribute(
+            "src",
+            expect.stringContaining(`/resource-guides/gesture/${imageFiles[imageIndex]}`),
+          );
+          expect(image.getAttribute("alt")?.trim()).toBeTruthy();
+        }
+        expect(
+          within(guide).getByText("ObjDet.modelSelect(OBJECT_DETECTION, DEFAULT_YOLOV4TINY, NA_MODEL, NA_MODEL);"),
+        ).toBeInTheDocument();
+        expect(
+          within(guide).getByText("ObjDet.modelSelect(OBJECT_DETECTION, CUSTOMIZED_YOLOV7TINY, NA_MODEL, NA_MODEL);"),
+        ).toBeInTheDocument();
+        expect(within(guide).queryByText(translations.en_US.resourceGuidePlaceholder)).not.toBeInTheDocument();
+      } else {
+        expect(
+          within(guide).getByRole("img", { name: `Weight placement illustration for ${card.title}` }),
+        ).toBeInTheDocument();
+        expect(within(guide).getByText(translations.en_US.resourceGuidePlaceholder)).toBeInTheDocument();
+      }
       for (const other of cards) {
         expect(screen.getByRole("button", { name: `View guide: ${other.title}` })).toHaveAttribute(
           "aria-pressed",
