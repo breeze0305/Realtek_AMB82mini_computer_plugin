@@ -29,6 +29,11 @@ export type CardGridProps = {
   openActionMenu: ActionMenuKey | null;
   running: RunningAction;
   setOpenActionMenu: Dispatch<SetStateAction<ActionMenuKey | null>>;
+  selection?: {
+    cardId: string;
+    onSelect: (id: string) => void;
+    panelId: string;
+  };
   startIndex?: number;
   t: Record<string, string>;
 };
@@ -40,6 +45,7 @@ export function CardGrid({
   openActionMenu,
   running,
   setOpenActionMenu,
+  selection,
   startIndex = 1,
   t,
 }: CardGridProps) {
@@ -87,10 +93,20 @@ export function CardGrid({
           <article
             className={`menuCard ${progress === undefined ? "" : "isDownloading"} ${
               hasOpenActionMenu ? "hasOpenActionMenu" : ""
-            }`}
+            } ${selection ? "isSelectable" : ""} ${selection?.cardId === card.id ? "isSelected" : ""}`}
             key={card.id}
             style={progressStyle}
           >
+            {selection && (
+              <button
+                type="button"
+                className="cardSelection"
+                aria-label={`${t.resourceViewGuide}: ${card.title}`}
+                aria-pressed={selection.cardId === card.id}
+                aria-controls={selection.panelId}
+                onClick={() => selection.onSelect(card.id)}
+              />
+            )}
             <span className="cardIndex">{String(startIndex + index).padStart(2, "0")}</span>
             <div className="cardIcon">
               <Icon size={24} />

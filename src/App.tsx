@@ -932,7 +932,7 @@ function App() {
       aria-busy={isNativeDialogOpen}
       className={`appShell ${view === "settings" ? "settingsShell" : ""} ${view === "converter" ? "converterShell" : ""} ${
         view === "annotator" || view === "image-converter" ? "annotationShell" : ""
-      }`}
+      } ${view === "weights" ? "weightsShell" : ""}`}
     >
       {view !== "annotator" && view !== "image-converter" && (
         <AppHeader
