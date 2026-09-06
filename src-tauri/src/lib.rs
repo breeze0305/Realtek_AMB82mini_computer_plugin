@@ -52,6 +52,7 @@ const ALLOWED_EXTERNAL_URL_HOSTS: &[&str] = &[
     "get.videolan.org",
     "mirror.twds.com.tw",
     "modelconverter.ntnu-aiot.com",
+    "www.youtube.com",
 ];
 const ENDPOINT_MANIFEST_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -3891,6 +3892,7 @@ mod tests {
             "https://get.videolan.org/vlc/3.0.23/win32/vlc-3.0.23-win32.exe",
             "https://mirror.twds.com.tw/videolan/vlc/3.0.23/win32/vlc-3.0.23-win32.exe",
             "https://modelconverter.ntnu-aiot.com/api/v1/conversions/123/download",
+            "https://www.youtube.com/watch?v=UpYyOiEFA0k",
         ];
 
         for url in urls {
@@ -3901,6 +3903,9 @@ mod tests {
     #[test]
     fn external_url_allow_list_rejects_http() {
         assert!(!is_allowed_external_url("http://github.com/breeze0305"));
+        assert!(!is_allowed_external_url(
+            "http://www.youtube.com/watch?v=UpYyOiEFA0k"
+        ));
     }
 
     #[test]
@@ -3910,6 +3915,8 @@ mod tests {
             "https://raw.githubusercontent.com.evil.com/version.txt",
             "https://downloads.arduino.cc.evil.com/arduino.exe",
             "https://github.com@evil.com/breeze0305",
+            "https://www.youtube.com.evil.com/watch?v=UpYyOiEFA0k",
+            "https://www.youtube.com@evil.com/watch?v=UpYyOiEFA0k",
         ];
 
         for url in urls {

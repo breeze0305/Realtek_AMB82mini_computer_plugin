@@ -1,3 +1,4 @@
+import carWiringDiagram from "./assets/resource-guides/gesture/car-wiring-diagram.png";
 import gestureClassList from "./assets/resource-guides/gesture/gesture-class-list.png";
 import gestureModelSelection from "./assets/resource-guides/gesture/model-selection.png";
 import gestureClassListTab from "./assets/resource-guides/gesture/object-class-list-tab.png";
@@ -12,6 +13,7 @@ export type ResourceGuide = {
     body: string;
     codeExamples?: Array<{ label: string; code: string }>;
     image?: { src?: string; alt: string; caption?: string };
+    link?: { label: string; url: string };
   }>;
 };
 
@@ -24,6 +26,7 @@ type ResourceGuideDefinition = {
     bodyKey: string;
     codeExamples?: Array<{ labelKey: string; code: string }>;
     image?: { src?: string; altKey: string; captionKey?: string };
+    link?: { labelKey: string; url: string };
   }>;
 };
 
@@ -93,6 +96,23 @@ const resourceGuides: Record<string, ResourceGuideDefinition> = {
       {
         titleKey: "resourceHandCarTitle",
         bodyKey: "resourceHandCarBody",
+      },
+      {
+        titleKey: "resourceHandWiringTitle",
+        bodyKey: "resourceHandWiringBody",
+        image: {
+          src: carWiringDiagram,
+          altKey: "resourceHandWiringImageAlt",
+          captionKey: "resourceHandWiringImageCaption",
+        },
+      },
+      {
+        titleKey: "resourceHandAssemblyTitle",
+        bodyKey: "resourceHandAssemblyBody",
+        link: {
+          labelKey: "resourceHandAssemblyLink",
+          url: "https://www.youtube.com/watch?v=UpYyOiEFA0k",
+        },
       },
     ],
   },
@@ -169,6 +189,7 @@ export function getResourceGuide(resourceId: string, t: Record<string, string>):
     sections: definition.sections.map((section) => ({
       title: translate(section.titleKey),
       body: translate(section.bodyKey),
+      ...(section.link ? { link: { label: translate(section.link.labelKey), url: section.link.url } } : {}),
       ...(section.codeExamples
         ? {
             codeExamples: section.codeExamples.map((example) => ({

@@ -663,6 +663,33 @@ button:disabled {
   width: 100%;
   height: auto;
   border-radius: 6px;
+  background: #fff;
+}
+
+.resourceGuideLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin-top: 12px;
+  padding: 8px 0;
+  color: #0f766e;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.resourceGuideLink svg {
+  flex-shrink: 0;
+}
+
+.resourceGuideLink:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid #0f766e;
+  outline-offset: 3px;
 }
 
 .resourceGuideImagePlaceholder {

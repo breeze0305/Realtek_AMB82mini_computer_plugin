@@ -23,7 +23,8 @@ export const translations = {
     resourceWeightGuideTitle: "權重放置位置",
     resourceWeightImageAlt: "{resource}的權重放置示意圖",
     resourceWeightImageCaption: "此處預留「{resource}」的操作截圖與圖片說明。",
-    resourceHandGuideSummary: "依下列步驟設定手勢辨識範例；如需搭配自走車，請參閱最後一節的程式碼替換方式。",
+    resourceHandGuideSummary:
+      "依下列步驟設定手勢辨識範例；如需搭配自走車，請參閱「搭配自走車使用」、接線圖與組裝影片。",
     resourceHandCodeTitle: "程式碼使用說明",
     resourceHandCodeGuide:
       "在 Arduino IDE 中開啟 File → AmebaNN → ObjectDetectionLoop，找到約第 82 行的 ObjDet.modelSelect，將 DEFAULT_YOLOV4TINY 改為 CUSTOMIZED_YOLOV7TINY。實際行號可能因版本而不同。",
@@ -55,6 +56,14 @@ export const translations = {
     resourceHandCarTitle: "搭配自走車使用",
     resourceHandCarBody:
       "以上為一般手勢權重的範例設定流程。如需使用自走車，請按「取得」儲存 hand_code.txt，複製其中的全部程式碼，再完整取代 ObjectDetectionLoop.ino 的內容；請勿附加在原程式碼後方。",
+    resourceHandWiringTitle: "自走車接線圖",
+    resourceHandWiringBody: "請參考下圖進行自走車接線。",
+    resourceHandWiringImageAlt: "AMB82-mini 與馬達驅動板的自走車接線示意圖",
+    resourceHandWiringImageCaption: "AMB82-mini 與馬達驅動板的自走車接線示意圖。",
+    resourceHandAssemblyTitle: "自走車組裝影片",
+    resourceHandAssemblyBody:
+      "可透過下方影片查看自走車的組裝方式。點擊連結會由預設瀏覽器開啟 YouTube，觀看影片需要網路連線。",
+    resourceHandAssemblyLink: "觀看自走車組裝影片（YouTube）",
     resourceBoxGuideSummary: "AMB 盒子追蹤範例的說明預留區，之後會補上程式碼使用與權重放置教學。",
     resourceBoxCodeGuide: "AMB 盒子追蹤程式的操作步驟待補，之後會說明如何使用程式碼。",
     resourceBoxWeightGuide: "AMB 盒子追蹤權重的放置路徑與操作步驟待補。",
@@ -190,7 +199,7 @@ export const translations = {
     resourceWeightImageAlt: "Weight placement illustration for {resource}",
     resourceWeightImageCaption: "Reserved for a screenshot and caption for {resource}.",
     resourceHandGuideSummary:
-      "Follow these steps to configure the gesture recognition sample. For use with a robot car, see the final section on replacing the code.",
+      "Follow these steps to configure the gesture recognition sample. For use with a robot car, see Use with a robot car, the wiring diagram, and the assembly video.",
     resourceHandCodeTitle: "Code usage instructions",
     resourceHandCodeGuide:
       "In Arduino IDE, open File → AmebaNN → ObjectDetectionLoop. Find ObjDet.modelSelect near line 82 and replace DEFAULT_YOLOV4TINY with CUSTOMIZED_YOLOV7TINY. The line number may vary by version.",
@@ -223,6 +232,14 @@ export const translations = {
     resourceHandCarTitle: "Use with a robot car",
     resourceHandCarBody:
       "The steps above configure the sample for the gesture weights. To use a robot car, click Get to save hand_code.txt, copy all of its code, and replace the entire contents of ObjectDetectionLoop.ino. Do not append it to the existing code.",
+    resourceHandWiringTitle: "Robot car wiring diagram",
+    resourceHandWiringBody: "Refer to the diagram below to connect the robot car wiring.",
+    resourceHandWiringImageAlt: "Robot car wiring diagram for the AMB82-mini and motor driver board",
+    resourceHandWiringImageCaption: "Robot car wiring diagram for the AMB82-mini and motor driver board.",
+    resourceHandAssemblyTitle: "Robot car assembly video",
+    resourceHandAssemblyBody:
+      "Watch the video below for robot car assembly instructions. The link opens YouTube in your default browser. An internet connection is required to watch the video.",
+    resourceHandAssemblyLink: "Watch the robot car assembly video (YouTube)",
     resourceBoxGuideSummary: "Reserved for the AMB box tracking guide, including code usage and weight placement.",
     resourceBoxCodeGuide: "Steps for using the AMB box tracking code will be added here.",
     resourceBoxWeightGuide:
@@ -372,7 +389,7 @@ export const translations = {
     resourceWeightImageAlt: "{resource}の重みファイル配置図",
     resourceWeightImageCaption: "ここに「{resource}」の操作画面と画像の説明を追加する予定です。",
     resourceHandGuideSummary:
-      "次の手順でジェスチャー認識サンプルを設定します。ロボットカーと組み合わせる場合は、最後のセクションのコード置き換え手順を参照してください。",
+      "次の手順でジェスチャー認識サンプルを設定します。ロボットカーと組み合わせる場合は、「ロボットカーと組み合わせて使う」、配線図、組み立て動画を参照してください。",
     resourceHandCodeTitle: "コードの使用手順",
     resourceHandCodeGuide:
       "Arduino IDE で File → AmebaNN → ObjectDetectionLoop を開きます。82 行目付近の ObjDet.modelSelect を探し、DEFAULT_YOLOV4TINY を CUSTOMIZED_YOLOV7TINY に変更してください。行番号はバージョンによって異なる場合があります。",
@@ -405,6 +422,14 @@ export const translations = {
     resourceHandCarTitle: "ロボットカーと組み合わせて使う",
     resourceHandCarBody:
       "以上がジェスチャーの重みを使うためのサンプル設定手順です。ロボットカーを使用する場合は、「取得」で hand_code.txt を保存し、そのコードをすべてコピーして ObjectDetectionLoop.ino の内容全体を置き換えてください。元のコードの末尾には追加しないでください。",
+    resourceHandWiringTitle: "ロボットカーの配線図",
+    resourceHandWiringBody: "下の配線図を参考に、ロボットカーを配線してください。",
+    resourceHandWiringImageAlt: "AMB82-mini とモータードライバーボードを接続するロボットカーの配線図",
+    resourceHandWiringImageCaption: "AMB82-mini とモータードライバーボードを接続するロボットカーの配線図。",
+    resourceHandAssemblyTitle: "ロボットカーの組み立て動画",
+    resourceHandAssemblyBody:
+      "下の動画でロボットカーの組み立て方法を確認できます。リンクをクリックすると、既定のブラウザーで YouTube が開きます。動画の視聴にはインターネット接続が必要です。",
+    resourceHandAssemblyLink: "ロボットカーの組み立て動画を見る（YouTube）",
     resourceBoxGuideSummary:
       "AMB ボックス追跡の説明用スペースです。コードの使い方と重みファイルの配置方法を追加する予定です。",
     resourceBoxCodeGuide: "AMB ボックス追跡コードの使い方は準備中です。",

@@ -37,7 +37,7 @@ This section is the authoritative source map for the current frontend. Some olde
 - `src/homeCards.ts`
   - Home and resource-library card composition. Resource definitions have an explicit installer/weight category so new files can be added without changing page JSX.
 - `src/resourceGuides.ts`
-  - `getResourceGuide(resourceId, t)` supplies each code/model-weight resource's guide sections, text, code examples, images, captions, and placeholder status. The first gesture guide contains the supplied instructions and five bundled screenshots; the other four guides remain explicitly marked placeholders. Localized copy lives in `src/i18n.ts`.
+  - `getResourceGuide(resourceId, t)` supplies each code/model-weight resource's guide sections, text, code examples, images, captions, links, and placeholder status. The first gesture guide contains the supplied instructions, six bundled images (five screenshots and one wiring diagram), and an assembly video link that opens in the default browser; the other four guides remain explicitly marked placeholders. Localized copy lives in `src/i18n.ts`.
 - `src/components/`
   - `AppHeader.tsx`: app title, back button, language menu, settings entry.
   - `CardGrid.tsx`: shared numbered card grid, download progress, running state, and split-action rendering.
@@ -179,7 +179,7 @@ Image conversion behavior:
 
 兩張入口的整張卡片都可點擊，不顯示額外的「開啟」按鈕，並分別開啟自己的二級頁面；頁面內不提供跨分類頁籤。首頁不直接展開個別下載卡。新增既有 command 的資源時，在 `src/homeCards.ts` 的 resource definition 加入項目並指定 `installers` 或 `weights`；若是新的 command，仍需同步新增 `RunningAction` 與 Rust 後端實作，網路下載還要補 `DownloadKey` 與進度事件。
 
-「程式碼與權重」二級頁左側單欄列出原有五張資源卡，右側顯示所選資源的文字、圖片與圖片說明，進入時預設第一項。左右欄依內容自然伸展，共用 `appShell` 的單一整頁垂直捲動條；卡片增多或說明變長時，兩欄一起捲動，不各自捲動。點擊卡片或透過鍵盤操作只切換說明；卡片內的「取得」按鈕維持原本的另存流程，不因選取說明而觸發。第一項手勢卡已使用正式教學與五張操作截圖，包含 `ObjectDetectionLoop` 的 `DEFAULT_YOLOV4TINY` 改為 `CUSTOMIZED_YOLOV7TINY`、`ObjectClassList.h` 的 `itemList` 類別設為 `gesture1`～`gesture5`，以及透過主選單的「開啟AmebaPro2資料夾」進入 `libraries → NeuralNetwork → examples → ObjectDetectionLoop`，將 `yolov7_tiny.nb` 放在與 `ObjectDetectionLoop.ino`、`ObjectClassList.h` 相同的資料夾。權重放置步驟接在類別設定之後，最後保留自走車用途以 `hand_code.txt` 完整取代 `ObjectDetectionLoop.ino` 的流程；其餘四項仍使用明確標示的佔位說明。「安裝檔」頁維持原卡片排列與下載／安裝功能。
+「程式碼與權重」二級頁左側單欄列出原有五張資源卡，右側顯示所選資源的文字、圖片與圖片說明，進入時預設第一項。左右欄依內容自然伸展，共用 `appShell` 的單一整頁垂直捲動條；卡片增多或說明變長時，兩欄一起捲動，不各自捲動。點擊卡片或透過鍵盤操作只切換說明；卡片內的「取得」按鈕維持原本的另存流程，不因選取說明而觸發。第一項手勢卡已使用正式教學與六張圖片（五張操作截圖與一張自走車接線圖），包含 `ObjectDetectionLoop` 的 `DEFAULT_YOLOV4TINY` 改為 `CUSTOMIZED_YOLOV7TINY`、`ObjectClassList.h` 的 `itemList` 類別設為 `gesture1`～`gesture5`，以及透過主選單的「開啟AmebaPro2資料夾」進入 `libraries → NeuralNetwork → examples → ObjectDetectionLoop`，將 `yolov7_tiny.nb` 放在與 `ObjectDetectionLoop.ino`、`ObjectClassList.h` 相同的資料夾。權重放置步驟接在類別設定之後，再說明自走車用途以 `hand_code.txt` 完整取代 `ObjectDetectionLoop.ino` 的流程，最後依序附上自走車接線圖與組裝影片。影片 URL 為 `https://www.youtube.com/watch?v=UpYyOiEFA0k`，經既有 `open_url` 命令由預設瀏覽器開啟，觀看影片需要網路連線；其餘四項仍使用明確標示的佔位說明。「安裝檔」頁維持原卡片排列與下載／安裝功能。
 
 設定入口不是主選單卡片。設定按鈕位於右上角語言選單旁邊。
 
@@ -393,7 +393,7 @@ Reset：
 ### 修改程式碼與權重說明
 
 - 在 `src/resourceGuides.ts` 的 `getResourceGuide(resourceId, t)` 維護各資源的段落、程式碼修改前後範例、圖片與佔位狀態，並補上替代文字與圖片說明。
-- 手勢教學截圖放在 `src/assets/resource-guides/gesture/`：`model-selection.png`、`object-class-list-tab.png`、`gesture-class-list.png`、`open-amebapro2-folder.png`、`weight-folder-location.png`。圖片透過 Vite import 隨前端打包進 exe，可離線顯示，不依賴使用者原本的 Screenshots 目錄。
+- 手勢教學圖片放在 `src/assets/resource-guides/gesture/`：五張操作截圖為 `model-selection.png`、`object-class-list-tab.png`、`gesture-class-list.png`、`open-amebapro2-folder.png`、`weight-folder-location.png`，自走車接線圖為 `car-wiring-diagram.png`。六張圖片透過 Vite import 隨前端打包進 exe，可離線顯示，不依賴使用者原本的 Screenshots 或 Downloads 目錄。組裝影片保留為 YouTube 外部連結，由預設瀏覽器開啟，需網路連線。
 - 使用者提供其餘資源的正式教學後，替換對應佔位內容與標記，並同步更新 `src/i18n.ts` 的繁中／英文／日文文字。
 - 顯示與選取操作集中在 `src/components/ResourceLibraryView.tsx`；修改時維持卡片選取與「取得」按鈕各自的操作效果。
 
@@ -625,7 +625,7 @@ npm.cmd run tauri build
 6. 設定頁切換 `YUY2`、`NV12`、`MJPG`、`H264`、`H265` 後，`settings.json` 有保存。
 7. 設定頁切換格式後，`UVCD_pram.h` 被覆寫為選定格式 `1`、其他格式 `0`。
 8. 設定頁按下「清除權重紀錄」時，只刪除兩個固定路徑的權重；檔案不存在視為已清除，且相鄰或其他目錄中的 `.nb` 檔案保持不變。
-9. 「程式碼與權重」頁在一般大小與 `1120 × 640` 下維持左側單欄資源卡、右側說明，預設顯示第一項；增加左側卡片或加長右側說明後，確認兩欄依內容自然伸展，僅由 `appShell` 顯示單一整頁垂直捲動條，在任一欄捲動時兩欄都一起移動。依序點擊五張卡片與使用鍵盤選取，都會切換對應說明，且不開啟另存視窗；第一項應顯示正式手勢教學、程式碼修改前後範例、權重放置路徑與五張可離線查看的截圖，自走車說明維持在最後，其餘四項保留佔位說明。按各卡片「取得」時，原本的檔案另存功能仍正常；切換語言後所選說明也同步更新。安裝檔頁維持原有排列與操作。
+9. 「程式碼與權重」頁在一般大小與 `1120 × 640` 下維持左側單欄資源卡、右側說明，預設顯示第一項；增加左側卡片或加長右側說明後，確認兩欄依內容自然伸展，僅由 `appShell` 顯示單一整頁垂直捲動條，在任一欄捲動時兩欄都一起移動。依序點擊五張卡片與使用鍵盤選取，都會切換對應說明，且不開啟另存視窗；第一項應顯示正式手勢教學、程式碼修改前後範例、權重放置路徑與六張可離線查看的圖片（五張操作截圖與一張接線圖）。自走車程式碼替換說明後依序顯示接線圖與組裝影片，影片連結須由預設瀏覽器開啟指定 YouTube 網址；其餘四項保留佔位說明。按各卡片「取得」時，原本的檔案另存功能仍正常；切換語言後所選說明也同步更新。安裝檔頁維持原有排列與操作。
 10. 無外網且沒有快取時，Arduino / VLC 會清楚回報無法取得；內嵌資源仍可取得。
 11. 有外網時首次取得 Arduino / VLC 會顯示下載進度，完成後可正常另存或自動安裝。
 12. 中斷外網後再次取得或安裝同一版本，會通過 SHA-256 驗證並重用快取，不重新下載。

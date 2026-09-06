@@ -997,6 +997,7 @@ function App() {
         <ResourceLibraryView
           cards={view === "installers" ? installerCards : weightCards}
           category={view}
+          onOpenUrl={(url) => void openUrl(url)}
           downloadProgress={downloadProgress}
           isDownloadKey={isDownloadKey}
           openActionMenu={openActionMenu}

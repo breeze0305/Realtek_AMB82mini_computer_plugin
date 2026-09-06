@@ -1,4 +1,4 @@
-import { Image as ImageIcon } from "lucide-react";
+import { ExternalLink, Image as ImageIcon } from "lucide-react";
 import { useId, useState } from "react";
 
 import { getResourceGuide } from "../resourceGuides";
@@ -8,6 +8,7 @@ import { CardGrid, type CardGridProps, type HomeCard } from "./CardGrid";
 type ResourceLibraryViewProps = Omit<CardGridProps, "cards" | "selection"> & {
   cards: HomeCard[];
   category: ResourceCategory;
+  onOpenUrl: (url: string) => void;
 };
 
 export function ResourceLibraryView({
@@ -15,6 +16,7 @@ export function ResourceLibraryView({
   category,
   downloadProgress,
   isDownloadKey,
+  onOpenUrl,
   openActionMenu,
   running,
   setOpenActionMenu,
@@ -97,6 +99,12 @@ export function ResourceLibraryView({
                         )}
                         {section.image.caption && <figcaption>{section.image.caption}</figcaption>}
                       </figure>
+                    )}
+                    {section.link && (
+                      <button type="button" className="resourceGuideLink" onClick={() => onOpenUrl(section.link!.url)}>
+                        <span>{section.link.label}</span>
+                        <ExternalLink size={16} aria-hidden="true" />
+                      </button>
                     )}
                   </section>
                 ))}

@@ -41,11 +41,13 @@ function renderResourceLibrary(
   category: ResourceCategory,
   running: RunningAction = null,
   cards = category === "installers" ? [createCard("installer", "Installer card", "arduino")] : createWeightCards(),
+  onOpenUrl = vi.fn(),
 ) {
   return render(
     <ResourceLibraryView
       cards={cards}
       category={category}
+      onOpenUrl={onOpenUrl}
       downloadProgress={{}}
       isDownloadKey={(key: RunningAction): key is DownloadKey => key === "arduino" || key === "vlc"}
       openActionMenu={null}
@@ -123,8 +125,9 @@ describe("ResourceLibraryView", () => {
           "gesture-class-list.png",
           "open-amebapro2-folder.png",
           "weight-folder-location.png",
+          "car-wiring-diagram.png",
         ];
-        expect(images).toHaveLength(5);
+        expect(images).toHaveLength(6);
         for (const [imageIndex, image] of images.entries()) {
           expect(image).toHaveAttribute(
             "src",
@@ -153,6 +156,19 @@ describe("ResourceLibraryView", () => {
         expect(other.action).not.toHaveBeenCalled();
       }
     }
+  });
+
+  it("opens the assembly video through the external URL handler without retrieving files", async () => {
+    const user = userEvent.setup();
+    const cards = createWeightCards();
+    const onOpenUrl = vi.fn();
+    renderResourceLibrary("weights", null, cards, onOpenUrl);
+
+    await user.click(screen.getByRole("button", { name: translations.en_US.resourceHandAssemblyLink }));
+
+    expect(onOpenUrl).toHaveBeenCalledExactlyOnceWith("https://www.youtube.com/watch?v=UpYyOiEFA0k");
+    expect(screen.getByRole("complementary", { name: cards[0].title })).toBeInTheDocument();
+    for (const card of cards) expect(card.action).not.toHaveBeenCalled();
   });
 
   it("supports Enter and Space for selecting a guide", async () => {
