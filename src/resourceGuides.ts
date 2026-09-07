@@ -1,3 +1,4 @@
+import boxClassList from "./assets/resource-guides/box/box-class-list.png";
 import carWiringDiagram from "./assets/resource-guides/gesture/car-wiring-diagram.png";
 import gestureClassList from "./assets/resource-guides/gesture/gesture-class-list.png";
 import gestureModelSelection from "./assets/resource-guides/gesture/model-selection.png";
@@ -30,103 +31,103 @@ type ResourceGuideDefinition = {
   }>;
 };
 
-// Each resource owns its content keys, code examples, and bundled images.
+// Tracking resources share the setup steps, wiring diagram, and assembly video.
+// Keep their class settings and resource-specific wording separate.
+function createTrackingSections(variant: "Hand" | "Box", classListImage: string): ResourceGuideDefinition["sections"] {
+  return [
+    {
+      titleKey: "resourceHandCodeTitle",
+      bodyKey: "resourceHandCodeGuide",
+      codeExamples: [
+        {
+          labelKey: "resourceGuideBeforeCode",
+          code: "ObjDet.modelSelect(OBJECT_DETECTION, DEFAULT_YOLOV4TINY, NA_MODEL, NA_MODEL);",
+        },
+        {
+          labelKey: "resourceGuideAfterCode",
+          code: "ObjDet.modelSelect(OBJECT_DETECTION, CUSTOMIZED_YOLOV7TINY, NA_MODEL, NA_MODEL);",
+        },
+      ],
+      image: {
+        src: gestureModelSelection,
+        altKey: "resourceHandModelImageAlt",
+        captionKey: "resourceHandModelImageCaption",
+      },
+    },
+    {
+      titleKey: "resourceHandClassTabTitle",
+      bodyKey: "resourceHandClassTabBody",
+      image: {
+        src: gestureClassListTab,
+        altKey: "resourceHandTabImageAlt",
+        captionKey: "resourceHandTabImageCaption",
+      },
+    },
+    {
+      titleKey: `resource${variant}ClassesTitle`,
+      bodyKey: `resource${variant}ClassesBody`,
+      image: {
+        src: classListImage,
+        altKey: `resource${variant}ClassesImageAlt`,
+        captionKey: `resource${variant}ClassesImageCaption`,
+      },
+    },
+    {
+      titleKey: "resourceHandOpenFolderTitle",
+      bodyKey: "resourceHandOpenFolderBody",
+      image: {
+        src: gestureOpenFolder,
+        altKey: "resourceHandOpenFolderImageAlt",
+        captionKey: "resourceHandOpenFolderImageCaption",
+      },
+    },
+    {
+      titleKey: `resource${variant}WeightLocationTitle`,
+      bodyKey: "resourceHandWeightLocationBody",
+      image: {
+        src: gestureWeightLocation,
+        altKey: "resourceHandWeightLocationImageAlt",
+        captionKey: "resourceHandWeightLocationImageCaption",
+      },
+    },
+    {
+      titleKey: "resourceHandCarTitle",
+      bodyKey: `resource${variant}CarBody`,
+    },
+    {
+      titleKey: "resourceHandWiringTitle",
+      bodyKey: "resourceHandWiringBody",
+      image: {
+        src: carWiringDiagram,
+        altKey: "resourceHandWiringImageAlt",
+        captionKey: "resourceHandWiringImageCaption",
+      },
+    },
+    {
+      titleKey: "resourceHandAssemblyTitle",
+      bodyKey: "resourceHandAssemblyBody",
+      link: {
+        labelKey: "resourceHandAssemblyLink",
+        url: "https://www.youtube.com/watch?v=UpYyOiEFA0k",
+      },
+    },
+  ];
+}
+
+// Each resource owns its content keys and placeholder status.
 // Set isPlaceholder to false when replacing a resource's placeholder guide.
 const resourceGuides: Record<string, ResourceGuideDefinition> = {
   "resource-hand": {
     isPlaceholder: false,
     nameKey: "hand",
     summaryKey: "resourceHandGuideSummary",
-    sections: [
-      {
-        titleKey: "resourceHandCodeTitle",
-        bodyKey: "resourceHandCodeGuide",
-        codeExamples: [
-          {
-            labelKey: "resourceGuideBeforeCode",
-            code: "ObjDet.modelSelect(OBJECT_DETECTION, DEFAULT_YOLOV4TINY, NA_MODEL, NA_MODEL);",
-          },
-          {
-            labelKey: "resourceGuideAfterCode",
-            code: "ObjDet.modelSelect(OBJECT_DETECTION, CUSTOMIZED_YOLOV7TINY, NA_MODEL, NA_MODEL);",
-          },
-        ],
-        image: {
-          src: gestureModelSelection,
-          altKey: "resourceHandModelImageAlt",
-          captionKey: "resourceHandModelImageCaption",
-        },
-      },
-      {
-        titleKey: "resourceHandClassTabTitle",
-        bodyKey: "resourceHandClassTabBody",
-        image: {
-          src: gestureClassListTab,
-          altKey: "resourceHandTabImageAlt",
-          captionKey: "resourceHandTabImageCaption",
-        },
-      },
-      {
-        titleKey: "resourceHandClassesTitle",
-        bodyKey: "resourceHandClassesBody",
-        image: {
-          src: gestureClassList,
-          altKey: "resourceHandClassesImageAlt",
-          captionKey: "resourceHandClassesImageCaption",
-        },
-      },
-      {
-        titleKey: "resourceHandOpenFolderTitle",
-        bodyKey: "resourceHandOpenFolderBody",
-        image: {
-          src: gestureOpenFolder,
-          altKey: "resourceHandOpenFolderImageAlt",
-          captionKey: "resourceHandOpenFolderImageCaption",
-        },
-      },
-      {
-        titleKey: "resourceHandWeightLocationTitle",
-        bodyKey: "resourceHandWeightLocationBody",
-        image: {
-          src: gestureWeightLocation,
-          altKey: "resourceHandWeightLocationImageAlt",
-          captionKey: "resourceHandWeightLocationImageCaption",
-        },
-      },
-      {
-        titleKey: "resourceHandCarTitle",
-        bodyKey: "resourceHandCarBody",
-      },
-      {
-        titleKey: "resourceHandWiringTitle",
-        bodyKey: "resourceHandWiringBody",
-        image: {
-          src: carWiringDiagram,
-          altKey: "resourceHandWiringImageAlt",
-          captionKey: "resourceHandWiringImageCaption",
-        },
-      },
-      {
-        titleKey: "resourceHandAssemblyTitle",
-        bodyKey: "resourceHandAssemblyBody",
-        link: {
-          labelKey: "resourceHandAssemblyLink",
-          url: "https://www.youtube.com/watch?v=UpYyOiEFA0k",
-        },
-      },
-    ],
+    sections: createTrackingSections("Hand", gestureClassList),
   },
   "resource-box": {
+    isPlaceholder: false,
     nameKey: "objectBoxTracking",
     summaryKey: "resourceBoxGuideSummary",
-    sections: [
-      { titleKey: "resourceCodeGuideTitle", bodyKey: "resourceBoxCodeGuide" },
-      {
-        titleKey: "resourceWeightGuideTitle",
-        bodyKey: "resourceBoxWeightGuide",
-        image: { altKey: "resourceWeightImageAlt", captionKey: "resourceWeightImageCaption" },
-      },
-    ],
+    sections: createTrackingSections("Box", boxClassList),
   },
   "resource-japan": {
     nameKey: "japanModel",

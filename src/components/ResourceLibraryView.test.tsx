@@ -33,7 +33,12 @@ const resources = [
 function createWeightCards(t = translations.en_US) {
   return resources.map(({ key, nameKey }) => ({
     ...createCard(`resource-${key}`, t[nameKey], key),
-    detail: `${key}_code.txt / ${key}_weights.nb`,
+    detail:
+      key === "hand"
+        ? "hand_code.txt / yolov7_tiny.nb"
+        : key === "box"
+          ? "code.txt / yolov7_tiny.nb"
+          : `${key}_weights.nb`,
   }));
 }
 
@@ -42,6 +47,7 @@ function renderResourceLibrary(
   running: RunningAction = null,
   cards = category === "installers" ? [createCard("installer", "Installer card", "arduino")] : createWeightCards(),
   onOpenUrl = vi.fn(),
+  t = translations.en_US,
 ) {
   return render(
     <ResourceLibraryView
@@ -53,7 +59,7 @@ function renderResourceLibrary(
       openActionMenu={null}
       running={running}
       setOpenActionMenu={vi.fn()}
-      t={translations.en_US}
+      t={t}
     />,
   );
 }
@@ -117,22 +123,20 @@ describe("ResourceLibraryView", () => {
       expect(button).toHaveAttribute("aria-controls", guide.id);
       expect(within(guide).getByText(translations.en_US[resources[index].summaryKey])).toBeInTheDocument();
       expect(within(guide).getByText(card.detail)).toBeInTheDocument();
-      if (resources[index].key === "hand") {
+      const resourceKey = resources[index].key;
+      if (resourceKey === "hand" || resourceKey === "box") {
         const images = within(guide).getAllByRole("img");
         const imageFiles = [
-          "model-selection.png",
-          "object-class-list-tab.png",
-          "gesture-class-list.png",
-          "open-amebapro2-folder.png",
-          "weight-folder-location.png",
-          "car-wiring-diagram.png",
+          "gesture/model-selection.png",
+          "gesture/object-class-list-tab.png",
+          resourceKey === "hand" ? "gesture/gesture-class-list.png" : "box/box-class-list.png",
+          "gesture/open-amebapro2-folder.png",
+          "gesture/weight-folder-location.png",
+          "gesture/car-wiring-diagram.png",
         ];
         expect(images).toHaveLength(6);
         for (const [imageIndex, image] of images.entries()) {
-          expect(image).toHaveAttribute(
-            "src",
-            expect.stringContaining(`/resource-guides/gesture/${imageFiles[imageIndex]}`),
-          );
+          expect(image).toHaveAttribute("src", expect.stringContaining(`/resource-guides/${imageFiles[imageIndex]}`));
           expect(image.getAttribute("alt")?.trim()).toBeTruthy();
         }
         expect(
@@ -141,6 +145,18 @@ describe("ResourceLibraryView", () => {
         expect(
           within(guide).getByText("ObjDet.modelSelect(OBJECT_DETECTION, CUSTOMIZED_YOLOV7TINY, NA_MODEL, NA_MODEL);"),
         ).toBeInTheDocument();
+        expect(
+          within(guide).getByText(
+            resourceKey === "hand"
+              ? translations.en_US.resourceHandClassesBody
+              : translations.en_US.resourceBoxClassesBody,
+          ),
+        ).toHaveTextContent(resourceKey === "hand" ? "itemList[5]" : "itemList[1]");
+        expect(
+          within(guide).getByText(
+            resourceKey === "hand" ? translations.en_US.resourceHandCarBody : translations.en_US.resourceBoxCarBody,
+          ),
+        ).toHaveTextContent(resourceKey === "hand" ? "hand_code.txt" : "code.txt");
         expect(within(guide).queryByText(translations.en_US.resourceGuidePlaceholder)).not.toBeInTheDocument();
       } else {
         expect(
@@ -164,12 +180,39 @@ describe("ResourceLibraryView", () => {
     const onOpenUrl = vi.fn();
     renderResourceLibrary("weights", null, cards, onOpenUrl);
 
-    await user.click(screen.getByRole("button", { name: translations.en_US.resourceHandAssemblyLink }));
+    for (const selectedCard of cards.slice(0, 2)) {
+      await user.click(screen.getByRole("button", { name: `View guide: ${selectedCard.title}` }));
+      await user.click(screen.getByRole("button", { name: translations.en_US.resourceHandAssemblyLink }));
 
-    expect(onOpenUrl).toHaveBeenCalledExactlyOnceWith("https://www.youtube.com/watch?v=UpYyOiEFA0k");
-    expect(screen.getByRole("complementary", { name: cards[0].title })).toBeInTheDocument();
-    for (const card of cards) expect(card.action).not.toHaveBeenCalled();
+      expect(onOpenUrl).toHaveBeenCalledExactlyOnceWith("https://www.youtube.com/watch?v=UpYyOiEFA0k");
+      expect(screen.getByRole("complementary", { name: selectedCard.title })).toBeInTheDocument();
+      for (const card of cards) expect(card.action).not.toHaveBeenCalled();
+      onOpenUrl.mockClear();
+    }
   });
+
+  it.each(["zh_TW", "en_US", "ja_JP"] as const)(
+    "shows complete box-specific instructions in %s without gesture configuration",
+    (language) => {
+      const t = translations[language];
+      const boxCard = createWeightCards(t)[1];
+      renderResourceLibrary("weights", null, [boxCard], vi.fn(), t);
+
+      const guide = screen.getByRole("complementary", { name: boxCard.title });
+      expect(within(guide).getByText(t.resourceBoxGuideSummary)).toBeInTheDocument();
+      expect(within(guide).getByText(t.resourceBoxClassesBody)).toHaveTextContent("itemList[1]");
+      expect(within(guide).getByText(t.resourceBoxClassesBody)).toHaveTextContent("box");
+      expect(within(guide).getByText(t.resourceBoxCarBody)).toHaveTextContent(/\bcode\.txt\b/);
+      expect(within(guide).getByText(t.resourceHandWeightLocationBody)).toHaveTextContent("yolov7_tiny.nb");
+      expect(within(guide).queryByText(t.resourceGuidePlaceholder)).not.toBeInTheDocument();
+      expect(within(guide).queryByText(t.resourceImagePlaceholder)).not.toBeInTheDocument();
+      expect(guide).not.toHaveTextContent(/itemList\[5\]|gesture[1-5]|hand_code\.txt/);
+      for (const image of within(guide).getAllByRole("img")) {
+        expect(image.getAttribute("alt")?.trim()).toBeTruthy();
+        expect(image).not.toHaveAttribute("alt", t.resourceGuidePlaceholder);
+      }
+    },
+  );
 
   it("supports Enter and Space for selecting a guide", async () => {
     const user = userEvent.setup();

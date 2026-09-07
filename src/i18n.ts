@@ -64,9 +64,16 @@ export const translations = {
     resourceHandAssemblyBody:
       "可透過下方影片查看自走車的組裝方式。點擊連結會由預設瀏覽器開啟 YouTube，觀看影片需要網路連線。",
     resourceHandAssemblyLink: "觀看自走車組裝影片（YouTube）",
-    resourceBoxGuideSummary: "AMB 盒子追蹤範例的說明預留區，之後會補上程式碼使用與權重放置教學。",
-    resourceBoxCodeGuide: "AMB 盒子追蹤程式的操作步驟待補，之後會說明如何使用程式碼。",
-    resourceBoxWeightGuide: "AMB 盒子追蹤權重的放置路徑與操作步驟待補。",
+    resourceBoxGuideSummary:
+      "依下列步驟設定 AMB 盒子辨識範例；如需搭配自走車，請參閱「搭配自走車使用」、接線圖與組裝影片。",
+    resourceBoxClassesTitle: "設定盒子類別",
+    resourceBoxClassesBody:
+      "將 itemList 陣列改為 1 個項目（itemList[1]），類別 ID 0 對應 box，並將啟用值設為 1，如下圖所示。",
+    resourceBoxClassesImageAlt: "itemList[1] 內僅有類別 ID 0，名稱設為 box，啟用值為 1",
+    resourceBoxClassesImageCaption: "盒子的類別設定：僅保留一個 box 項目，並將啟用值設為 1。",
+    resourceBoxWeightLocationTitle: "放置盒子權重檔案",
+    resourceBoxCarBody:
+      "以上為一般 AMB 盒子權重的範例設定流程。如需使用自走車，請按「取得」儲存 code.txt，複製其中的全部程式碼，再完整取代 ObjectDetectionLoop.ino 的內容；請勿附加在原程式碼後方。",
     resourceJapanGuideSummary: "AMB 盒子、日本硬幣與滑鼠分類權重的說明預留區。",
     resourceJapanCodeGuide: "日本硬幣分類範例的程式設定步驟待補。",
     resourceJapanWeightGuide: "日本硬幣分類權重的放置路徑與操作步驟待補。",
@@ -240,10 +247,16 @@ export const translations = {
     resourceHandAssemblyBody:
       "Watch the video below for robot car assembly instructions. The link opens YouTube in your default browser. An internet connection is required to watch the video.",
     resourceHandAssemblyLink: "Watch the robot car assembly video (YouTube)",
-    resourceBoxGuideSummary: "Reserved for the AMB box tracking guide, including code usage and weight placement.",
-    resourceBoxCodeGuide: "Steps for using the AMB box tracking code will be added here.",
-    resourceBoxWeightGuide:
-      "The destination folder and steps for placing the AMB box tracking weights will be added here.",
+    resourceBoxGuideSummary:
+      "Follow the steps below to configure the AMB box recognition sample. For a robot car, see Use with a robot car, the wiring diagram, and the assembly video.",
+    resourceBoxClassesTitle: "Configure the box class",
+    resourceBoxClassesBody:
+      "Change the itemList array to contain one item (itemList[1]). Set class ID 0 to box and its enabled value to 1, as shown below.",
+    resourceBoxClassesImageAlt: "itemList[1] contains only class ID 0, named box, with its enabled value set to 1",
+    resourceBoxClassesImageCaption: "Box class settings: keep a single box item and set its enabled value to 1.",
+    resourceBoxWeightLocationTitle: "Place the box weight file",
+    resourceBoxCarBody:
+      "The steps above configure the sample for the AMB box weights. To use a robot car, click Get to save code.txt, copy all of its code, and replace the entire contents of ObjectDetectionLoop.ino. Do not append it to the existing code.",
     resourceJapanGuideSummary:
       "Reserved for the classification guide for AMB boxes, Japanese coins, and computer mice.",
     resourceJapanCodeGuide: "Steps for configuring the Japanese coin classification sample will be added here.",
@@ -431,9 +444,15 @@ export const translations = {
       "下の動画でロボットカーの組み立て方法を確認できます。リンクをクリックすると、既定のブラウザーで YouTube が開きます。動画の視聴にはインターネット接続が必要です。",
     resourceHandAssemblyLink: "ロボットカーの組み立て動画を見る（YouTube）",
     resourceBoxGuideSummary:
-      "AMB ボックス追跡の説明用スペースです。コードの使い方と重みファイルの配置方法を追加する予定です。",
-    resourceBoxCodeGuide: "AMB ボックス追跡コードの使い方は準備中です。",
-    resourceBoxWeightGuide: "AMB ボックス追跡の重みファイルの配置場所と操作手順は準備中です。",
+      "以下の手順で AMB ボックス認識のサンプルを設定してください。ロボットカーと組み合わせる場合は、「ロボットカーと組み合わせて使う」、配線図、組み立て動画を参照してください。",
+    resourceBoxClassesTitle: "ボックスのクラスを設定する",
+    resourceBoxClassesBody:
+      "itemList 配列を 1 項目（itemList[1]）に変更し、クラス ID 0 の名前を box、有効化の値を 1 に設定してください。設定例は下の画像を参照してください。",
+    resourceBoxClassesImageAlt: "itemList[1] にはクラス ID 0 のみを登録し、名前を box、有効化の値を 1 に設定した画面",
+    resourceBoxClassesImageCaption: "ボックスのクラス設定：box の 1 項目のみを残し、有効化の値を 1 に設定します。",
+    resourceBoxWeightLocationTitle: "ボックスの重みファイルを配置する",
+    resourceBoxCarBody:
+      "以上が AMB ボックスの重みを使うためのサンプル設定手順です。ロボットカーを使用する場合は、「取得」で code.txt を保存し、そのコードをすべてコピーして ObjectDetectionLoop.ino の内容全体を置き換えてください。元のコードの末尾には追加しないでください。",
     resourceJapanGuideSummary: "AMB ボックス、日本の硬貨、マウスを分類する重みファイルの説明用スペースです。",
     resourceJapanCodeGuide: "日本の硬貨を分類するサンプルコードの設定手順は準備中です。",
     resourceJapanWeightGuide: "日本の硬貨を分類する重みファイルの配置場所と操作手順は準備中です。",
